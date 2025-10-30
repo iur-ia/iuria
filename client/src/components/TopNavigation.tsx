@@ -66,7 +66,7 @@ const menuItems = [
 ];
 
 export function TopNavigation() {
-  const [location] = useLocation();
+  const [, setLocation] = useLocation();
 
   return (
     <div className="bg-[#1a1a1a] text-white border-b border-[#2a2a2a]">
@@ -95,12 +95,12 @@ export function TopNavigation() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-48">
                     {item.submenu.map((subItem) => (
-                      <DropdownMenuItem key={subItem.href} asChild>
-                        <Link href={subItem.href}>
-                          <span className="cursor-pointer" data-testid={`nav-${subItem.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                            {subItem.title}
-                          </span>
-                        </Link>
+                      <DropdownMenuItem 
+                        key={subItem.href}
+                        onClick={() => setLocation(subItem.href)}
+                        data-testid={`nav-${subItem.title.toLowerCase().replace(/\s+/g, '-')}`}
+                      >
+                        {subItem.title}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
