@@ -12,14 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu";
 import logoImage from "@assets/generated_images/Law_firm_logo_design_bb2f9039.png";
 import avatarImage from "@assets/stock_images/professional_lawyer__9acf90aa.jpg";
 
@@ -87,43 +79,45 @@ export function TopNavigation() {
             </div>
           </Link>
 
-          <NavigationMenu>
-            <NavigationMenuList className="gap-1">
-              {menuItems.map((item) => (
-                <NavigationMenuItem key={item.title}>
-                  {item.submenu ? (
-                    <>
-                      <NavigationMenuTrigger 
-                        className="bg-transparent hover:bg-white/10 data-[state=open]:bg-white/10 text-white h-9 px-3 text-sm font-medium"
-                        data-testid={`nav-${item.title.toLowerCase()}`}
-                      >
-                        {item.title}
-                      </NavigationMenuTrigger>
-                      <NavigationMenuContent>
-                        <ul className="w-48 p-2 bg-popover">
-                          {item.submenu.map((subItem) => (
-                            <li key={subItem.href}>
-                              <Link href={subItem.href}>
-                                <NavigationMenuLink className="block px-3 py-2 text-sm rounded hover-elevate cursor-pointer" data-testid={`nav-${subItem.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                                  {subItem.title}
-                                </NavigationMenuLink>
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </NavigationMenuContent>
-                    </>
-                  ) : (
-                    <Link href={item.href}>
-                      <NavigationMenuLink className="inline-flex items-center justify-center h-9 px-3 text-sm font-medium bg-transparent hover:bg-white/10 rounded" data-testid={`nav-${item.title.toLowerCase()}`}>
-                        {item.title}
-                      </NavigationMenuLink>
-                    </Link>
-                  )}
-                </NavigationMenuItem>
-              ))}
-            </NavigationMenuList>
-          </NavigationMenu>
+          <nav className="flex items-center gap-1">
+            {menuItems.map((item) => (
+              item.submenu ? (
+                <DropdownMenu key={item.title}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="bg-transparent hover:bg-white/10 text-white h-9 px-3 text-sm font-medium"
+                      data-testid={`nav-${item.title.toLowerCase()}`}
+                    >
+                      {item.title}
+                      <ChevronDown className="ml-1 h-3 w-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    {item.submenu.map((subItem) => (
+                      <DropdownMenuItem key={subItem.href} asChild>
+                        <Link href={subItem.href}>
+                          <span className="cursor-pointer" data-testid={`nav-${subItem.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                            {subItem.title}
+                          </span>
+                        </Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <Link key={item.title} href={item.href}>
+                  <Button
+                    variant="ghost"
+                    className="bg-transparent hover:bg-white/10 text-white h-9 px-3 text-sm font-medium"
+                    data-testid={`nav-${item.title.toLowerCase()}`}
+                  >
+                    {item.title}
+                  </Button>
+                </Link>
+              )
+            ))}
+          </nav>
         </div>
 
         <div className="flex items-center gap-4">
