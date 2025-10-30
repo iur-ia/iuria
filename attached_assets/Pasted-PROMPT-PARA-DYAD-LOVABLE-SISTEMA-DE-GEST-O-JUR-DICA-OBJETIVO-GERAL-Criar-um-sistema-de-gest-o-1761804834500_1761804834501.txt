@@ -1,0 +1,1423 @@
+PROMPT PARA DYAD/LOVABLE - SISTEMA DE GESTÃO JURÍDICA
+
+🎯 OBJETIVO GERAL
+
+Criar um sistema de gestão jurídica completo inspirado no Projuris ADV, com funcionalidades para gestão de processos, intimações, andamentos processuais, tarefas, documentos e finanças. O sistema deve ser moderno, intuitivo e otimizado para escritórios de advocacia brasileiros.
+
+
+
+
+📋 FASE 1: ESTRUTURA BASE E AUTENTICAÇÃO
+
+1.1 Configuração Inicial
+
+Crie uma aplicação web moderna com:
+
+•
+Framework: React + TypeScript + Vite
+
+•
+Estilização: Tailwind CSS
+
+•
+Roteamento: React Router v6
+
+•
+Estado Global: Zustand ou Context API
+
+•
+UI Components: shadcn/ui
+
+•
+Ícones: Lucide React
+
+•
+Formulários: React Hook Form + Zod
+
+1.2 Sistema de Autenticação
+
+Implemente autenticação completa com:
+
+•
+Tela de login responsiva
+
+•
+Tela de cadastro de usuário
+
+•
+Recuperação de senha
+
+•
+Persistência de sessão (localStorage)
+
+•
+Proteção de rotas privadas
+
+•
+Logout com confirmação
+
+Estrutura de Usuário:
+
+TypeScript
+
+
+interface Usuario {
+  id: string;
+  nome: string;
+  email: string;
+  oab?: string;
+  foto?: string;
+  role: 'admin' | 'advogado' | 'assistente' | 'cliente';
+  iniciais: string; // Ex: "TG" para Thiago Gomes
+  cor: string; // Cor do badge circular
+}
+
+
+1.3 Layout Principal
+
+Crie o layout base com:
+
+Sidebar (Menu Lateral):
+
+•
+Logo no topo
+
+•
+Menu principal com ícones:
+
+•
+🏠 Dashboard
+
+•
+📊 Gestão
+
+•
+📋 Atividades
+
+•
+⚖️ Processos (com submenu)
+
+•
+💰 Financeiro
+
+•
+📄 Documentos
+
+
+
+•
+Badges de notificação nos itens
+
+•
+Colapsável em mobile
+
+Header (Cabeçalho):
+
+•
+Barra de pesquisa global
+
+•
+Ícone de notificações com badge numérico
+
+•
+Menu do usuário com foto/avatar
+
+•
+Dropdown com opções:
+
+•
+Meus Dados
+
+•
+Configurações
+
+•
+Sair
+
+
+
+Área de Conteúdo:
+
+•
+Responsiva e adaptável
+
+•
+Breadcrumbs de navegação
+
+•
+Título da página atual
+
+
+
+
+📋 FASE 2: DASHBOARD PRINCIPAL
+
+2.1 Cards de Métricas
+
+Crie 5 cards no dashboard mostrando:
+
+Card 1: Tarefas
+
+•
+Total de tarefas
+
+•
+Subdivisão: Atrasadas (vermelho), Hoje (amarelo), Futuras (verde)
+
+•
+Ícone: CheckSquare
+
+•
+Cor tema: Roxo
+
+Card 2: Intimações
+
+•
+Total de intimações pendentes
+
+•
+Cor tema: Laranja
+
+•
+Ícone: Bell
+
+Card 3: Andamentos
+
+•
+Total de andamentos não lidos
+
+•
+Subdivisão: Lidos vs Não lidos
+
+•
+Cor tema: Azul
+
+•
+Ícone: Activity
+
+Card 4: Audiências
+
+•
+Total de audiências
+
+•
+Subdivisão: Atrasadas, Hoje, Futuras
+
+•
+Cor tema: Verde
+
+•
+Ícone: Calendar
+
+Card 5: Compromissos
+
+•
+Total de compromissos
+
+•
+Subdivisão: Atrasados, Hoje, Futuros
+
+•
+Cor tema: Cinza
+
+•
+Ícone: Clock
+
+2.2 Calendário/Agenda
+
+Implemente um calendário mensal com:
+
+•
+Visualizações: Mês, Semana, Dia
+
+•
+Navegação entre períodos (anterior/próximo)
+
+•
+Botão "Hoje" para voltar à data atual
+
+•
+Eventos inline nos dias
+
+•
+Cores diferentes por tipo de evento
+
+•
+Hover mostrando detalhes do evento
+
+•
+Click para abrir detalhes
+
+2.3 Abas de Visualização
+
+Crie abas para alternar entre:
+
+•
+Pessoal: Eventos do usuário logado
+
+•
+Escritório: Eventos de toda a equipe
+
+
+
+
+📋 FASE 3: MÓDULO DE PROCESSOS
+
+3.1 Estrutura de Dados - Processo
+
+TypeScript
+
+
+interface Processo {
+  id: string;
+  codigo_interno: string; // Ex: "PRO.0000001"
+  numero_cnj: string; // Ex: "0806008-09.2025.8.19.0024"
+  
+  // Partes
+  cliente: {
+    nome: string;
+    tipo: 'pessoa_fisica' | 'pessoa_juridica';
+    cpf_cnpj?: string;
+  };
+  envolvidos: Array<{
+    nome: string;
+    tipo: 'autor' | 'reu' | 'terceiro' | 'executado' | 'exequente';
+  }>;
+  
+  // Classificação
+  assunto: string;
+  area_direito: string;
+  
+  // Localização
+  orgao: string; // Ex: "TJRJ"
+  comarca: string; // Ex: "Itaguaí"
+  orgao_julgador?: string; // Ex: "2ª Vara Cível"
+  instancia: '1ª' | '2ª' | 'TS';
+  
+  // Status e Controle
+  status: Array<'ativo' | 'incompleto' | 'movimentado' | 'parado' | 'arquivado'>;
+  valor_acao?: number;
+  data_distribuicao: Date;
+  
+  // Organização
+  responsaveis: Array<{
+    usuario_id: string;
+    nome: string;
+    iniciais: string;
+    cor: string;
+  }>;
+  marcadores: Array<{
+    nome: string;
+    cor: string;
+  }>;
+  
+  // Caso (apelido do processo)
+  caso?: {
+    nome: string;
+    cor: string;
+  };
+  
+  // Metadados
+  created_at: Date;
+  updated_at: Date;
+}
+
+
+3.2 Tela de Listagem de Processos
+
+Cabeçalho:
+
+•
+Botão "Novo processo" (verde, destaque)
+
+•
+Campo de pesquisa: "Pesquise por pasta, nº processo, marcador, assunto..."
+
+•
+Botão "Filtros" com badge mostrando quantidade de filtros ativos
+
+•
+Toggle de visualização: Lista / Grade
+
+Filtros Rápidos (Abas):
+
+•
+Todos (badge com total)
+
+•
+Incompletos (badge laranja)
+
+•
+Movimentados (badge roxo)
+
+•
+Parados (badge cinza)
+
+Ordenação: Dropdown com opções:
+
+•
+Últimos cadastrados
+
+•
+Últimos movimentados
+
+•
+Últimos atualizados
+
+Cards de Processo: Cada processo deve exibir:
+
+•
+Cliente (destaque)
+
+•
+Envolvido com tipo (ex: "João Silva (Réu)")
+
+•
+Número interno + Número CNJ
+
+•
+Assunto jurídico
+
+•
+Órgão + Comarca
+
+•
+Órgão julgador (quando houver)
+
+•
+Badges de status (cores: laranja=incompleto, roxo=movimentado, cinza=parado)
+
+•
+Badge de instância (1ª, 2ª, TS)
+
+•
+Marcadores personalizados (tags coloridas)
+
+•
+Badges circulares dos responsáveis (iniciais + cor)
+
+•
+Menu de ações (três pontos)
+
+Design dos Cards:
+
+•
+Borda esquerda colorida (indicador visual)
+
+•
+Hover com elevação (sombra)
+
+•
+Layout responsivo (grid adaptável)
+
+•
+Espaçamento consistente
+
+3.3 Página de Detalhes do Processo
+
+Cabeçalho do Processo:
+
+•
+Código interno + Número CNJ (clicável para tribunais)
+
+•
+Cliente principal
+
+•
+Botões de ação:
+
+•
+Projuris Peticiona (amarelo)
+
+•
+Consultar Jusbrasil (roxo)
+
+•
+Projuris IA (roxo)
+
+•
+Editar
+
+•
+Menu de ações
+
+
+
+Seções em Abas:
+
+Aba 1: Informações
+
+•
+Dados gerais do processo
+
+•
+Partes envolvidas
+
+•
+Classificação jurídica
+
+•
+Localização (tribunal, comarca, vara)
+
+•
+Valor da ação
+
+•
+Responsáveis
+
+•
+Marcadores
+
+Aba 2: Linha do Tempo
+
+•
+Timeline visual de eventos
+
+•
+Ícones por tipo de evento
+
+•
+Data e hora
+
+•
+Descrição
+
+•
+Responsável pela ação
+
+Aba 3: Tarefas
+
+•
+Lista de tarefas vinculadas ao processo
+
+•
+Botão "Nova tarefa"
+
+•
+Cards de tarefa com:
+
+•
+Título
+
+•
+Prazo fatal
+
+•
+Status
+
+•
+Responsáveis
+
+•
+Alertas de atraso
+
+
+
+Aba 4: Andamentos
+
+•
+Lista de movimentações processuais
+
+•
+Filtro por período
+
+•
+Status: Lido / Não lido
+
+•
+Botão "Marcar como lido"
+
+•
+Detalhes da movimentação
+
+Aba 5: Documentos
+
+•
+Lista de documentos vinculados
+
+•
+Upload de novos documentos
+
+•
+Botão "Usar modelo de documento"
+
+•
+Preview de documentos
+
+•
+Download
+
+Aba 6: Financeiro
+
+•
+Receitas e despesas vinculadas ao processo
+
+•
+Honorários
+
+•
+Custas processuais
+
+•
+Resumo financeiro
+
+
+
+
+📋 FASE 4: MÓDULO DE INTIMAÇÕES
+
+4.1 Estrutura de Dados - Intimação
+
+TypeScript
+
+
+interface Intimacao {
+  id: string;
+  codigo_interno: string; // Ex: "INT.0000001"
+  
+  // Datas
+  data_disponibilizacao: Date;
+  data_publicacao: Date;
+  
+  // Processo
+  numero_processo: string;
+  processo_id?: string; // Se vinculado
+  cliente?: string;
+  
+  // Conteúdo
+  descricao: string; // Texto completo da intimação
+  tribunal: string;
+  tipo_publicacao: string;
+  
+  // Status
+  status: 'pendente' | 'arquivada' | 'processada';
+  processo_localizado: boolean;
+  
+  // Controle
+  responsavel_id: string;
+  tarefa_criada_id?: string;
+  
+  // Metadados
+  created_at: Date;
+  updated_at: Date;
+}
+
+
+4.2 Tela de Intimações
+
+Abas Principais:
+
+•
+Intimações (aba ativa)
+
+•
+Intimações descartadas
+
+•
+Captura de intimações (configurações)
+
+Controles:
+
+•
+Campo de pesquisa: "Pesquise pela descrição da intimação."
+
+•
+Botão "Filtros"
+
+•
+Botão "Ações em lote"
+
+Filtros Rápidos:
+
+•
+Todas (badge com total)
+
+•
+Pendentes (badge laranja)
+
+•
+Arquivadas (badge roxo)
+
+•
+Processadas (badge verde)
+
+Ordenação:
+
+•
+Disponibilizações mais recentes
+
+•
+Disponibilizações mais antigas
+
+•
+Publicações mais recentes
+
+•
+Publicações mais antigas
+
+•
+Número do processo
+
+Lista de Intimações: Cada intimação exibe:
+
+•
+Datas (disponibilização + publicação)
+
+•
+Número do processo
+
+•
+Cliente (ou "Não informado")
+
+•
+Descrição completa
+
+•
+Tags de status:
+
+•
+"Processo não localizado" (vermelho)
+
+•
+Status atual (pendente/arquivada/processada)
+
+
+
+•
+Badge circular do responsável
+
+Ações por Intimação:
+
+•
+Arquivar
+
+•
+Descartar
+
+•
+Criar tarefa
+
+•
+Vincular a processo
+
+4.3 Configuração de Captura
+
+Tela para cadastrar:
+
+•
+OABs para monitoramento
+
+•
+Nomes de partes
+
+•
+CNPJs
+
+•
+Tribunais a monitorar
+
+
+
+
+📋 FASE 5: MÓDULO DE ANDAMENTOS PROCESSUAIS
+
+5.1 Estrutura de Dados - Andamento
+
+TypeScript
+
+
+interface Andamento {
+  id: string;
+  
+  // Identificação
+  data: Date;
+  orgao: string; // Ex: "TJ-RJ"
+  tipo: string; // Ex: "Movimentação TJ", "Intimação"
+  
+  // Processo
+  processo_id: string;
+  numero_processo: string;
+  cliente?: string;
+  
+  // Conteúdo
+  descricao: string;
+  
+  // Classificação
+  instancia: '1ª' | '2ª' | 'TS';
+  
+  // Controle
+  lido: boolean;
+  responsaveis: Array<{
+    usuario_id: string;
+    iniciais: string;
+    cor: string;
+  }>;
+  
+  // Metadados
+  created_at: Date;
+}
+
+
+5.2 Tela de Andamentos
+
+Controles:
+
+•
+Botão "Novo Andamento" (manual)
+
+•
+Campo de pesquisa: "Pesquise pelo tipo do andamento, descrição, identificação..."
+
+•
+Botão "Filtros"
+
+Filtros Rápidos:
+
+•
+Todos (badge com total)
+
+•
+Lidos (badge verde)
+
+•
+Não lidos (badge laranja)
+
+Filtro de Período:
+
+•
+Seletor de data inicial e final
+
+•
+Formato: DD/MM/YYYY - DD/MM/YYYY
+
+Ordenação:
+
+•
+Mais antigas
+
+•
+Mais recentes
+
+•
+Cliente
+
+Lista de Andamentos: Cada andamento exibe:
+
+•
+Ícone de envelope (verde=lido, cinza=não lido)
+
+•
+Data
+
+•
+Órgão
+
+•
+Tipo
+
+•
+Número do processo
+
+•
+Cliente
+
+•
+Descrição
+
+•
+Badge de instância
+
+•
+Badges circulares dos responsáveis
+
+•
+Menu de ações
+
+Ações:
+
+•
+Marcar como lido/não lido
+
+•
+Criar tarefa
+
+•
+Ver processo relacionado
+
+
+
+
+📋 FASE 6: MÓDULO DE TAREFAS
+
+6.1 Estrutura de Dados - Tarefa
+
+TypeScript
+
+
+interface Tarefa {
+  id: string;
+  codigo_interno: string; // Ex: "TAR.0000001"
+  
+  // Identificação
+  titulo: string;
+  descricao?: string;
+  tipo: 'processo' | 'revisao' | 'intimacao' | 'administrativa';
+  
+  // Status
+  status: 'pendente' | 'a_confirmar' | 'em_execucao' | 'revisao' | 'concluida';
+  
+  // Prazos
+  data_criacao: Date;
+  data_fatal: Date; // Prazo limite
+  
+  // Vinculação
+  processo_id?: string;
+  intimacao_id?: string;
+  cliente?: string;
+  
+  // Responsáveis
+  responsaveis: Array<{
+    usuario_id: string;
+    nome: string;
+    iniciais: string;
+    cor: string;
+  }>;
+  criado_por: string;
+  
+  // Origem
+  origem?: string; // Ex: "Diário de Justiça: Justiça Estadual"
+  
+  // Metadados
+  created_at: Date;
+  updated_at: Date;
+}
+
+
+6.2 Painel de Tarefas
+
+Visualizações:
+
+•
+Toggle: Kanban / Painel (lista)
+
+Seções do Painel:
+
+1. Minhas tarefas
+
+•
+Tarefas atribuídas ao usuário logado
+
+•
+Ordenadas por prazo
+
+2. Tarefas que criei e deleguei
+
+•
+Tarefas criadas pelo usuário mas atribuídas a outros
+
+3. Tarefas da semana
+
+•
+Tarefas com prazo na semana atual
+
+Cards de Tarefa: Cada tarefa exibe:
+
+•
+Barra lateral colorida (tipo)
+
+•
+Badges de status
+
+•
+Ícones de alerta:
+
+•
+Triângulo vermelho: Atrasada
+
+•
+Círculo amarelo: Próxima do prazo
+
+
+
+•
+Título
+
+•
+Cliente/parte
+
+•
+Descrição adicional
+
+•
+Vínculos (processo, intimação)
+
+•
+Código da tarefa
+
+•
+Datas (criação + fatal)
+
+•
+Badges circulares dos responsáveis
+
+•
+Badge numérico (ações/itens)
+
+Visualização Kanban: Colunas:
+
+•
+A confirmar
+
+•
+Pendente
+
+•
+Em execução
+
+•
+Revisão
+
+•
+Concluída
+
+Drag-and-drop entre colunas.
+
+
+
+
+📋 FASE 7: MÓDULO FINANCEIRO
+
+7.1 Estrutura de Dados - Receita/Despesa
+
+TypeScript
+
+
+interface Lancamento {
+  id: string;
+  tipo: 'receita' | 'despesa';
+  
+  // Identificação
+  descricao: string;
+  valor: number;
+  data_vencimento: Date;
+  
+  // Classificação
+  plano_contas: string; // Ex: "Honorários de êxito"
+  categoria: string;
+  
+  // Vinculação
+  cliente_id?: string;
+  processo_id?: string;
+  
+  // Parcelamento
+  parcela_numero?: number;
+  parcela_total?: number;
+  
+  // Status
+  status: 'pendente' | 'recebida' | 'atrasada' | 'parcial';
+  valor_recebido?: number;
+  data_recebimento?: Date;
+  
+  // Controle
+  responsavel_id: string;
+  
+  // Metadados
+  created_at: Date;
+  updated_at: Date;
+}
+
+
+7.2 Tela de Receitas e Despesas
+
+Abas:
+
+•
+Receitas
+
+•
+Despesas
+
+Painel Lateral (Resumo):
+
+•
+Total geral
+
+•
+Receitas (total + variação)
+
+•
+Despesas (total + variação)
+
+•
+Pendentes (receitas + despesas)
+
+Controles:
+
+•
+Botão "Novo lançamento"
+
+•
+Botão "Ocultar valores" (privacidade)
+
+•
+Campo de pesquisa
+
+•
+Botão "Filtros"
+
+•
+Botão "Ações em lote"
+
+Filtros Rápidos:
+
+•
+Todas
+
+•
+Pendentes
+
+•
+Recebidas/Pagas
+
+•
+Atrasadas
+
+Filtro de Período:
+
+•
+Seletor de data inicial e final
+
+•
+Navegação: Período anterior / Próximo período
+
+Lista de Lançamentos: Cada lançamento exibe:
+
+•
+Checkbox (seleção)
+
+•
+Data de vencimento
+
+•
+Valor (com seta ↑ receita ou ↓ despesa)
+
+•
+Badge de parcela (ex: 1/2)
+
+•
+Plano de contas
+
+•
+Cliente
+
+•
+Badges de status
+
+•
+Badge circular do responsável
+
+•
+Menu de ações
+
+
+
+
+📋 FASE 8: MÓDULO DE DOCUMENTOS
+
+8.1 Estrutura de Dados - Documento
+
+TypeScript
+
+
+interface Documento {
+  id: string;
+  
+  // Identificação
+  nome: string;
+  descricao?: string;
+  tipo: 'pdf' | 'docx' | 'html' | 'jpg' | 'png' | 'outros';
+  tamanho: number; // em bytes
+  
+  // Arquivo
+  url: string;
+  caminho: string;
+  
+  // Vinculação
+  processo_id?: string;
+  tarefa_id?: string;
+  vinculo_tipo: 'processo' | 'tarefa' | 'evento' | 'geral';
+  
+  // Classificação
+  categoria?: string;
+  tags?: string[];
+  
+  // Controle
+  uploaded_by: string;
+  
+  // Metadados
+  created_at: Date;
+  updated_at: Date;
+}
+
+
+8.2 Tela de Documentos
+
+Controles:
+
+•
+Botão "Novo" (upload)
+
+•
+Campo de pesquisa: "Pesquise pelo nome ou descrição do documento."
+
+•
+Botão "Filtros"
+
+•
+Botão "Ações em lote"
+
+Ordenação:
+
+•
+Mais recentes
+
+•
+Mais antigos
+
+•
+Alfabética
+
+Lista de Documentos: Cada documento exibe:
+
+•
+Checkbox (seleção)
+
+•
+Ícone do tipo de arquivo
+
+•
+Nome do documento
+
+•
+Data
+
+•
+Tamanho
+
+•
+Descrição
+
+•
+Badge de vínculo (Processo / Tarefa Evento)
+
+•
+Menu de ações
+
+Ações:
+
+•
+Visualizar
+
+•
+Download
+
+•
+Editar metadados
+
+•
+Excluir
+
+•
+Mover para processo/tarefa
+
+
+
+
+🎨 DESIGN SYSTEM
+
+Paleta de Cores
+
+Cores Principais:
+
+•
+Primary (Teal): #14B8A6
+
+•
+Secondary (Azul): #1E40AF
+
+•
+CTA (Laranja): #F97316
+
+Cores de Status:
+
+•
+Verde: #00C853 - Sucesso, ativo, recebido
+
+•
+Amarelo: #FFB300 - Pendente, aviso, revisão
+
+•
+Vermelho: #D32F2F - Erro, atrasado, urgente
+
+•
+Azul: #1976D2 - Informação, processo, judicial
+
+•
+Roxo: #7B1FA2 - Movimentado, arquivado
+
+•
+Cinza: #757575 - Neutro, incompleto, parado
+
+Tipografia
+
+•
+Fonte: Inter ou Roboto
+
+•
+Tamanhos:
+
+•
+H1: 32px (bold)
+
+•
+H2: 24px (bold)
+
+•
+H3: 20px (semibold)
+
+•
+Body: 16px (regular)
+
+•
+Small: 14px (regular)
+
+•
+Tiny: 12px (regular)
+
+
+
+Espaçamento
+
+•
+xs: 4px
+
+•
+sm: 8px
+
+•
+md: 16px
+
+•
+lg: 24px
+
+•
+xl: 32px
+
+•
+2xl: 48px
+
+Componentes Reutilizáveis
+
+Badge Circular de Responsável:
+
+TSX
+
+
+<div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{backgroundColor: cor}}>
+  {iniciais}
+</div>
+
+
+Badge de Status:
+
+TSX
+
+
+<span className="px-2 py-1 rounded text-xs font-medium" style={{backgroundColor, color}}>
+  {texto}
+</span>
+
+
+Card Base:
+
+•
+Borda arredondada: 8px
+
+•
+Sombra: shadow-sm hover:shadow-md
+
+•
+Padding: 16px
+
+•
+Transição: 200ms ease
+
+
+
+
+🔧 FUNCIONALIDADES TÉCNICAS
+
+Responsividade
+
+•
+Mobile: < 768px
+
+•
+Tablet: 768px - 1024px
+
+•
+Desktop: > 1024px
+
+Performance
+
+•
+Lazy loading de rotas
+
+•
+Virtual scrolling em listas longas
+
+•
+Debounce em campos de pesquisa (300ms)
+
+•
+Otimização de imagens
+
+Acessibilidade
+
+•
+Contraste mínimo WCAG AA
+
+•
+Navegação por teclado
+
+•
+ARIA labels
+
+•
+Focus indicators
+
+
+
+
+📝 INSTRUÇÕES FINAIS
+
+1.
+Implemente fase por fase na ordem apresentada
+
+2.
+Teste cada funcionalidade antes de avançar
+
+3.
+Use componentes reutilizáveis do shadcn/ui
+
+4.
+Mantenha código limpo e bem comentado
+
+5.
+Siga o design system rigorosamente
+
+6.
+Priorize UX e facilidade de uso
+
+Após cada fase, me mostre o resultado para validação antes de prosseguir!
+
