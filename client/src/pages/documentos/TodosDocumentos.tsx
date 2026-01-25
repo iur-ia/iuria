@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Filter, FileText, Download, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,90 +13,55 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Documento {
-  id: string;
-  nome: string;
-  tipo: "Petição" | "Contrato" | "Procuração" | "Sentença" | "Outro";
-  processo?: string;
-  tamanho: string;
-  data_upload: string;
-  enviado_por: string;
-}
-
-const mockDocumentos: Documento[] = [
-  {
-    id: "1",
-    nome: "Petição Inicial - Ação de Cobrança.pdf",
-    tipo: "Petição",
-    processo: "PRO.0000001",
-    tamanho: "2.5 MB",
-    data_upload: "2025-10-25",
-    enviado_por: "Thiago Gomes",
-  },
-  {
-    id: "2",
-    nome: "Contrato de Honorários - Maria Silva.pdf",
-    tipo: "Contrato",
-    processo: "PRO.0000001",
-    tamanho: "850 KB",
-    data_upload: "2025-08-15",
-    enviado_por: "Maria Costa",
-  },
-  {
-    id: "3",
-    nome: "Procuração - Pedro Oliveira.pdf",
-    tipo: "Procuração",
-    processo: "PRO.0000002",
-    tamanho: "450 KB",
-    data_upload: "2025-09-01",
-    enviado_por: "Roberto Silva",
-  },
-  {
-    id: "4",
-    nome: "Sentença - 1ª Instância.pdf",
-    tipo: "Sentença",
-    processo: "PRO.0000003",
-    tamanho: "1.2 MB",
-    data_upload: "2025-10-20",
-    enviado_por: "Sistema",
-  },
-  {
-    id: "5",
-    nome: "Contestação - Processo 004.pdf",
-    tipo: "Petição",
-    processo: "PRO.0000004",
-    tamanho: "3.1 MB",
-    data_upload: "2025-10-28",
-    enviado_por: "Maria Costa",
-  },
-  {
-    id: "6",
-    nome: "Acordo Trabalhista - Empresa XYZ.pdf",
-    tipo: "Contrato",
-    tamanho: "1.8 MB",
-    data_upload: "2025-10-15",
-    enviado_por: "Thiago Gomes",
-  },
-];
+import type { Documento, Processo, Equipe } from "@shared/schema";
 
 export default function TodosDocumentos() {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredDocumentos = mockDocumentos.filter(
+  const { data: documentos = [], isLoading } = useQuery<Documento[]>({
+    queryKey: ["/api/documentos"],
+  });
+
+  const { data: processos = [] } = useQuery<Processo[]>({
+    queryKey: ["/api/processos"],
+  });
+
+  const { data: equipe = [] } = useQuery<Equipe[]>({
+    queryKey: ["/api/equipe"],
+  });
+
+  const getProcessoNumero = (id: string | null) => {
+    const proc = processos.find(p => p.id === id);
+    return proc?.numero;
+  };
+
+  const getEnviadoPorNome = (id: string | null) => {
+    const membro = equipe.find(m => m.id === id);
+    return membro?.nome || "Sistema";
+  };
+
+  const filteredDocumentos = documentos.filter(
     (doc) =>
       doc.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      doc.processo?.includes(searchTerm) ||
+      getProcessoNumero(doc.processoId)?.includes(searchTerm) ||
       doc.tipo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const tipoColors = {
+  const tipoColors: Record<string, string> = {
     Petição: "bg-purple-100 text-purple-800",
     Contrato: "bg-blue-100 text-blue-800",
     Procuração: "bg-green-100 text-green-800",
     Sentença: "bg-orange-100 text-orange-800",
     Outro: "bg-gray-100 text-gray-800",
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Carregando documentos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
@@ -121,14 +87,14 @@ export default function TodosDocumentos() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Total</p>
-            <p className="text-3xl font-bold text-foreground">{mockDocumentos.length}</p>
+            <p className="text-3xl font-bold text-foreground">{documentos.length}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Petições</p>
             <p className="text-3xl font-bold text-purple-600">
-              {mockDocumentos.filter((d) => d.tipo === "Petição").length}
+              {documentos.filter((d) => d.tipo === "Petição").length}
             </p>
           </CardContent>
         </Card>
@@ -136,7 +102,7 @@ export default function TodosDocumentos() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Contratos</p>
             <p className="text-3xl font-bold text-blue-600">
-              {mockDocumentos.filter((d) => d.tipo === "Contrato").length}
+              {documentos.filter((d) => d.tipo === "Contrato").length}
             </p>
           </CardContent>
         </Card>
@@ -144,7 +110,7 @@ export default function TodosDocumentos() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Procurações</p>
             <p className="text-3xl font-bold text-green-600">
-              {mockDocumentos.filter((d) => d.tipo === "Procuração").length}
+              {documentos.filter((d) => d.tipo === "Procuração").length}
             </p>
           </CardContent>
         </Card>
@@ -152,7 +118,7 @@ export default function TodosDocumentos() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Sentenças</p>
             <p className="text-3xl font-bold text-orange-600">
-              {mockDocumentos.filter((d) => d.tipo === "Sentença").length}
+              {documentos.filter((d) => d.tipo === "Sentença").length}
             </p>
           </CardContent>
         </Card>
@@ -200,20 +166,20 @@ export default function TodosDocumentos() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge className={tipoColors[doc.tipo]}>{doc.tipo}</Badge>
+                    <Badge className={tipoColors[doc.tipo] || "bg-gray-100"}>{doc.tipo}</Badge>
                   </TableCell>
                   <TableCell>
-                    {doc.processo ? (
-                      <span className="font-mono text-sm">{doc.processo}</span>
+                    {doc.processoId ? (
+                      <span className="font-mono text-sm">{getProcessoNumero(doc.processoId)}</span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm">{doc.tamanho}</TableCell>
+                  <TableCell className="text-sm">{doc.tamanho || "-"}</TableCell>
                   <TableCell>
-                    {new Date(doc.data_upload).toLocaleDateString("pt-BR")}
+                    {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString("pt-BR") : "-"}
                   </TableCell>
-                  <TableCell className="text-sm">{doc.enviado_por}</TableCell>
+                  <TableCell className="text-sm">{getEnviadoPorNome(doc.enviadoPor)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-view-${doc.id}`}>
@@ -228,6 +194,12 @@ export default function TodosDocumentos() {
               ))}
             </TableBody>
           </Table>
+
+          {filteredDocumentos.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Nenhum documento encontrado</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

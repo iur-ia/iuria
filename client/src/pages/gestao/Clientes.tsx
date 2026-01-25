@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Filter, Mail, Phone, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,90 +21,33 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-interface Cliente {
-  id: string;
-  nome: string;
-  tipo: "Pessoa Física" | "Pessoa Jurídica";
-  cpf_cnpj: string;
-  email: string;
-  telefone: string;
-  processos_ativos: number;
-  status: "Ativo" | "Inativo";
-  categoria: "Premium" | "Regular";
-}
-
-const mockClientes: Cliente[] = [
-  {
-    id: "1",
-    nome: "Maria Silva Comércio LTDA",
-    tipo: "Pessoa Jurídica",
-    cpf_cnpj: "12.345.678/0001-90",
-    email: "contato@mariasilva.com.br",
-    telefone: "(21) 3456-7890",
-    processos_ativos: 3,
-    status: "Ativo",
-    categoria: "Premium",
-  },
-  {
-    id: "2",
-    nome: "Pedro Oliveira",
-    tipo: "Pessoa Física",
-    cpf_cnpj: "123.456.789-00",
-    email: "pedro.oliveira@email.com",
-    telefone: "(21) 98765-4321",
-    processos_ativos: 1,
-    status: "Ativo",
-    categoria: "Regular",
-  },
-  {
-    id: "3",
-    nome: "Ana Paula Rodrigues",
-    tipo: "Pessoa Física",
-    cpf_cnpj: "987.654.321-00",
-    email: "ana.rodrigues@email.com",
-    telefone: "(21) 99876-5432",
-    processos_ativos: 2,
-    status: "Ativo",
-    categoria: "Regular",
-  },
-  {
-    id: "4",
-    nome: "Comércio Central S/A",
-    tipo: "Pessoa Jurídica",
-    cpf_cnpj: "98.765.432/0001-10",
-    email: "juridico@comerciocentral.com.br",
-    telefone: "(21) 2345-6789",
-    processos_ativos: 5,
-    status: "Ativo",
-    categoria: "Premium",
-  },
-  {
-    id: "5",
-    nome: "Carlos Eduardo Santos",
-    tipo: "Pessoa Física",
-    cpf_cnpj: "456.789.123-00",
-    email: "carlos.santos@email.com",
-    telefone: "(21) 97654-3210",
-    processos_ativos: 0,
-    status: "Inativo",
-    categoria: "Regular",
-  },
-];
+import type { Cliente } from "@shared/schema";
 
 export default function Clientes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("todos");
 
-  const filteredClientes = mockClientes.filter((cliente) => {
+  const { data: clientes = [], isLoading } = useQuery<Cliente[]>({
+    queryKey: ["/api/clientes"],
+  });
+
+  const filteredClientes = clientes.filter((cliente) => {
     const matchesSearch =
       cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cliente.cpf_cnpj.includes(searchTerm) ||
-      cliente.email.toLowerCase().includes(searchTerm.toLowerCase());
+      cliente.cpfCnpj?.includes(searchTerm) ||
+      cliente.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTipo =
       tipoFilter === "todos" || cliente.tipo === tipoFilter;
     return matchesSearch && matchesTipo;
   });
+
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Carregando clientes...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
@@ -127,14 +71,14 @@ export default function Clientes() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Total de Clientes</p>
-            <p className="text-3xl font-bold text-foreground">{mockClientes.length}</p>
+            <p className="text-3xl font-bold text-foreground">{clientes.length}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Clientes Ativos</p>
             <p className="text-3xl font-bold text-green-600">
-              {mockClientes.filter((c) => c.status === "Ativo").length}
+              {clientes.filter((c) => c.status === "Ativo").length}
             </p>
           </CardContent>
         </Card>
@@ -142,7 +86,7 @@ export default function Clientes() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Pessoa Física</p>
             <p className="text-3xl font-bold text-blue-600">
-              {mockClientes.filter((c) => c.tipo === "Pessoa Física").length}
+              {clientes.filter((c) => c.tipo === "Pessoa Física").length}
             </p>
           </CardContent>
         </Card>
@@ -150,7 +94,7 @@ export default function Clientes() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Pessoa Jurídica</p>
             <p className="text-3xl font-bold text-purple-600">
-              {mockClientes.filter((c) => c.tipo === "Pessoa Jurídica").length}
+              {clientes.filter((c) => c.tipo === "Pessoa Jurídica").length}
             </p>
           </CardContent>
         </Card>
@@ -193,7 +137,7 @@ export default function Clientes() {
                 <TableHead>Tipo</TableHead>
                 <TableHead>CPF/CNPJ</TableHead>
                 <TableHead>Contato</TableHead>
-                <TableHead>Processos</TableHead>
+                <TableHead>Cidade</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Ações</TableHead>
               </TableRow>
@@ -213,14 +157,7 @@ export default function Clientes() {
                             .toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <p className="font-medium">{cliente.nome}</p>
-                        {cliente.categoria === "Premium" && (
-                          <Badge variant="secondary" className="mt-1">
-                            Premium
-                          </Badge>
-                        )}
-                      </div>
+                      <p className="font-medium">{cliente.nome}</p>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -234,23 +171,25 @@ export default function Clientes() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="font-mono text-sm">{cliente.cpf_cnpj}</span>
+                    <span className="font-mono text-sm">{cliente.cpfCnpj || "-"}</span>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="w-3 h-3 text-muted-foreground" />
-                        <span>{cliente.email}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Phone className="w-3 h-3 text-muted-foreground" />
-                        <span>{cliente.telefone}</span>
-                      </div>
+                      {cliente.email && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Mail className="w-3 h-3 text-muted-foreground" />
+                          <span>{cliente.email}</span>
+                        </div>
+                      )}
+                      {cliente.telefone && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Phone className="w-3 h-3 text-muted-foreground" />
+                          <span>{cliente.telefone}</span>
+                        </div>
+                      )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{cliente.processos_ativos}</Badge>
-                  </TableCell>
+                  <TableCell>{cliente.cidade || "-"}</TableCell>
                   <TableCell>
                     <Badge
                       className={

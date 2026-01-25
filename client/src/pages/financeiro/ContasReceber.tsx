@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Filter, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,98 +13,66 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { ContaReceber, Cliente, Processo } from "@shared/schema";
 
-interface ContaReceber {
-  id: string;
-  cliente: string;
-  processo?: string;
-  descricao: string;
-  valor: number;
-  vencimento: string;
-  status: "Pago" | "Pendente" | "Atrasado" | "Parcial";
-  tipo: "Honorários" | "Sucumbência" | "Consultoria";
-}
-
-const mockContas: ContaReceber[] = [
-  {
-    id: "1",
-    cliente: "Maria Silva Comércio LTDA",
-    processo: "PRO.0000001",
-    descricao: "Honorários - Ação de Cobrança",
-    valor: 15000,
-    vencimento: "2025-11-05",
-    status: "Pendente",
-    tipo: "Honorários",
-  },
-  {
-    id: "2",
-    cliente: "Pedro Oliveira",
-    processo: "PRO.0000002",
-    descricao: "Honorários - Execução de Título",
-    valor: 8500,
-    vencimento: "2025-10-28",
-    status: "Atrasado",
-    tipo: "Honorários",
-  },
-  {
-    id: "3",
-    cliente: "Comércio Central S/A",
-    processo: "PRO.0000004",
-    descricao: "Consultoria Jurídica - Outubro",
-    valor: 12000,
-    vencimento: "2025-11-01",
-    status: "Pago",
-    tipo: "Consultoria",
-  },
-  {
-    id: "4",
-    cliente: "Ana Paula Rodrigues",
-    processo: "PRO.0000003",
-    descricao: "Sucumbência - Rescisão Contratual",
-    valor: 5000,
-    vencimento: "2025-11-10",
-    status: "Pendente",
-    tipo: "Sucumbência",
-  },
-  {
-    id: "5",
-    cliente: "Maria Silva Comércio LTDA",
-    descricao: "Consultoria Tributária",
-    valor: 7500,
-    vencimento: "2025-10-30",
-    status: "Parcial",
-    tipo: "Consultoria",
-  },
-];
-
-export default function ContasReceber() {
+export default function ContasReceberPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredContas = mockContas.filter(
+  const { data: contas = [], isLoading } = useQuery<ContaReceber[]>({
+    queryKey: ["/api/contas-receber"],
+  });
+
+  const { data: clientes = [] } = useQuery<Cliente[]>({
+    queryKey: ["/api/clientes"],
+  });
+
+  const { data: processos = [] } = useQuery<Processo[]>({
+    queryKey: ["/api/processos"],
+  });
+
+  const getClienteNome = (id: string | null) => {
+    const cliente = clientes.find(c => c.id === id);
+    return cliente?.nome || "Não informado";
+  };
+
+  const getProcessoNumero = (id: string | null) => {
+    const proc = processos.find(p => p.id === id);
+    return proc?.numero;
+  };
+
+  const filteredContas = contas.filter(
     (conta) =>
-      conta.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getClienteNome(conta.clienteId).toLowerCase().includes(searchTerm.toLowerCase()) ||
       conta.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      conta.processo?.includes(searchTerm)
+      getProcessoNumero(conta.processoId)?.includes(searchTerm)
   );
 
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     Pago: "bg-green-100 text-green-800",
     Pendente: "bg-yellow-100 text-yellow-800",
     Atrasado: "bg-red-100 text-red-800",
     Parcial: "bg-blue-100 text-blue-800",
   };
 
-  const totalReceber = mockContas
+  const totalReceber = contas
     .filter((c) => c.status !== "Pago")
-    .reduce((acc, c) => acc + c.valor, 0);
+    .reduce((acc, c) => acc + parseFloat(c.valor), 0);
 
-  const totalRecebido = mockContas
+  const totalRecebido = contas
     .filter((c) => c.status === "Pago")
-    .reduce((acc, c) => acc + c.valor, 0);
+    .reduce((acc, c) => acc + parseFloat(c.valor), 0);
 
-  const totalAtrasado = mockContas
+  const totalAtrasado = contas
     .filter((c) => c.status === "Atrasado")
-    .reduce((acc, c) => acc + c.valor, 0);
+    .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Carregando contas...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
@@ -164,7 +133,7 @@ export default function ContasReceber() {
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-muted-foreground">Total de Contas</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">{mockContas.length}</p>
+            <p className="text-2xl font-bold text-foreground">{contas.length}</p>
           </CardContent>
         </Card>
       </div>
@@ -205,11 +174,11 @@ export default function ContasReceber() {
             <TableBody>
               {filteredContas.map((conta) => (
                 <TableRow key={conta.id} data-testid={`row-receivable-${conta.id}`}>
-                  <TableCell className="font-medium">{conta.cliente}</TableCell>
+                  <TableCell className="font-medium">{getClienteNome(conta.clienteId)}</TableCell>
                   <TableCell>{conta.descricao}</TableCell>
                   <TableCell>
-                    {conta.processo ? (
-                      <span className="font-mono text-sm">{conta.processo}</span>
+                    {conta.processoId ? (
+                      <span className="font-mono text-sm">{getProcessoNumero(conta.processoId)}</span>
                     ) : (
                       <span className="text-muted-foreground">-</span>
                     )}
@@ -218,13 +187,13 @@ export default function ContasReceber() {
                     <Badge variant="outline">{conta.tipo}</Badge>
                   </TableCell>
                   <TableCell className="font-semibold">
-                    R$ {conta.valor.toLocaleString("pt-BR")}
+                    R$ {parseFloat(conta.valor).toLocaleString("pt-BR")}
                   </TableCell>
                   <TableCell>
                     {new Date(conta.vencimento).toLocaleDateString("pt-BR")}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColors[conta.status]}>
+                    <Badge className={statusColors[conta.status] || "bg-gray-100"}>
                       {conta.status}
                     </Badge>
                   </TableCell>
@@ -237,6 +206,12 @@ export default function ContasReceber() {
               ))}
             </TableBody>
           </Table>
+
+          {filteredContas.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Nenhuma conta encontrada</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

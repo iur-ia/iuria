@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Filter, Calendar, Clock, Bell, Gavel } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,126 +14,78 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-interface Atividade {
-  id: string;
-  titulo: string;
-  tipo: "Tarefa" | "Intimação" | "Audiência" | "Compromisso";
-  processo?: string;
-  responsavel: string;
-  data: string;
-  hora?: string;
-  prioridade: "Alta" | "Média" | "Baixa";
-  status: "Pendente" | "Em Andamento" | "Concluído" | "Atrasado";
-}
-
-const mockAtividades: Atividade[] = [
-  {
-    id: "1",
-    titulo: "Revisar petição inicial",
-    tipo: "Tarefa",
-    processo: "PRO.0000001",
-    responsavel: "Thiago Gomes",
-    data: "2025-10-30",
-    hora: "14:00",
-    prioridade: "Alta",
-    status: "Pendente",
-  },
-  {
-    id: "2",
-    titulo: "Prazo recurso - Processo Silva",
-    tipo: "Intimação",
-    processo: "PRO.0000002",
-    responsavel: "Maria Costa",
-    data: "2025-11-02",
-    prioridade: "Alta",
-    status: "Pendente",
-  },
-  {
-    id: "3",
-    titulo: "Audiência de instrução",
-    tipo: "Audiência",
-    processo: "PRO.0000001",
-    responsavel: "Thiago Gomes",
-    data: "2025-11-05",
-    hora: "10:30",
-    prioridade: "Alta",
-    status: "Pendente",
-  },
-  {
-    id: "4",
-    titulo: "Reunião com cliente - Comércio Central",
-    tipo: "Compromisso",
-    responsavel: "Roberto Silva",
-    data: "2025-10-31",
-    hora: "15:00",
-    prioridade: "Média",
-    status: "Pendente",
-  },
-  {
-    id: "5",
-    titulo: "Análise de contrato",
-    tipo: "Tarefa",
-    processo: "PRO.0000004",
-    responsavel: "Maria Costa",
-    data: "2025-10-29",
-    hora: "09:00",
-    prioridade: "Média",
-    status: "Atrasado",
-  },
-  {
-    id: "6",
-    titulo: "Elaborar contestação",
-    tipo: "Tarefa",
-    processo: "PRO.0000003",
-    responsavel: "Roberto Silva",
-    data: "2025-11-01",
-    hora: "11:00",
-    prioridade: "Alta",
-    status: "Em Andamento",
-  },
-];
+import type { Atividade, Processo, Equipe } from "@shared/schema";
 
 export default function ListaAtividades() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("todas");
 
-  const filteredAtividades = mockAtividades.filter((atividade) => {
+  const { data: atividades = [], isLoading } = useQuery<Atividade[]>({
+    queryKey: ["/api/atividades"],
+  });
+
+  const { data: processos = [] } = useQuery<Processo[]>({
+    queryKey: ["/api/processos"],
+  });
+
+  const { data: equipe = [] } = useQuery<Equipe[]>({
+    queryKey: ["/api/equipe"],
+  });
+
+  const getProcessoNumero = (id: string | null) => {
+    const proc = processos.find(p => p.id === id);
+    return proc?.numero;
+  };
+
+  const getResponsavelNome = (id: string | null) => {
+    const membro = equipe.find(m => m.id === id);
+    return membro?.nome || "Não atribuído";
+  };
+
+  const filteredAtividades = atividades.filter((atividade) => {
     const matchesSearch =
       atividade.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      atividade.processo?.includes(searchTerm) ||
-      atividade.responsavel.toLowerCase().includes(searchTerm.toLowerCase());
+      getProcessoNumero(atividade.processoId)?.includes(searchTerm) ||
+      getResponsavelNome(atividade.responsavelId).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTipo =
       tipoFilter === "todas" || atividade.tipo === tipoFilter;
     return matchesSearch && matchesTipo;
   });
 
-  const tipoIcons = {
+  const tipoIcons: Record<string, typeof Clock> = {
     Tarefa: Clock,
     Intimação: Bell,
     Audiência: Gavel,
     Compromisso: Calendar,
   };
 
-  const tipoColors = {
+  const tipoColors: Record<string, string> = {
     Tarefa: "bg-purple-100 text-purple-800",
     Intimação: "bg-orange-100 text-orange-800",
     Audiência: "bg-green-100 text-green-800",
     Compromisso: "bg-blue-100 text-blue-800",
   };
 
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     Pendente: "bg-gray-100 text-gray-800",
     "Em Andamento": "bg-blue-100 text-blue-800",
     Concluído: "bg-green-100 text-green-800",
     Atrasado: "bg-red-100 text-red-800",
   };
 
-  const prioridadeColors = {
+  const prioridadeColors: Record<string, string> = {
     Alta: "text-red-600",
     Média: "text-yellow-600",
     Baixa: "text-green-600",
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Carregando atividades...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
@@ -159,7 +112,7 @@ export default function ListaAtividades() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Tarefas</p>
             <p className="text-3xl font-bold text-purple-600">
-              {mockAtividades.filter((a) => a.tipo === "Tarefa").length}
+              {atividades.filter((a) => a.tipo === "Tarefa").length}
             </p>
           </CardContent>
         </Card>
@@ -167,7 +120,7 @@ export default function ListaAtividades() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Intimações</p>
             <p className="text-3xl font-bold text-orange-600">
-              {mockAtividades.filter((a) => a.tipo === "Intimação").length}
+              {atividades.filter((a) => a.tipo === "Intimação").length}
             </p>
           </CardContent>
         </Card>
@@ -175,7 +128,7 @@ export default function ListaAtividades() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Audiências</p>
             <p className="text-3xl font-bold text-green-600">
-              {mockAtividades.filter((a) => a.tipo === "Audiência").length}
+              {atividades.filter((a) => a.tipo === "Audiência").length}
             </p>
           </CardContent>
         </Card>
@@ -183,7 +136,7 @@ export default function ListaAtividades() {
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Compromissos</p>
             <p className="text-3xl font-bold text-blue-600">
-              {mockAtividades.filter((a) => a.tipo === "Compromisso").length}
+              {atividades.filter((a) => a.tipo === "Compromisso").length}
             </p>
           </CardContent>
         </Card>
@@ -244,24 +197,24 @@ export default function ListaAtividades() {
             </TableHeader>
             <TableBody>
               {filteredAtividades.map((atividade) => {
-                const Icon = tipoIcons[atividade.tipo];
+                const Icon = tipoIcons[atividade.tipo] || Clock;
                 return (
                   <TableRow key={atividade.id} data-testid={`row-activity-${atividade.id}`}>
                     <TableCell className="font-medium">{atividade.titulo}</TableCell>
                     <TableCell>
-                      <Badge className={tipoColors[atividade.tipo]}>
+                      <Badge className={tipoColors[atividade.tipo] || "bg-gray-100"}>
                         <Icon className="w-3 h-3 mr-1" />
                         {atividade.tipo}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {atividade.processo ? (
-                        <span className="font-mono text-sm">{atividade.processo}</span>
+                      {atividade.processoId ? (
+                        <span className="font-mono text-sm">{getProcessoNumero(atividade.processoId)}</span>
                       ) : (
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell>{atividade.responsavel}</TableCell>
+                    <TableCell>{getResponsavelNome(atividade.responsavelId)}</TableCell>
                     <TableCell>
                       <div className="text-sm">
                         <div>{new Date(atividade.data).toLocaleDateString("pt-BR")}</div>
@@ -271,12 +224,12 @@ export default function ListaAtividades() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`font-medium ${prioridadeColors[atividade.prioridade]}`}>
+                      <span className={`font-medium ${prioridadeColors[atividade.prioridade] || ""}`}>
                         {atividade.prioridade}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge className={statusColors[atividade.status]}>
+                      <Badge className={statusColors[atividade.status] || "bg-gray-100"}>
                         {atividade.status}
                       </Badge>
                     </TableCell>
@@ -290,6 +243,12 @@ export default function ListaAtividades() {
               })}
             </TableBody>
           </Table>
+
+          {filteredAtividades.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">Nenhuma atividade encontrada</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
