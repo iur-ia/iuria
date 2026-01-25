@@ -85,3 +85,64 @@ The application follows Material Design 3 principles customized for enterprise l
 ### Development Tools
 - **Replit Plugins**: Runtime error overlay, cartographer, and dev banner for Replit environment
 - **TypeScript**: Strict mode enabled with path aliases for clean imports
+
+### Web Scraping (Consulta Processual)
+- **Playwright (Python)**: Web scraping framework for court portal automation
+- **CNJ Parser**: Automatic tribunal detection from process numbers
+- **Scrapers Path**: `scraper/` directory contains Python scrapers for each tribunal
+
+## Web Scraping Architecture
+
+### Tribunal Scrapers
+Located in `scraper/tribunais/`, each file implements scraping logic for a specific court:
+- `stf.py` - Supremo Tribunal Federal (active)
+- `stj.py` - Superior Tribunal de Justiça (planned)
+- `trf2.py` - TRF 2ª Região (planned)
+- `tjrj.py` - TJ Rio de Janeiro (planned)
+
+### CNJ Parser (`scraper/cnj_parser.py`)
+Parses Brazilian court process numbers and detects tribunal automatically:
+- **CNJ Format**: `NNNNNNN-DD.AAAA.J.TR.OOOO`
+- **Class Format**: `ADI 1`, `HC 123456`, `REsp 1234567`
+
+### API Endpoints for Scraping
+- `GET /api/detectar-tribunal/:numero` - Detects tribunal from process number
+- `POST /api/consulta-processual` - Executes web scraping search
+
+## Implementation Roadmap
+
+### Phase 1 - Foundation (Completed)
+- [x] STF scraper implementation
+- [x] Automatic tribunal detection (CNJ parser)
+- [x] Tabbed process details (Info, Partes, Andamentos, Decisões)
+- [x] Party search page (Busca por Parte)
+
+### Phase 2 - Priority Tribunals (Next)
+- [ ] STJ - Superior Tribunal de Justiça
+- [ ] TRF2 - Tribunal Regional Federal 2ª Região
+- [ ] TJRJ - Tribunal de Justiça do Rio de Janeiro
+
+### Phase 3 - Federal Expansion
+- [ ] TRF1, TRF3, TRF4, TRF5, TRF6
+- [ ] TJSP - Tribunal de Justiça de São Paulo
+
+### Phase 4 - State Courts
+- [ ] Remaining 25 State TJs
+
+### Phase 5 - Monitoring
+- [ ] DJE/DJEM module (Electronic Journal)
+- [ ] Automatic deadline tracking
+- [ ] Process-publication crossreferencing
+
+## Key Routes
+
+| Route | Description |
+|-------|-------------|
+| `/` | Dashboard |
+| `/processos` | Process list |
+| `/consulta-processual` | Court portal search (auto-detection) |
+| `/busca-parte` | Search by party name/CNPJ |
+| `/atividades` | Activities/Tasks |
+| `/financeiro/*` | Financial management |
+| `/documentos/*` | Document management |
+| `/gestao/*` | CRM and team management |
