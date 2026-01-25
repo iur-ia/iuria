@@ -4,8 +4,11 @@ https://www.tjrj.jus.br/
 """
 import asyncio
 import re
+import sys
+import os
 from playwright.async_api import async_playwright, Browser, Page
-from ..base_scraper import BaseScraper, ResultadoBusca, ProcessoInfo, Movimentacao
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from base_scraper import BaseScraper, ResultadoBusca, ProcessoInfo, Movimentacao
 
 
 class TJRJScraper(BaseScraper):

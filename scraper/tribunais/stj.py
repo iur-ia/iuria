@@ -5,7 +5,10 @@ https://www.stj.jus.br/
 import asyncio
 import re
 from playwright.async_api import async_playwright, Browser, Page
-from ..base_scraper import BaseScraper, ResultadoBusca, ProcessoInfo, Movimentacao
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from base_scraper import BaseScraper, ResultadoBusca, ProcessoInfo, Movimentacao
 
 
 class STJScraper(BaseScraper):
