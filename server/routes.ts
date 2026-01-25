@@ -531,6 +531,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Detectar tribunal automaticamente pelo número do processo
+  app.get("/api/detectar-tribunal/:numero", async (req, res) => {
+    try {
+      const { numero } = req.params;
+      
+      if (!numero || numero.trim().length < 2) {
+        return res.status(400).json({ error: "Número do processo inválido" });
+      }
+      
+      const { spawn } = await import("child_process");
+      const path = await import("path");
+      
+      const scriptPath = path.join(process.cwd(), "scraper", "detect_tribunal.py");
+      
+      const pythonProcess = spawn("python", [scriptPath, "detectar", numero]);
+      
+      let stdout = "";
+      let stderr = "";
+      
+      pythonProcess.stdout.on("data", (data: Buffer) => {
+        stdout += data.toString();
+      });
+      
+      pythonProcess.stderr.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+      
+      pythonProcess.on("close", (code: number) => {
+        if (code !== 0) {
+          console.error("Detect tribunal error:", stderr);
+          return res.status(500).json({ error: "Erro ao detectar tribunal" });
+        }
+        
+        try {
+          const result = JSON.parse(stdout);
+          res.json(result);
+        } catch (e) {
+          res.status(500).json({ error: "Erro ao processar resposta" });
+        }
+      });
+      
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao detectar tribunal" });
+    }
+  });
+
   // ==================== CONSULTA PROCESSUAL ====================
   app.get("/api/consultas-processuais", async (req, res) => {
     try {
