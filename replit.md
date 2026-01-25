@@ -117,10 +117,10 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 - [x] Tabbed process details (Info, Partes, Andamentos, Decisões)
 - [x] Party search page (Busca por Parte)
 
-### Phase 2 - Priority Tribunals (Next)
-- [ ] STJ - Superior Tribunal de Justiça
-- [ ] TRF2 - Tribunal Regional Federal 2ª Região
-- [ ] TJRJ - Tribunal de Justiça do Rio de Janeiro
+### Phase 2 - Priority Tribunals (Completed)
+- [x] STJ - Superior Tribunal de Justica
+- [x] TRF2 - Tribunal Regional Federal 2a Regiao
+- [x] TJRJ - Tribunal de Justica do Rio de Janeiro
 
 ### Phase 3 - Federal Expansion
 - [ ] TRF1, TRF3, TRF4, TRF5, TRF6

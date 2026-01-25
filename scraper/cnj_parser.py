@@ -195,18 +195,20 @@ def get_tribunal_info(sigla: str) -> Optional[Dict]:
             "nome": "Superior Tribunal de Justiça",
             "url": "https://processo.stj.jus.br/processo/pesquisa",
             "sistema": "Portal próprio",
-            "ativo": False  # Ainda não implementado
+            "ativo": True
         }
     
     # Buscar em TRFs
     for codigo, info in TRIBUNAIS_FEDERAIS.items():
         if info["sigla"] == sigla:
-            return {**info, "sistema": "eProc/PJe", "ativo": False}
+            ativo = sigla == "TRF2"  # TRF2 está ativo
+            return {**info, "sistema": "eProc/PJe", "ativo": ativo}
     
     # Buscar em TJs
     for codigo, info in TRIBUNAIS_ESTADUAIS.items():
         if info["sigla"] == sigla:
-            return {**info, "sistema": "PJe/eSAJ/eProc", "ativo": False}
+            ativo = sigla == "TJRJ"  # TJRJ está ativo
+            return {**info, "sistema": "PJe/eSAJ/eProc", "ativo": ativo}
     
     return None
 
@@ -216,7 +218,10 @@ def listar_tribunais_ativos() -> list:
     Retorna lista de tribunais com scraper implementado.
     """
     return [
-        {"sigla": "STF", "nome": "Supremo Tribunal Federal", "ativo": True}
+        {"sigla": "STF", "nome": "Supremo Tribunal Federal", "ativo": True},
+        {"sigla": "STJ", "nome": "Superior Tribunal de Justica", "ativo": True},
+        {"sigla": "TRF2", "nome": "Tribunal Regional Federal da 2a Regiao", "ativo": True},
+        {"sigla": "TJRJ", "nome": "Tribunal de Justica do Rio de Janeiro", "ativo": True}
     ]
 
 
@@ -228,7 +233,7 @@ def listar_todos_tribunais() -> list:
     
     # Superiores
     tribunais.append({"sigla": "STF", "nome": "Supremo Tribunal Federal", "segmento": "Superior", "ativo": True})
-    tribunais.append({"sigla": "STJ", "nome": "Superior Tribunal de Justiça", "segmento": "Superior", "ativo": False})
+    tribunais.append({"sigla": "STJ", "nome": "Superior Tribunal de Justica", "segmento": "Superior", "ativo": True})
     
     # TRFs
     for codigo, info in TRIBUNAIS_FEDERAIS.items():

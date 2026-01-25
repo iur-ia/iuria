@@ -27,9 +27,9 @@ interface BuscaResultado {
 
 const TRIBUNAIS_BUSCA = [
   { sigla: "STF", nome: "Supremo Tribunal Federal", ativo: true },
-  { sigla: "STJ", nome: "Superior Tribunal de Justiça", ativo: false },
-  { sigla: "TRF2", nome: "TRF 2ª Região (RJ/ES)", ativo: false },
-  { sigla: "TJRJ", nome: "TJ Rio de Janeiro", ativo: false },
+  { sigla: "STJ", nome: "Superior Tribunal de Justica", ativo: true },
+  { sigla: "TRF2", nome: "TRF 2a Regiao (RJ/ES)", ativo: true },
+  { sigla: "TJRJ", nome: "TJ Rio de Janeiro", ativo: true },
 ];
 
 export default function BuscaParte() {

@@ -12,11 +12,17 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from tribunais.stf import STFScraper
+from tribunais.stj import STJScraper
+from tribunais.trf2 import TRF2Scraper
+from tribunais.tjrj import TJRJScraper
 
 
 # Registry of available scrapers
 SCRAPERS = {
     "STF": STFScraper,
+    "STJ": STJScraper,
+    "TRF2": TRF2Scraper,
+    "TJRJ": TJRJScraper,
 }
 
 
