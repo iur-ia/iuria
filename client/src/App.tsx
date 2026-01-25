@@ -20,6 +20,7 @@ import TodosDocumentos from "@/pages/documentos/TodosDocumentos";
 import Peticoes from "@/pages/documentos/Peticoes";
 import Contratos from "@/pages/documentos/Contratos";
 import ConsultaProcessual from "@/pages/ConsultaProcessual";
+import BuscaParte from "@/pages/BuscaParte";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -46,6 +47,7 @@ function Router() {
       <Route path="/documentos/contratos" component={Contratos} />
       <Route path="/documentos" component={TodosDocumentos} />
       <Route path="/consulta-processual" component={ConsultaProcessual} />
+      <Route path="/busca-parte" component={BuscaParte} />
       <Route component={NotFound} />
     </Switch>
   );
