@@ -263,7 +263,15 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
             ) : (
               <div className="text-center py-8 text-muted-foreground" data-testid="sem-partes">
                 <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                Nenhuma parte encontrada
+                <p>Partes nao disponiveis no momento</p>
+                {processo.url && (
+                  <Button variant="outline" size="sm" className="mt-3" asChild>
+                    <a href={processo.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-1" />
+                      Ver partes no portal do {processo.tribunal}
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
           </TabsContent>
@@ -286,7 +294,15 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
             ) : (
               <div className="text-center py-8 text-muted-foreground" data-testid="sem-andamentos">
                 <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                Nenhum andamento encontrado
+                <p>Andamentos nao disponiveis no momento</p>
+                {processo.url && (
+                  <Button variant="outline" size="sm" className="mt-3" asChild>
+                    <a href={processo.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-1" />
+                      Ver andamentos no portal do {processo.tribunal}
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
           </TabsContent>
@@ -309,7 +325,15 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
             ) : (
               <div className="text-center py-8 text-muted-foreground" data-testid="sem-decisoes">
                 <Gavel className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                Nenhuma decisão encontrada
+                <p>Decisoes nao disponiveis no momento</p>
+                {processo.url && (
+                  <Button variant="outline" size="sm" className="mt-3" asChild>
+                    <a href={processo.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4 mr-1" />
+                      Ver decisoes no portal do {processo.tribunal}
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
           </TabsContent>

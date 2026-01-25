@@ -257,6 +257,19 @@ class STFScraper(BaseScraper):
         try:
             page_text = await self.page.evaluate('() => document.body.innerText')
             
+            # Check if access was blocked (403)
+            if '403' in page_text or 'Forbidden' in page_text:
+                # Return basic info with direct link
+                processo = ProcessoInfo(
+                    numero=f"{classe} {numero}",
+                    tribunal=self.tribunal_sigla,
+                    url=f"https://portal.stf.jus.br/processos/listarProcessos.asp?classe={classe}&numeroProcesso={numero}",
+                    classe=classe,
+                    assunto="Acesse o portal do STF para ver os detalhes completos"
+                )
+                processos.append(processo)
+                return processos
+            
             # Check if we found a process
             if 'não encontrado' in page_text.lower() or 'nenhum processo' in page_text.lower():
                 return []
