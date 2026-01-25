@@ -10,11 +10,11 @@ import {
 import { z } from "zod";
 
 const consultaProcessualSchema = z.object({
-  tribunal: z.string().min(1, "Tribunal é obrigatório"),
-  tipoBusca: z.enum(["numero", "nome"], { 
-    errorMap: () => ({ message: "Tipo de busca deve ser 'numero' ou 'nome'" })
+  tribunal: z.string().min(1, "Tribunal e obrigatorio"),
+  tipoBusca: z.enum(["numero", "nome", "oab", "cnpj"], { 
+    errorMap: () => ({ message: "Tipo de busca deve ser 'numero', 'nome', 'oab' ou 'cnpj'" })
   }),
-  termoBusca: z.string().min(1, "Termo de busca é obrigatório")
+  termoBusca: z.string().min(1, "Termo de busca e obrigatorio")
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {

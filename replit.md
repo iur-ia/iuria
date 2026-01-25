@@ -134,9 +134,14 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 - [x] User-configurable check intervals (1h, 2h, 6h, 12h, 24h)
 - [x] Visual alerts for new movements
 - [x] Badge counter for unread movements
-- [ ] DJE/DJEM module (Electronic Journal)
+- [x] DJE/DJEM module UI (Electronic Journal page created - scrapers pending)
 - [ ] Automatic deadline tracking
 - [ ] Process-publication crossreferencing
+
+### BuscaParte Features
+- [x] Search by party name (nome)
+- [x] Search by CNPJ (company ID)
+- [x] Search by OAB (lawyer registration with state selection)
 
 ## Process Monitoring System
 

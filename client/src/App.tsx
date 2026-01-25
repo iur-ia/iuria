@@ -22,6 +22,7 @@ import Contratos from "@/pages/documentos/Contratos";
 import ConsultaProcessual from "@/pages/ConsultaProcessual";
 import BuscaParte from "@/pages/BuscaParte";
 import Monitoramento from "@/pages/Monitoramento";
+import DiarioOficial from "@/pages/DiarioOficial";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/consulta-processual" component={ConsultaProcessual} />
       <Route path="/busca-parte" component={BuscaParte} />
       <Route path="/monitoramento" component={Monitoramento} />
+      <Route path="/diarios" component={DiarioOficial} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -146,8 +146,8 @@ class STFScraper(BaseScraper):
     
     async def buscar_por_nome(self, nome: str) -> ResultadoBusca:
         """
-        Search for cases by party name
-        Uses the search interface
+        Search for cases by party name using STF advanced search
+        Uses the pesquisa.asp endpoint with party parameter
         """
         resultado = ResultadoBusca(
             tribunal=self.tribunal_sigla,
@@ -158,11 +158,16 @@ class STFScraper(BaseScraper):
         try:
             await self._init_browser()
             
-            # Use search URL with party parameter
-            # Note: STF may not have a direct URL for party search
-            url = f"{self.base_url}/processos/"
+            # Use STF advanced search URL with party name parameter
+            # The STF portal has a search page that accepts party name
+            from urllib.parse import quote
+            nome_encoded = quote(nome.strip())
+            
+            # STF search URL format for party search
+            url = f"{self.base_url}/processos/pesquisar.asp?pesquisar=pesquisar&partes={nome_encoded}"
+            
             await self.page.goto(url, wait_until="domcontentloaded", timeout=30000)
-            await asyncio.sleep(2)
+            await asyncio.sleep(3)
             
             # Handle cookie consent
             try:
@@ -173,45 +178,70 @@ class STFScraper(BaseScraper):
             except:
                 pass
             
-            # Look for the party search input and fill it
-            # The portal has a dynamic form, so we need to interact with it
             try:
-                # Find and click on "Por Parte" radio/option
-                parte_options = await self.page.query_selector_all('input[type="radio"], a, button, span')
-                for option in parte_options:
+                # Look for result links
+                processos = []
+                
+                # Find all process links in the results
+                links = await self.page.query_selector_all('a[href*="/processos/detalhe.asp"]')
+                
+                for link in links[:10]:  # Limit to first 10 results
                     try:
-                        text = await option.text_content()
-                        if text and 'parte' in text.lower():
-                            await option.click()
-                            await asyncio.sleep(1)
-                            break
+                        href = await link.get_attribute('href')
+                        text = await link.text_content()
+                        
+                        if href and text:
+                            text = text.strip()
+                            # Extract class and number from link text
+                            match = re.match(r'([A-Z]+)\s*(\d+)', text.upper())
+                            if match:
+                                classe = match.group(1)
+                                numero = match.group(2)
+                                
+                                processo = ProcessoInfo(
+                                    numero=f"{classe} {numero}",
+                                    tribunal=self.tribunal_sigla,
+                                    url=f"{self.base_url}{href}" if not href.startswith('http') else href,
+                                    classe=classe
+                                )
+                                processos.append(processo)
                     except:
                         continue
                 
-                # Find the input for party name and fill it
-                inputs = await self.page.query_selector_all('input[type="text"]')
-                for inp in inputs:
-                    try:
-                        placeholder = await inp.get_attribute('placeholder')
-                        if placeholder and ('parte' in placeholder.lower() or 'nome' in placeholder.lower()):
-                            await inp.fill(nome)
-                            await asyncio.sleep(0.5)
-                            await inp.press('Enter')
-                            break
-                    except:
-                        continue
+                # If no links found, try alternate approach - look for table rows
+                if not processos:
+                    rows = await self.page.query_selector_all('table tr, .resultado-processo, .processo-item')
+                    for row in rows[:10]:
+                        try:
+                            text = await row.text_content()
+                            if text:
+                                # Look for process patterns like "ADI 1234"
+                                matches = re.findall(r'\b([A-Z]{2,5})\s*(\d{1,7})\b', text.upper())
+                                for classe, numero in matches:
+                                    if classe in self.classes_stf:
+                                        processo = ProcessoInfo(
+                                            numero=f"{classe} {numero}",
+                                            tribunal=self.tribunal_sigla,
+                                            classe=classe
+                                        )
+                                        # Check if not already added
+                                        if not any(p.numero == processo.numero for p in processos):
+                                            processos.append(processo)
+                        except:
+                            continue
                 
-                await asyncio.sleep(3)
-                
-                # Extract results
-                processos = await self._extrair_lista_resultados()
                 resultado.processos = processos
                 
                 if not processos:
-                    resultado.erro = "Busca por nome requer interação com o portal. Use busca por número para resultados mais precisos."
+                    # Check if the page indicates no results
+                    page_text = await self.page.evaluate('() => document.body.innerText')
+                    if 'nenhum' in page_text.lower() or 'não encontrado' in page_text.lower():
+                        resultado.erro = f"Nenhum processo encontrado para '{nome}' no STF"
+                    else:
+                        resultado.erro = "Nao foi possivel extrair resultados. Tente uma busca mais especifica."
                 
             except Exception as e:
-                resultado.erro = f"Erro na busca por nome: {str(e)}. A busca por nome no STF requer interação manual."
+                resultado.erro = f"Erro na busca por nome: {str(e)}"
             
         except Exception as e:
             resultado.erro = f"Erro ao consultar STF: {str(e)}"

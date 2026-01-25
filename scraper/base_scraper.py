@@ -97,15 +97,22 @@ class BaseScraper(ABC):
         pass
     
     async def buscar(self, termo: str, tipo: str = "numero") -> ResultadoBusca:
-        """Generic search method"""
+        """Generic search method
+        
+        Args:
+            termo: Search term
+            tipo: Search type - "numero", "nome", "oab", or "cnpj"
+        """
         if tipo == "numero":
             return await self.buscar_por_numero(termo)
-        elif tipo == "nome":
+        elif tipo in ("nome", "oab", "cnpj"):
+            # OAB and CNPJ searches use the name search functionality
+            # as they search for party/representative names
             return await self.buscar_por_nome(termo)
         else:
             return ResultadoBusca(
                 tribunal=self.tribunal_sigla,
                 tipo_busca=tipo,
                 termo_busca=termo,
-                erro=f"Tipo de busca inválido: {tipo}"
+                erro=f"Tipo de busca invalido: {tipo}"
             )

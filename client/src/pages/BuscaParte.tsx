@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Search, Users, Scale, Building, AlertCircle, User } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, Search, Users, Scale, Building, AlertCircle, User, Briefcase } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
 interface Processo {
@@ -33,10 +34,11 @@ const TRIBUNAIS_BUSCA = [
 
 export default function BuscaParte() {
   const [termo, setTermo] = useState("");
-  const [tipoBusca, setTipoBusca] = useState<"nome" | "cnpj">("nome");
+  const [tipoBusca, setTipoBusca] = useState<"nome" | "cnpj" | "oab">("nome");
   const [tribunaisSelecionados, setTribunaisSelecionados] = useState<string[]>(["STF"]);
   const [resultados, setResultados] = useState<BuscaResultado[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [oabUF, setOabUF] = useState("RJ");
 
   const handleToggleTribunal = (sigla: string) => {
     const tribunal = TRIBUNAIS_BUSCA.find(t => t.sigla === sigla);
@@ -76,11 +78,12 @@ export default function BuscaParte() {
     try {
       const promises = tribunaisAtivos.map(async (tribunal) => {
         try {
-          const response = await apiRequest("POST", "/api/consulta-processual", {
+          const payload: Record<string, string> = {
             tribunal,
             tipoBusca: tipoBusca,
-            termoBusca: termo.trim()
-          });
+            termoBusca: tipoBusca === "oab" ? `${termo.trim()}/${oabUF}` : termo.trim()
+          };
+          const response = await apiRequest("POST", "/api/consulta-processual", payload);
           const data = await response.json();
           return {
             tribunal,
@@ -116,7 +119,7 @@ export default function BuscaParte() {
           Busca por Parte
         </h1>
         <p className="text-muted-foreground">
-          Pesquise processos por nome da parte ou CNPJ em múltiplos tribunais
+          Pesquise processos por nome da parte, CNPJ ou OAB do advogado em multiplos tribunais
         </p>
       </div>
 
@@ -129,10 +132,10 @@ export default function BuscaParte() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Tipo de Busca</Label>
-                <div className="flex gap-4">
+                <div className="flex gap-4 flex-wrap">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -159,20 +162,58 @@ export default function BuscaParte() {
                     <Building className="h-4 w-4" />
                     <span>CNPJ</span>
                   </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="tipoBusca"
+                      value="oab"
+                      checked={tipoBusca === "oab"}
+                      onChange={() => setTipoBusca("oab")}
+                      className="accent-primary"
+                      data-testid="radio-oab"
+                    />
+                    <Briefcase className="h-4 w-4" />
+                    <span>OAB</span>
+                  </label>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="termo">
-                  {tipoBusca === "nome" ? "Nome da Parte" : "CNPJ"}
-                </Label>
-                <Input
-                  id="termo"
-                  data-testid="input-termo"
-                  placeholder={tipoBusca === "nome" ? "Ex: João da Silva" : "Ex: 00.000.000/0001-00"}
-                  value={termo}
-                  onChange={(e) => setTermo(e.target.value)}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="termo">
+                    {tipoBusca === "nome" ? "Nome da Parte" : tipoBusca === "cnpj" ? "CNPJ" : "Número da OAB"}
+                  </Label>
+                  <Input
+                    id="termo"
+                    data-testid="input-termo"
+                    placeholder={
+                      tipoBusca === "nome" 
+                        ? "Ex: João da Silva" 
+                        : tipoBusca === "cnpj" 
+                          ? "Ex: 00.000.000/0001-00" 
+                          : "Ex: 123456"
+                    }
+                    value={termo}
+                    onChange={(e) => setTermo(e.target.value)}
+                  />
+                </div>
+                
+                {tipoBusca === "oab" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="oabUF">Estado da OAB</Label>
+                    <select
+                      id="oabUF"
+                      data-testid="select-oab-uf"
+                      value={oabUF}
+                      onChange={(e) => setOabUF(e.target.value)}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      {["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"].map(uf => (
+                        <option key={uf} value={uf}>{uf}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </div>
 
