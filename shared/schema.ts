@@ -225,3 +225,50 @@ export const insertTemplateSchema = createInsertSchema(templates).omit({
 
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 export type Template = typeof templates.$inferSelect;
+
+// Tribunais table - Registry of available courts for search
+export const tribunais = pgTable("tribunais", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sigla: text("sigla").notNull().unique(),
+  nome: text("nome").notNull(),
+  tipo: text("tipo").notNull(), // Federal, Estadual, Superior, Trabalhista
+  url: text("url"),
+  ativo: boolean("ativo").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTribunalSchema = createInsertSchema(tribunais).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTribunal = z.infer<typeof insertTribunalSchema>;
+export type Tribunal = typeof tribunais.$inferSelect;
+
+// Consultas processuais table - Search history and results cache
+export const consultasProcessuais = pgTable("consultas_processuais", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tribunalId: varchar("tribunal_id").references(() => tribunais.id),
+  tipoBusca: text("tipo_busca").notNull(), // numero, nome
+  termoBusca: text("termo_busca").notNull(),
+  numeroProcesso: text("numero_processo"),
+  classe: text("classe"),
+  assunto: text("assunto"),
+  relator: text("relator"),
+  origem: text("origem"),
+  partes: text("partes"),
+  movimentacoes: text("movimentacoes"),
+  urlProcesso: text("url_processo"),
+  sucesso: boolean("sucesso").notNull().default(true),
+  erro: text("erro"),
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertConsultaProcessualSchema = createInsertSchema(consultasProcessuais).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertConsultaProcessual = z.infer<typeof insertConsultaProcessualSchema>;
+export type ConsultaProcessual = typeof consultasProcessuais.$inferSelect;

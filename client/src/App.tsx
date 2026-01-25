@@ -19,6 +19,7 @@ import Honorarios from "@/pages/financeiro/Honorarios";
 import TodosDocumentos from "@/pages/documentos/TodosDocumentos";
 import Peticoes from "@/pages/documentos/Peticoes";
 import Contratos from "@/pages/documentos/Contratos";
+import ConsultaProcessual from "@/pages/ConsultaProcessual";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/documentos/peticoes" component={Peticoes} />
       <Route path="/documentos/contratos" component={Contratos} />
       <Route path="/documentos" component={TodosDocumentos} />
+      <Route path="/consulta-processual" component={ConsultaProcessual} />
       <Route component={NotFound} />
     </Switch>
   );

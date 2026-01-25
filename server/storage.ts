@@ -9,11 +9,14 @@ import {
   type ContaPagar, type InsertContaPagar,
   type Honorario, type InsertHonorario,
   type Template, type InsertTemplate,
+  type Tribunal, type InsertTribunal,
+  type ConsultaProcessual, type InsertConsultaProcessual,
   users, clientes, equipe, processos, atividades, documentos, 
-  contasReceber, contasPagar, honorarios, templates
+  contasReceber, contasPagar, honorarios, templates,
+  tribunais, consultasProcessuais
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -83,6 +86,16 @@ export interface IStorage {
   createTemplate(template: InsertTemplate): Promise<Template>;
   updateTemplate(id: string, template: Partial<InsertTemplate>): Promise<Template | undefined>;
   deleteTemplate(id: string): Promise<boolean>;
+  
+  // Tribunais
+  getTribunais(): Promise<Tribunal[]>;
+  getTribunal(id: string): Promise<Tribunal | undefined>;
+  getTribunalBySigla(sigla: string): Promise<Tribunal | undefined>;
+  createTribunal(tribunal: InsertTribunal): Promise<Tribunal>;
+  
+  // Consultas Processuais
+  getConsultasProcessuais(limit?: number): Promise<ConsultaProcessual[]>;
+  createConsultaProcessual(consulta: InsertConsultaProcessual): Promise<ConsultaProcessual>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -325,6 +338,36 @@ export class DatabaseStorage implements IStorage {
   async deleteTemplate(id: string): Promise<boolean> {
     const result = await db.delete(templates).where(eq(templates.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Tribunais
+  async getTribunais(): Promise<Tribunal[]> {
+    return db.select().from(tribunais);
+  }
+
+  async getTribunal(id: string): Promise<Tribunal | undefined> {
+    const [tribunal] = await db.select().from(tribunais).where(eq(tribunais.id, id));
+    return tribunal;
+  }
+
+  async getTribunalBySigla(sigla: string): Promise<Tribunal | undefined> {
+    const [tribunal] = await db.select().from(tribunais).where(eq(tribunais.sigla, sigla));
+    return tribunal;
+  }
+
+  async createTribunal(insertTribunal: InsertTribunal): Promise<Tribunal> {
+    const [tribunal] = await db.insert(tribunais).values(insertTribunal).returning();
+    return tribunal;
+  }
+
+  // Consultas Processuais
+  async getConsultasProcessuais(limit: number = 50): Promise<ConsultaProcessual[]> {
+    return db.select().from(consultasProcessuais).orderBy(desc(consultasProcessuais.createdAt)).limit(limit);
+  }
+
+  async createConsultaProcessual(insertConsulta: InsertConsultaProcessual): Promise<ConsultaProcessual> {
+    const [consulta] = await db.insert(consultasProcessuais).values(insertConsulta).returning();
+    return consulta;
   }
 }
 

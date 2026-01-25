@@ -1,11 +1,59 @@
 import { db } from "./db";
 import { 
   clientes, equipe, processos, atividades, documentos, 
-  contasReceber, contasPagar, honorarios, templates 
+  contasReceber, contasPagar, honorarios, templates, tribunais 
 } from "@shared/schema";
 
 async function seed() {
   console.log("Seeding database...");
+
+  // Seed Tribunais (Courts)
+  await db.insert(tribunais).values([
+    {
+      sigla: "STF",
+      nome: "Supremo Tribunal Federal",
+      tipo: "Superior",
+      url: "https://portal.stf.jus.br/processos/",
+      ativo: true,
+    },
+    {
+      sigla: "STJ",
+      nome: "Superior Tribunal de Justiça",
+      tipo: "Superior",
+      url: "https://processo.stj.jus.br/processo/pesquisa/",
+      ativo: false,
+    },
+    {
+      sigla: "TST",
+      nome: "Tribunal Superior do Trabalho",
+      tipo: "Trabalhista",
+      url: "https://consultaprocessual.tst.jus.br/",
+      ativo: false,
+    },
+    {
+      sigla: "TJSP",
+      nome: "Tribunal de Justiça de São Paulo",
+      tipo: "Estadual",
+      url: "https://esaj.tjsp.jus.br/cpopg/open.do",
+      ativo: false,
+    },
+    {
+      sigla: "TRF1",
+      nome: "Tribunal Regional Federal da 1ª Região",
+      tipo: "Federal",
+      url: "https://processual.trf1.jus.br/consultaProcessual/",
+      ativo: false,
+    },
+    {
+      sigla: "TRF3",
+      nome: "Tribunal Regional Federal da 3ª Região",
+      tipo: "Federal",
+      url: "https://pje1g.trf3.jus.br/pje/ConsultaPublica/listView.seam",
+      ativo: false,
+    },
+  ]).onConflictDoNothing();
+
+  console.log("Tribunais seeded");
 
   // Seed Equipe (Team members)
   const [thiago, maria, roberto] = await db.insert(equipe).values([

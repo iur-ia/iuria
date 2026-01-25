@@ -6,6 +6,15 @@ import {
   insertAtividadeSchema, insertDocumentoSchema, insertContaReceberSchema,
   insertContaPagarSchema, insertHonorarioSchema, insertTemplateSchema
 } from "@shared/schema";
+import { z } from "zod";
+
+const consultaProcessualSchema = z.object({
+  tribunal: z.string().min(1, "Tribunal é obrigatório"),
+  tipoBusca: z.enum(["numero", "nome"], { 
+    errorMap: () => ({ message: "Tipo de busca deve ser 'numero' ou 'nome'" })
+  }),
+  termoBusca: z.string().min(1, "Termo de busca é obrigatório")
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CLIENTES ====================
@@ -509,6 +518,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Erro ao excluir template" });
+    }
+  });
+
+  // ==================== TRIBUNAIS ====================
+  app.get("/api/tribunais", async (req, res) => {
+    try {
+      const tribunais = await storage.getTribunais();
+      res.json(tribunais);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar tribunais" });
+    }
+  });
+
+  // ==================== CONSULTA PROCESSUAL ====================
+  app.get("/api/consultas-processuais", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const consultas = await storage.getConsultasProcessuais(limit);
+      res.json(consultas);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar histórico de consultas" });
+    }
+  });
+
+  app.post("/api/consulta-processual", async (req, res) => {
+    try {
+      const validationResult = consultaProcessualSchema.safeParse(req.body);
+      
+      if (!validationResult.success) {
+        const errors = validationResult.error.errors.map(e => e.message).join(", ");
+        return res.status(400).json({ error: errors });
+      }
+      
+      const { tribunal, tipoBusca, termoBusca } = validationResult.data;
+      
+      const { spawn } = await import("child_process");
+      const path = await import("path");
+      
+      const scraperPath = path.join(process.cwd(), "scraper", "run_scraper.py");
+      
+      const pythonProcess = spawn("python", [
+        scraperPath,
+        "consultar",
+        tribunal,
+        termoBusca,
+        tipoBusca
+      ]);
+      
+      let stdout = "";
+      let stderr = "";
+      
+      pythonProcess.stdout.on("data", (data: Buffer) => {
+        stdout += data.toString();
+      });
+      
+      pythonProcess.stderr.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+      
+      pythonProcess.on("close", async (code: number) => {
+        try {
+          if (code !== 0) {
+            console.error("Scraper error:", stderr);
+            return res.status(500).json({ 
+              error: "Erro ao executar consulta processual",
+              details: stderr
+            });
+          }
+          
+          // Extract JSON from stdout (filter out any non-JSON lines like logs)
+          let jsonStr = stdout.trim();
+          const jsonStart = jsonStr.indexOf('{');
+          const jsonEnd = jsonStr.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            jsonStr = jsonStr.slice(jsonStart, jsonEnd + 1);
+          }
+          
+          const resultado = JSON.parse(jsonStr);
+          
+          const tribunalRecord = await storage.getTribunalBySigla(tribunal);
+          
+          for (const processo of resultado.processos || []) {
+            await storage.createConsultaProcessual({
+              tribunalId: tribunalRecord?.id || null,
+              tipoBusca,
+              termoBusca,
+              numeroProcesso: processo.numero,
+              classe: processo.classe || null,
+              assunto: processo.assunto || null,
+              relator: processo.relator || null,
+              origem: processo.origem || null,
+              partes: JSON.stringify(processo.partes || []),
+              movimentacoes: JSON.stringify(processo.movimentacoes || []),
+              urlProcesso: processo.url || null,
+              sucesso: true,
+              erro: null,
+              usuarioId: null
+            });
+          }
+          
+          if (resultado.erro && (!resultado.processos || resultado.processos.length === 0)) {
+            await storage.createConsultaProcessual({
+              tribunalId: tribunalRecord?.id || null,
+              tipoBusca,
+              termoBusca,
+              numeroProcesso: null,
+              classe: null,
+              assunto: null,
+              relator: null,
+              origem: null,
+              partes: null,
+              movimentacoes: null,
+              urlProcesso: null,
+              sucesso: false,
+              erro: resultado.erro,
+              usuarioId: null
+            });
+          }
+          
+          res.json(resultado);
+        } catch (parseError) {
+          console.error("Parse error:", parseError, "stdout:", stdout);
+          res.status(500).json({ 
+            error: "Erro ao processar resposta da consulta",
+            details: stdout
+          });
+        }
+      });
+      
+      pythonProcess.on("error", (error: Error) => {
+        console.error("Spawn error:", error);
+        res.status(500).json({ 
+          error: "Erro ao iniciar consulta processual",
+          details: error.message
+        });
+      });
+      
+    } catch (error) {
+      console.error("Consulta processual error:", error);
+      res.status(500).json({ error: "Erro ao executar consulta processual" });
     }
   });
 

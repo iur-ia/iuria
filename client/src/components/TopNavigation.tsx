@@ -40,6 +40,7 @@ const menuItems = [
     href: "/processos",
     submenu: [
       { title: "Todos os Processos", href: "/processos" },
+      { title: "Consulta Processual", href: "/consulta-processual" },
       { title: "Incompletos", href: "/processos/incompletos" },
       { title: "Movimentados", href: "/processos/movimentados" },
       { title: "Parados", href: "/processos/parados" },
