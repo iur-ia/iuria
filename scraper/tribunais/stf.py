@@ -26,14 +26,20 @@ class STFScraper(BaseScraper):
         self.page: Optional[Page] = None
         self._playwright = None
         
-        # STF process classes
-        self.classes_stf = [
-            "AC", "ACO", "ADC", "ADI", "ADO", "ADPF", "AI", "AImp", "AO", "AOE",
-            "AP", "AR", "ARE", "AS", "CC", "Cm", "EI", "EL", "EP", "Ext",
-            "HC", "HD", "IF", "Inq", "MI", "MS", "PADM", "Pet", "PPE", "PSV",
-            "RC", "Rcl", "RE", "RHC", "RHD", "RMI", "RMS", "RvC", "SE",
-            "SIRDR", "SL", "SS", "STA", "STP", "TPA"
-        ]
+        # STF process classes - mapping from uppercase to proper case for URL
+        # The STF portal is case-sensitive, so we need proper capitalization
+        self.classes_stf_map = {
+            "AC": "AC", "ACO": "ACO", "ADC": "ADC", "ADI": "ADI", "ADO": "ADO",
+            "ADPF": "ADPF", "AI": "AI", "AIMP": "AImp", "AO": "AO", "AOE": "AOE",
+            "AP": "AP", "AR": "AR", "ARE": "ARE", "AS": "AS", "CC": "CC",
+            "CM": "Cm", "EI": "EI", "EL": "EL", "EP": "EP", "EXT": "Ext",
+            "HC": "HC", "HD": "HD", "IF": "IF", "INQ": "Inq", "MI": "MI",
+            "MS": "MS", "PADM": "PADM", "PET": "Pet", "PPE": "PPE", "PSV": "PSV",
+            "RC": "RC", "RCL": "Rcl", "RE": "RE", "RHC": "RHC", "RHD": "RHD",
+            "RMI": "RMI", "RMS": "RMS", "RVC": "RvC", "SE": "SE",
+            "SIRDR": "SIRDR", "SL": "SL", "SS": "SS", "STA": "STA", "STP": "STP", "TPA": "TPA"
+        }
+        self.classes_stf = list(self.classes_stf_map.keys())
     
     async def _init_browser(self):
         """Initialize Playwright browser"""
@@ -69,21 +75,24 @@ class STFScraper(BaseScraper):
     def _parse_stf_number(self, numero: str) -> tuple:
         """
         Parse STF process number to extract class and number
-        Examples: 'ADI 1', 'HC 123456', 'ARE 1234567'
-        Returns: (classe, numero) or (None, None)
+        Examples: 'ADI 1', 'HC 123456', 'ARE 1234567', 'PET 13350'
+        Returns: (classe_for_url, numero) or (None, None)
+        The classe returned is in proper case for the STF portal URL
         """
-        numero = numero.strip().upper()
+        numero_str = numero.strip().upper()
         
         # Pattern: CLASS NUMBER (with or without space)
-        for classe in sorted(self.classes_stf, key=len, reverse=True):
-            pattern = rf'^({classe})\s*(\d+)$'
-            match = re.match(pattern, numero, re.IGNORECASE)
+        for classe_upper in sorted(self.classes_stf, key=len, reverse=True):
+            pattern = rf'^({classe_upper})\s*(\d+)$'
+            match = re.match(pattern, numero_str, re.IGNORECASE)
             if match:
-                return match.group(1).upper(), match.group(2)
+                # Return the proper case for URL using the mapping
+                classe_for_url = self.classes_stf_map.get(classe_upper, classe_upper)
+                return classe_for_url, match.group(2)
         
         # If just a number, return None for class
-        if numero.isdigit():
-            return None, numero
+        if numero_str.isdigit():
+            return None, numero_str
         
         return None, None
     
@@ -212,12 +221,10 @@ class STFScraper(BaseScraper):
         return resultado
     
     async def _extrair_detalhes_pagina(self, classe: str, numero: str) -> List[ProcessoInfo]:
-        """Extract process details from the current page"""
+        """Extract process details from the current page using proper selectors"""
         processos = []
         
         try:
-            # Get page content
-            content = await self.page.content()
             page_text = await self.page.evaluate('() => document.body.innerText')
             
             # Check if we found a process
@@ -232,82 +239,114 @@ class STFScraper(BaseScraper):
                 classe=classe
             )
             
-            # Extract relator
-            relator_patterns = [
-                r'Relator[a-z\(\)]*[:\s]+Min\.\s*([^<\n]+)',
-                r'Relator[:\s]+([^<\n]+)',
-                r'RELATOR[:\s]+([^<\n]+)'
-            ]
-            for pattern in relator_patterns:
-                match = re.search(pattern, content, re.IGNORECASE)
-                if match:
-                    processo.relator = match.group(1).strip()[:100]
-                    break
+            # Extract numero unico
+            try:
+                numero_unico_el = await self.page.query_selector('#descricao-classe')
+                if numero_unico_el:
+                    texto = await numero_unico_el.text_content()
+                    # Look for NÚMERO ÚNICO pattern
+                    match = re.search(r'NÚMERO ÚNICO:\s*([^\n]+)', page_text)
+                    if match:
+                        processo.numero_unico = match.group(1).strip()
+            except:
+                pass
             
-            # Extract parties (partes)
+            # Extract relator using selector
+            try:
+                dados_els = await self.page.query_selector_all('.processo-dados')
+                for el in dados_els:
+                    text = await el.text_content()
+                    if text and 'Relator(a):' in text and 'último incidente' not in text:
+                        # Extract just the name after "Relator(a):"
+                        match = re.search(r'Relator\(a\):\s*(.+)', text)
+                        if match:
+                            processo.relator = match.group(1).strip()
+                        break
+            except:
+                pass
+            
+            # Extract origem using selector
+            try:
+                origem_el = await self.page.query_selector('#descricao-procedencia')
+                if origem_el:
+                    processo.origem = (await origem_el.text_content()).strip()
+            except:
+                pass
+            
+            # Extract partes using proper selectors
             partes = []
-            partes_patterns = [
-                r'REQTE\.?\s*[:\s]*([^<\n]+)',
-                r'REQDO\.?\s*[:\s]*([^<\n]+)',
-                r'Requerente[:\s]+([^<\n]+)',
-                r'Requerido[:\s]+([^<\n]+)',
-                r'IMPTE\.?\s*[:\s]*([^<\n]+)',
-                r'IMPDO\.?\s*[:\s]*([^<\n]+)',
-                r'Impetrante[:\s]+([^<\n]+)',
-                r'Impetrado[:\s]+([^<\n]+)',
-                r'PACTE\.?\s*[:\s]*([^<\n]+)',
-                r'Paciente[:\s]+([^<\n]+)'
-            ]
-            for pattern in partes_patterns:
-                matches = re.findall(pattern, content, re.IGNORECASE)
-                for match in matches[:5]:
-                    parte = match.strip()[:150]
-                    if parte and len(parte) > 2 and parte not in partes:
-                        partes.append(parte)
-            processo.partes = partes[:10]
+            try:
+                # First try the detailed partes section
+                partes_els = await self.page.query_selector_all('.nome-parte')
+                for el in partes_els:
+                    nome = await el.text_content()
+                    if nome:
+                        nome = nome.strip()
+                        if nome and len(nome) > 2 and nome not in partes:
+                            partes.append(nome)
+                
+                # Also get the role (REQTE, REQDO, etc.)
+                if not partes:
+                    # Try alternate selectors
+                    partes_rows = await self.page.query_selector_all('.processo-partes.col-md-8')
+                    for el in partes_rows:
+                        nome = await el.text_content()
+                        if nome:
+                            nome = nome.strip()
+                            if nome and len(nome) > 2 and nome not in partes:
+                                partes.append(nome)
+            except:
+                pass
+            processo.partes = partes[:15]
             
-            # Extract subject/assunto
-            assunto_patterns = [
-                r'Assunto[:\s]+([^<\n]+)',
-                r'ASSUNTO[:\s]+([^<\n]+)'
-            ]
-            for pattern in assunto_patterns:
-                match = re.search(pattern, content, re.IGNORECASE)
-                if match:
-                    processo.assunto = match.group(1).strip()[:200]
-                    break
+            # Extract assunto
+            try:
+                assunto_div = await self.page.query_selector('.informacoes__assunto .processo-detalhes')
+                if assunto_div:
+                    processo.assunto = (await assunto_div.text_content()).strip()
+            except:
+                pass
             
-            # Extract origin
-            origem_patterns = [
-                r'Origem[:\s]+([^<\n]+)',
-                r'ORIGEM[:\s]+([^<\n]+)',
-                r'Procedência[:\s]+([^<\n]+)'
-            ]
-            for pattern in origem_patterns:
-                match = re.search(pattern, content, re.IGNORECASE)
-                if match:
-                    processo.origem = match.group(1).strip()[:150]
-                    break
-            
-            # Extract movements/andamentos
+            # Extract andamentos/movimentacoes
             movimentacoes = []
-            # Look for dates followed by descriptions
-            mov_pattern = r'(\d{2}/\d{2}/\d{4})[:\s-]+([^<\n]+)'
-            matches = re.findall(mov_pattern, content)
-            for match in matches[:20]:
-                data, descricao = match
-                if len(descricao.strip()) > 5:
-                    mov = Movimentacao(
-                        data=data,
-                        descricao=descricao.strip()[:300]
-                    )
-                    movimentacoes.append(mov)
+            try:
+                andamentos = await self.page.query_selector_all('.andamento-item')
+                for and_el in andamentos[:20]:
+                    try:
+                        data_el = await and_el.query_selector('.andamento-data')
+                        nome_el = await and_el.query_selector('.andamento-nome')
+                        
+                        data = ""
+                        descricao = ""
+                        
+                        if data_el:
+                            data = (await data_el.text_content()).strip()
+                        if nome_el:
+                            descricao = (await nome_el.text_content()).strip()
+                        
+                        if data and descricao:
+                            # Get additional details if available
+                            detalhes_el = await and_el.query_selector('.andamento-descricao')
+                            detalhes = None
+                            if detalhes_el:
+                                detalhes = (await detalhes_el.text_content()).strip()
+                            
+                            mov = Movimentacao(
+                                data=data,
+                                descricao=descricao,
+                                detalhes=detalhes
+                            )
+                            movimentacoes.append(mov)
+                    except:
+                        continue
+            except:
+                pass
             processo.movimentacoes = movimentacoes
             
             processos.append(processo)
             
         except Exception as e:
-            print(f"Error extracting details: {e}")
+            print(f"Error extracting details: {e}", file=sys.stderr)
         
         return processos
     
