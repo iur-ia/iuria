@@ -559,28 +559,42 @@ export default function ConsultaProcessual() {
             <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
               <span className="font-medium">STF</span>
               <span className="text-xs text-muted-foreground ml-2">
-                ADI, HC, RE, Pet, etc
+                ADI, HC, RE, Rcl, etc
               </span>
-              <Badge className="ml-2" variant="default">Disponível</Badge>
+              <Badge className="ml-2" variant="default">Disponivel</Badge>
             </div>
-            <div className="p-2 rounded-md bg-muted/50 border border-muted">
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
               <span className="font-medium">STJ</span>
               <span className="text-xs text-muted-foreground ml-2">
                 REsp, RHC, HC, etc
               </span>
-              <Badge className="ml-2" variant="secondary">Em breve</Badge>
+              <Badge className="ml-2" variant="default">Disponivel</Badge>
+            </div>
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
+              <span className="font-medium">TRF2</span>
+              <span className="text-xs text-muted-foreground ml-2">
+                RJ/ES - CNJ 4.02
+              </span>
+              <Badge className="ml-2" variant="default">Disponivel</Badge>
+            </div>
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
+              <span className="font-medium">TJRJ</span>
+              <span className="text-xs text-muted-foreground ml-2">
+                CNJ 8.19
+              </span>
+              <Badge className="ml-2" variant="default">Disponivel</Badge>
             </div>
             <div className="p-2 rounded-md bg-muted/50 border border-muted">
-              <span className="font-medium">TRFs</span>
+              <span className="font-medium">Outros TRFs</span>
               <span className="text-xs text-muted-foreground ml-2">
-                CNJ 4.01-4.06
+                TRF1, TRF3-6
               </span>
               <Badge className="ml-2" variant="secondary">Em breve</Badge>
             </div>
             <div className="p-2 rounded-md bg-muted/50 border border-muted">
-              <span className="font-medium">TJs</span>
+              <span className="font-medium">Outros TJs</span>
               <span className="text-xs text-muted-foreground ml-2">
-                CNJ 8.01-8.27
+                TJSP, TJMG, etc
               </span>
               <Badge className="ml-2" variant="secondary">Em breve</Badge>
             </div>
