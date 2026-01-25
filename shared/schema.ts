@@ -272,3 +272,63 @@ export const insertConsultaProcessualSchema = createInsertSchema(consultasProces
 
 export type InsertConsultaProcessual = z.infer<typeof insertConsultaProcessualSchema>;
 export type ConsultaProcessual = typeof consultasProcessuais.$inferSelect;
+
+// Monitoramento de processos - Watchlist com alertas
+export const monitoramentos = pgTable("monitoramentos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  numeroProcesso: text("numero_processo").notNull(),
+  tribunal: text("tribunal").notNull(),
+  classe: text("classe"),
+  assunto: text("assunto"),
+  relator: text("relator"),
+  urlProcesso: text("url_processo"),
+  
+  // Configuração de frequência (em minutos)
+  frequenciaMinutos: integer("frequencia_minutos").notNull().default(60),
+  
+  // Controle de checagem
+  ultimaChecagem: timestamp("ultima_checagem"),
+  proximaChecagem: timestamp("proxima_checagem"),
+  
+  // Detecção de mudanças
+  contadorAndamentos: integer("contador_andamentos").notNull().default(0),
+  hashAndamentos: text("hash_andamentos"),
+  novosAndamentos: integer("novos_andamentos").notNull().default(0),
+  
+  // Status
+  ativo: boolean("ativo").notNull().default(true),
+  
+  // Auditoria
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMonitoramentoSchema = createInsertSchema(monitoramentos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertMonitoramento = z.infer<typeof insertMonitoramentoSchema>;
+export type Monitoramento = typeof monitoramentos.$inferSelect;
+
+// Histórico de verificações do monitoramento
+export const verificacoesMonitoramento = pgTable("verificacoes_monitoramento", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  monitoramentoId: varchar("monitoramento_id").references(() => monitoramentos.id),
+  contadorAnterior: integer("contador_anterior").notNull().default(0),
+  contadorAtual: integer("contador_atual").notNull().default(0),
+  novosDetectados: integer("novos_detectados").notNull().default(0),
+  sucesso: boolean("sucesso").notNull().default(true),
+  erro: text("erro"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertVerificacaoMonitoramentoSchema = createInsertSchema(verificacoesMonitoramento).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertVerificacaoMonitoramento = z.infer<typeof insertVerificacaoMonitoramentoSchema>;
+export type VerificacaoMonitoramento = typeof verificacoesMonitoramento.$inferSelect;

@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import { 
   insertClienteSchema, insertEquipeSchema, insertProcessoSchema,
   insertAtividadeSchema, insertDocumentoSchema, insertContaReceberSchema,
-  insertContaPagarSchema, insertHonorarioSchema, insertTemplateSchema
+  insertContaPagarSchema, insertHonorarioSchema, insertTemplateSchema,
+  insertMonitoramentoSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -704,6 +705,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Consulta processual error:", error);
       res.status(500).json({ error: "Erro ao executar consulta processual" });
+    }
+  });
+
+  // ==================== MONITORAMENTO ====================
+  
+  // Listar monitoramentos
+  app.get("/api/monitoramentos", async (req, res) => {
+    try {
+      const monitoramentos = await storage.getMonitoramentosAtivos();
+      res.json(monitoramentos);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar monitoramentos" });
+    }
+  });
+
+  // Obter monitoramento específico
+  app.get("/api/monitoramentos/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const monitoramento = await storage.getMonitoramento(id);
+      if (!monitoramento) {
+        return res.status(404).json({ error: "Monitoramento não encontrado" });
+      }
+      res.json(monitoramento);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar monitoramento" });
+    }
+  });
+
+  // Adicionar processo ao monitoramento
+  app.post("/api/monitoramentos", async (req, res) => {
+    try {
+      const createMonitoramentoSchema = z.object({
+        numeroProcesso: z.string().min(1, "Número do processo é obrigatório"),
+        tribunal: z.string().min(1, "Tribunal é obrigatório"),
+        classe: z.string().optional(),
+        assunto: z.string().optional(),
+        relator: z.string().optional(),
+        urlProcesso: z.string().optional(),
+        frequenciaMinutos: z.number().int().positive().default(60),
+        contadorAndamentos: z.number().int().min(0).default(0),
+      });
+      
+      const validationResult = createMonitoramentoSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Dados inválidos", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const { numeroProcesso, tribunal, classe, assunto, relator, urlProcesso, frequenciaMinutos, contadorAndamentos } = validationResult.data;
+      
+      // Verificar se já existe
+      const existente = await storage.getMonitoramentoByNumero(numeroProcesso);
+      if (existente) {
+        return res.status(400).json({ error: "Processo já está sendo monitorado" });
+      }
+      
+      const agora = new Date();
+      const proximaChecagem = new Date(agora.getTime() + frequenciaMinutos * 60 * 1000);
+      
+      const monitoramento = await storage.createMonitoramento({
+        numeroProcesso,
+        tribunal,
+        classe,
+        assunto,
+        relator,
+        urlProcesso,
+        frequenciaMinutos,
+        ultimaChecagem: agora,
+        proximaChecagem,
+        contadorAndamentos,
+        novosAndamentos: 0,
+        ativo: true,
+      });
+      
+      res.json({ success: true, monitoramento, mensagem: "Processo adicionado ao monitoramento!" });
+    } catch (error) {
+      console.error("Erro ao criar monitoramento:", error);
+      res.status(500).json({ error: "Erro ao criar monitoramento" });
+    }
+  });
+
+  // Atualizar configuração de monitoramento
+  app.patch("/api/monitoramentos/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updateMonitoramentoSchema = z.object({
+        frequenciaMinutos: z.number().int().positive().optional(),
+        ativo: z.boolean().optional(),
+      });
+      
+      const validationResult = updateMonitoramentoSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          error: "Dados inválidos", 
+          details: validationResult.error.errors 
+        });
+      }
+      
+      const { frequenciaMinutos, ativo } = validationResult.data;
+      const updateData: any = {};
+      
+      if (frequenciaMinutos !== undefined) {
+        updateData.frequenciaMinutos = frequenciaMinutos;
+        const agora = new Date();
+        updateData.proximaChecagem = new Date(agora.getTime() + frequenciaMinutos * 60 * 1000);
+      }
+      
+      if (ativo !== undefined) {
+        updateData.ativo = ativo;
+      }
+      
+      const monitoramento = await storage.updateMonitoramento(id, updateData);
+      
+      if (!monitoramento) {
+        return res.status(404).json({ error: "Monitoramento não encontrado" });
+      }
+      
+      res.json({ success: true, monitoramento });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao atualizar monitoramento" });
+    }
+  });
+
+  // Remover monitoramento
+  app.delete("/api/monitoramentos/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteMonitoramento(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Monitoramento não encontrado" });
+      }
+      
+      res.json({ success: true, mensagem: "Monitoramento removido!" });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao remover monitoramento" });
+    }
+  });
+
+  // Marcar novos andamentos como vistos
+  app.post("/api/monitoramentos/:id/marcar-visto", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const monitoramento = await storage.updateMonitoramento(id, {
+        novosAndamentos: 0
+      });
+      
+      if (!monitoramento) {
+        return res.status(404).json({ error: "Monitoramento não encontrado" });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao marcar como visto" });
+    }
+  });
+
+  // Obter contagem total de novos andamentos (para badge)
+  app.get("/api/monitoramentos/contador/novos", async (req, res) => {
+    try {
+      const monitoramentos = await storage.getMonitoramentosAtivos();
+      const totalNovos = monitoramentos.reduce((acc, m) => acc + (m.novosAndamentos || 0), 0);
+      res.json({ totalNovos, monitoramentosComNovos: monitoramentos.filter(m => m.novosAndamentos > 0).length });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar contador" });
     }
   });
 

@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Gavel, Info, ChevronRight } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Gavel, Info, ChevronRight, Bell, Check } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface Movimentacao {
   data: string;
@@ -70,6 +71,8 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
   const [activeTab, setActiveTab] = useState("informacoes");
+  const [adicionadoMonitoramento, setAdicionadoMonitoramento] = useState(false);
+  const { toast } = useToast();
   
   const decisoes = processo.movimentacoes?.filter(m => 
     m.descricao.toLowerCase().includes("decisão") ||
@@ -83,6 +86,37 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
   ) || [];
   
   const andamentos = processo.movimentacoes?.filter(m => !decisoes.includes(m)) || [];
+  
+  const monitoramentoMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/monitoramentos", {
+        numeroProcesso: processo.numero,
+        tribunal: processo.tribunal,
+        classe: processo.classe,
+        assunto: processo.assunto,
+        relator: processo.relator,
+        urlProcesso: processo.url,
+        frequenciaMinutos: 60,
+        contadorAndamentos: processo.movimentacoes?.length || 0,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setAdicionadoMonitoramento(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/monitoramentos"] });
+      toast({
+        title: "Processo adicionado ao monitoramento!",
+        description: "Voce sera alertado quando houver novos andamentos.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao adicionar monitoramento",
+        description: error.message || "Processo ja pode estar sendo monitorado.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <Card data-testid="card-processo-detalhe">
@@ -101,19 +135,37 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
             {processo.tribunal}
           </p>
         </div>
-        {processo.url && (
+        <div className="flex items-center gap-2 flex-wrap">
           <Button 
-            variant="outline" 
+            variant={adicionadoMonitoramento ? "secondary" : "default"}
             size="sm" 
-            asChild
-            data-testid="button-ver-portal"
+            onClick={() => monitoramentoMutation.mutate()}
+            disabled={adicionadoMonitoramento || monitoramentoMutation.isPending}
+            data-testid="button-adicionar-monitoramento"
           >
-            <a href={processo.url} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="h-4 w-4 mr-1" />
-              Ver no Portal
-            </a>
+            {monitoramentoMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : adicionadoMonitoramento ? (
+              <Check className="h-4 w-4 mr-1" />
+            ) : (
+              <Bell className="h-4 w-4 mr-1" />
+            )}
+            {adicionadoMonitoramento ? "Monitorando" : "Monitorar"}
           </Button>
-        )}
+          {processo.url && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              asChild
+              data-testid="button-ver-portal"
+            >
+              <a href={processo.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Ver no Portal
+              </a>
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

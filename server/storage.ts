@@ -11,12 +11,14 @@ import {
   type Template, type InsertTemplate,
   type Tribunal, type InsertTribunal,
   type ConsultaProcessual, type InsertConsultaProcessual,
+  type Monitoramento, type InsertMonitoramento,
+  type VerificacaoMonitoramento, type InsertVerificacaoMonitoramento,
   users, clientes, equipe, processos, atividades, documentos, 
   contasReceber, contasPagar, honorarios, templates,
-  tribunais, consultasProcessuais
+  tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, lte, and } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -96,6 +98,20 @@ export interface IStorage {
   // Consultas Processuais
   getConsultasProcessuais(limit?: number): Promise<ConsultaProcessual[]>;
   createConsultaProcessual(consulta: InsertConsultaProcessual): Promise<ConsultaProcessual>;
+  
+  // Monitoramento
+  getMonitoramentos(): Promise<Monitoramento[]>;
+  getMonitoramentosAtivos(): Promise<Monitoramento[]>;
+  getMonitoramentosPendentes(): Promise<Monitoramento[]>;
+  getMonitoramento(id: string): Promise<Monitoramento | undefined>;
+  getMonitoramentoByNumero(numero: string): Promise<Monitoramento | undefined>;
+  createMonitoramento(monitoramento: InsertMonitoramento): Promise<Monitoramento>;
+  updateMonitoramento(id: string, monitoramento: Partial<InsertMonitoramento>): Promise<Monitoramento | undefined>;
+  deleteMonitoramento(id: string): Promise<boolean>;
+  
+  // Verificações de Monitoramento
+  createVerificacao(verificacao: InsertVerificacaoMonitoramento): Promise<VerificacaoMonitoramento>;
+  getVerificacoesByMonitoramento(monitoramentoId: string): Promise<VerificacaoMonitoramento[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -368,6 +384,69 @@ export class DatabaseStorage implements IStorage {
   async createConsultaProcessual(insertConsulta: InsertConsultaProcessual): Promise<ConsultaProcessual> {
     const [consulta] = await db.insert(consultasProcessuais).values(insertConsulta).returning();
     return consulta;
+  }
+
+  // Monitoramento
+  async getMonitoramentos(): Promise<Monitoramento[]> {
+    return db.select().from(monitoramentos).orderBy(desc(monitoramentos.createdAt));
+  }
+
+  async getMonitoramentosAtivos(): Promise<Monitoramento[]> {
+    return db.select().from(monitoramentos)
+      .where(eq(monitoramentos.ativo, true))
+      .orderBy(desc(monitoramentos.createdAt));
+  }
+
+  async getMonitoramentosPendentes(): Promise<Monitoramento[]> {
+    const agora = new Date();
+    return db.select().from(monitoramentos)
+      .where(and(
+        eq(monitoramentos.ativo, true),
+        lte(monitoramentos.proximaChecagem, agora)
+      ))
+      .orderBy(monitoramentos.proximaChecagem);
+  }
+
+  async getMonitoramento(id: string): Promise<Monitoramento | undefined> {
+    const [monitoramento] = await db.select().from(monitoramentos).where(eq(monitoramentos.id, id));
+    return monitoramento;
+  }
+
+  async getMonitoramentoByNumero(numero: string): Promise<Monitoramento | undefined> {
+    const [monitoramento] = await db.select().from(monitoramentos)
+      .where(eq(monitoramentos.numeroProcesso, numero));
+    return monitoramento;
+  }
+
+  async createMonitoramento(insertMonitoramento: InsertMonitoramento): Promise<Monitoramento> {
+    const [monitoramento] = await db.insert(monitoramentos).values(insertMonitoramento).returning();
+    return monitoramento;
+  }
+
+  async updateMonitoramento(id: string, updateData: Partial<InsertMonitoramento>): Promise<Monitoramento | undefined> {
+    const [monitoramento] = await db.update(monitoramentos)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(monitoramentos.id, id))
+      .returning();
+    return monitoramento;
+  }
+
+  async deleteMonitoramento(id: string): Promise<boolean> {
+    const result = await db.delete(monitoramentos).where(eq(monitoramentos.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Verificações de Monitoramento
+  async createVerificacao(insertVerificacao: InsertVerificacaoMonitoramento): Promise<VerificacaoMonitoramento> {
+    const [verificacao] = await db.insert(verificacoesMonitoramento).values(insertVerificacao).returning();
+    return verificacao;
+  }
+
+  async getVerificacoesByMonitoramento(monitoramentoId: string): Promise<VerificacaoMonitoramento[]> {
+    return db.select().from(verificacoesMonitoramento)
+      .where(eq(verificacoesMonitoramento.monitoramentoId, monitoramentoId))
+      .orderBy(desc(verificacoesMonitoramento.createdAt))
+      .limit(10);
   }
 }
 

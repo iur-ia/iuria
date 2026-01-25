@@ -129,10 +129,36 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 ### Phase 4 - State Courts
 - [ ] Remaining 25 State TJs
 
-### Phase 5 - Monitoring
+### Phase 5 - Monitoring (Partially Completed)
+- [x] Process monitoring system (watchlist)
+- [x] User-configurable check intervals (1h, 2h, 6h, 12h, 24h)
+- [x] Visual alerts for new movements
+- [x] Badge counter for unread movements
 - [ ] DJE/DJEM module (Electronic Journal)
 - [ ] Automatic deadline tracking
 - [ ] Process-publication crossreferencing
+
+## Process Monitoring System
+
+The monitoring system allows users to track processes and receive alerts when new movements are detected.
+
+### Database Tables
+- `monitoramentos` - Stores monitored processes with configuration
+- `verificacoes_monitoramento` - Stores verification history
+
+### Key Fields
+- `frequenciaMinutos`: Check interval (60=1h, 120=2h, 360=6h, 720=12h, 1440=24h)
+- `contadorAndamentos`: Number of movements at last check
+- `novosAndamentos`: New movements detected since last check
+- `proximaChecagem`: Timestamp for next automatic check
+
+### API Endpoints
+- `GET /api/monitoramentos` - List active monitored processes
+- `POST /api/monitoramentos` - Add process to monitoring
+- `PATCH /api/monitoramentos/:id` - Update frequency or status
+- `DELETE /api/monitoramentos/:id` - Remove from monitoring
+- `POST /api/monitoramentos/:id/marcar-visto` - Mark new movements as seen
+- `GET /api/monitoramentos/contador/novos` - Get total unread count
 
 ## Key Routes
 
@@ -142,6 +168,7 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 | `/processos` | Process list |
 | `/consulta-processual` | Court portal search (auto-detection) |
 | `/busca-parte` | Search by party name/CNPJ |
+| `/monitoramento` | Process monitoring dashboard |
 | `/atividades` | Activities/Tasks |
 | `/financeiro/*` | Financial management |
 | `/documentos/*` | Document management |
