@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Gavel, Info, ChevronRight, Bell, Check } from "lucide-react";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -70,35 +69,23 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
-  const [activeTab, setActiveTab] = useState("informacoes");
   const [adicionadoMonitoramento, setAdicionadoMonitoramento] = useState(false);
   const { toast } = useToast();
   
-  const decisoes = processo.movimentacoes?.filter(m => 
-    m.descricao.toLowerCase().includes("decisão") ||
-    m.descricao.toLowerCase().includes("decisao") ||
-    m.descricao.toLowerCase().includes("despacho") ||
-    m.descricao.toLowerCase().includes("acórdão") ||
-    m.descricao.toLowerCase().includes("acordao") ||
-    m.descricao.toLowerCase().includes("sentença") ||
-    m.descricao.toLowerCase().includes("sentenca") ||
-    m.descricao.toLowerCase().includes("julgamento")
-  ) || [];
-  
-  const andamentos = processo.movimentacoes?.filter(m => !decisoes.includes(m)) || [];
-  
   const monitoramentoMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/monitoramentos", {
-        numeroProcesso: processo.numero,
+      const payload: Record<string, unknown> = {
+        numeroProcesso: processo.numero_unico || processo.numero,
         tribunal: processo.tribunal,
-        classe: processo.classe,
-        assunto: processo.assunto,
-        relator: processo.relator,
-        urlProcesso: processo.url,
         frequenciaMinutos: 60,
         contadorAndamentos: processo.movimentacoes?.length || 0,
-      });
+      };
+      if (processo.classe) payload.classe = processo.classe;
+      if (processo.assunto) payload.assunto = processo.assunto;
+      if (processo.relator) payload.relator = processo.relator;
+      if (processo.url) payload.urlProcesso = processo.url;
+      
+      const res = await apiRequest("POST", "/api/monitoramentos", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -118,226 +105,153 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
     },
   });
 
+  const movimentacoes = processo.movimentacoes || [];
+
   return (
     <Card data-testid="card-processo-detalhe">
-      <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2 flex-wrap">
-        <div>
-          <CardTitle className="flex items-center gap-2 flex-wrap">
-            <Scale className="h-5 w-5" />
-            {processo.numero}
-            {processo.classe && (
-              <Badge variant="outline" className="ml-2" data-testid="badge-classe">
-                {processo.classe}
-              </Badge>
+      {/* CAPA DO PROCESSO */}
+      <CardHeader className="pb-3 border-b">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div className="flex-1">
+            <CardTitle className="flex items-center gap-2 flex-wrap text-lg">
+              <Scale className="h-5 w-5 text-primary" />
+              {processo.numero}
+              {processo.classe && (
+                <Badge variant="default" data-testid="badge-classe">
+                  {processo.classe}
+                </Badge>
+              )}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              {processo.tribunal}
+            </p>
+            {/* Numero CNJ */}
+            {processo.numero_unico && processo.numero_unico !== processo.numero && (
+              <p className="text-xs text-muted-foreground mt-1 font-mono" data-testid="text-numero-cnj">
+                CNJ: {processo.numero_unico}
+              </p>
             )}
-          </CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            {processo.tribunal}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button 
-            variant={adicionadoMonitoramento ? "secondary" : "default"}
-            size="sm" 
-            onClick={() => monitoramentoMutation.mutate()}
-            disabled={adicionadoMonitoramento || monitoramentoMutation.isPending}
-            data-testid="button-adicionar-monitoramento"
-          >
-            {monitoramentoMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : adicionadoMonitoramento ? (
-              <Check className="h-4 w-4 mr-1" />
-            ) : (
-              <Bell className="h-4 w-4 mr-1" />
-            )}
-            {adicionadoMonitoramento ? "Monitorando" : "Monitorar"}
-          </Button>
-          {processo.url && (
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             <Button 
-              variant="outline" 
+              variant={adicionadoMonitoramento ? "secondary" : "default"}
               size="sm" 
-              asChild
-              data-testid="button-ver-portal"
+              onClick={() => monitoramentoMutation.mutate()}
+              disabled={adicionadoMonitoramento || monitoramentoMutation.isPending}
+              data-testid="button-adicionar-monitoramento"
             >
-              <a href={processo.url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-1" />
-                Ver no Portal
-              </a>
+              {monitoramentoMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : adicionadoMonitoramento ? (
+                <Check className="h-4 w-4 mr-1" />
+              ) : (
+                <Bell className="h-4 w-4 mr-1" />
+              )}
+              {adicionadoMonitoramento ? "Monitorando" : "Monitorar"}
             </Button>
-          )}
+            {processo.url && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                asChild
+                data-testid="button-ver-portal"
+              >
+                <a href={processo.url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Ver no Portal
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4" data-testid="tabs-processo">
-            <TabsTrigger value="informacoes" data-testid="tab-informacoes">
-              <Info className="h-4 w-4 mr-1 hidden sm:inline" />
-              Info
-            </TabsTrigger>
-            <TabsTrigger value="partes" data-testid="tab-partes">
-              <Users className="h-4 w-4 mr-1 hidden sm:inline" />
-              Partes
-            </TabsTrigger>
-            <TabsTrigger value="andamentos" data-testid="tab-andamentos">
-              <Clock className="h-4 w-4 mr-1 hidden sm:inline" />
-              Andamentos
-            </TabsTrigger>
-            <TabsTrigger value="decisoes" data-testid="tab-decisoes">
-              <Gavel className="h-4 w-4 mr-1 hidden sm:inline" />
-              Decisões
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="informacoes" className="mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium">Número</p>
-                  <p className="text-sm text-muted-foreground" data-testid="text-numero">
-                    {processo.numero_unico || processo.numero}
-                  </p>
-                </div>
+      
+      <CardContent className="pt-4">
+        {/* INFORMACOES DA CAPA */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          {processo.assunto && (
+            <div className="flex items-start gap-2 md:col-span-2">
+              <FileText className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase">Assunto</p>
+                <p className="text-sm" data-testid="text-assunto">{processo.assunto}</p>
               </div>
-              
-              {processo.classe && (
-                <div className="flex items-start gap-2">
-                  <Scale className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">Classe</p>
-                    <p className="text-sm text-muted-foreground" data-testid="text-classe">
-                      {processo.classe}
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-              {processo.relator && (
-                <div className="flex items-start gap-2">
-                  <User className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">Relator</p>
-                    <p className="text-sm text-muted-foreground" data-testid="text-relator">
-                      {processo.relator}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {processo.assunto && (
-                <div className="flex items-start gap-2">
-                  <FileText className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">Assunto</p>
-                    <p className="text-sm text-muted-foreground" data-testid="text-assunto">
-                      {processo.assunto}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {processo.origem && (
-                <div className="flex items-start gap-2 md:col-span-2">
-                  <Building className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">Origem</p>
-                    <p className="text-sm text-muted-foreground" data-testid="text-origem">
-                      {processo.origem}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
-          </TabsContent>
+          )}
           
-          <TabsContent value="partes" className="mt-4">
-            {processo.partes && processo.partes.length > 0 ? (
-              <div className="space-y-2" data-testid="lista-partes">
-                {processo.partes.filter(p => p.length > 3).map((parte, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-                    <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-sm" data-testid={`parte-${i}`}>{parte}</span>
-                  </div>
-                ))}
+          {processo.relator && (
+            <div className="flex items-start gap-2">
+              <User className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase">Relator</p>
+                <p className="text-sm" data-testid="text-relator">{processo.relator}</p>
               </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground" data-testid="sem-partes">
-                <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Partes nao disponiveis no momento</p>
-                {processo.url && (
-                  <Button variant="outline" size="sm" className="mt-3" asChild>
-                    <a href={processo.url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-1" />
-                      Ver partes no portal do {processo.tribunal}
-                    </a>
-                  </Button>
-                )}
+            </div>
+          )}
+
+          {processo.origem && (
+            <div className="flex items-start gap-2">
+              <Building className="h-4 w-4 text-muted-foreground mt-1 flex-shrink-0" />
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase">Origem</p>
+                <p className="text-sm" data-testid="text-origem">{processo.origem}</p>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* PARTES */}
+        {processo.partes && processo.partes.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              Partes
+            </h3>
+            <div className="space-y-1 pl-6" data-testid="lista-partes">
+              {processo.partes.filter(p => p.length > 3).map((parte, i) => (
+                <p key={i} className="text-sm text-muted-foreground" data-testid={`parte-${i}`}>
+                  {parte}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ANDAMENTOS */}
+        <div>
+          <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            Andamentos
+            {movimentacoes.length > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {movimentacoes.length}
+              </Badge>
             )}
-          </TabsContent>
+          </h3>
           
-          <TabsContent value="andamentos" className="mt-4">
-            {andamentos.length > 0 ? (
-              <div className="space-y-2 max-h-80 overflow-y-auto" data-testid="lista-andamentos">
-                {andamentos.map((mov, i) => (
-                  <div key={i} className="flex items-start gap-2 p-2 border-l-2 border-muted pl-3">
-                    <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <span className="text-xs text-muted-foreground" data-testid={`andamento-data-${i}`}>
-                        {mov.data}
-                      </span>
-                      <p className="text-sm" data-testid={`andamento-desc-${i}`}>{mov.descricao}</p>
-                    </div>
+          {movimentacoes.length > 0 ? (
+            <div className="space-y-2 max-h-96 overflow-y-auto" data-testid="lista-andamentos">
+              {movimentacoes.map((mov, i) => (
+                <div key={i} className="flex items-start gap-2 p-2 border-l-2 border-primary/30 pl-3 bg-muted/30 rounded-r">
+                  <div className="flex-1">
+                    <span className="text-xs font-medium text-primary" data-testid={`andamento-data-${i}`}>
+                      {mov.data}
+                    </span>
+                    <p className="text-sm" data-testid={`andamento-desc-${i}`}>{mov.descricao}</p>
+                    {mov.detalhes && (
+                      <p className="text-xs text-muted-foreground mt-1">{mov.detalhes}</p>
+                    )}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground" data-testid="sem-andamentos">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Andamentos nao disponiveis no momento</p>
-                {processo.url && (
-                  <Button variant="outline" size="sm" className="mt-3" asChild>
-                    <a href={processo.url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-1" />
-                      Ver andamentos no portal do {processo.tribunal}
-                    </a>
-                  </Button>
-                )}
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="decisoes" className="mt-4">
-            {decisoes.length > 0 ? (
-              <div className="space-y-2 max-h-80 overflow-y-auto" data-testid="lista-decisoes">
-                {decisoes.map((dec, i) => (
-                  <div key={i} className="p-3 rounded-md bg-primary/5 border border-primary/10">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Gavel className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span className="text-xs text-muted-foreground" data-testid={`decisao-data-${i}`}>
-                        {dec.data}
-                      </span>
-                    </div>
-                    <p className="text-sm" data-testid={`decisao-desc-${i}`}>{dec.descricao}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground" data-testid="sem-decisoes">
-                <Gavel className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Decisoes nao disponiveis no momento</p>
-                {processo.url && (
-                  <Button variant="outline" size="sm" className="mt-3" asChild>
-                    <a href={processo.url} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="h-4 w-4 mr-1" />
-                      Ver decisoes no portal do {processo.tribunal}
-                    </a>
-                  </Button>
-                )}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg" data-testid="sem-andamentos">
+              <Clock className="h-6 w-6 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhum andamento disponivel</p>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

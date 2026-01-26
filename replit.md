@@ -114,7 +114,11 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 ### Phase 1 - Foundation (Completed)
 - [x] STF scraper implementation
 - [x] Automatic tribunal detection (CNJ parser)
-- [x] Tabbed process details (Info, Partes, Andamentos, Decisões)
+- [x] Process cover page layout (capa do processo) with party info, subject, lawyers
+- [x] Movements list below cover page
+- [x] Direct link to tribunal portal ("Ver no Portal")
+- [x] CNJ number capture and display
+- [x] One-click monitoring button on process details
 - [x] Party search page (Busca por Parte)
 
 ### Phase 2 - Priority Tribunals (Completed)
@@ -172,9 +176,32 @@ The monitoring system allows users to track processes and receive alerts when ne
 | `/` | Dashboard |
 | `/processos` | Process list |
 | `/consulta-processual` | Court portal search (auto-detection) |
-| `/busca-parte` | Search by party name/CNPJ |
+| `/busca-parte` | Search by party name/CNPJ/OAB |
 | `/monitoramento` | Process monitoring dashboard |
 | `/atividades` | Activities/Tasks |
 | `/financeiro/*` | Financial management |
 | `/documentos/*` | Document management |
 | `/gestao/*` | CRM and team management |
+
+## Consulta Processual Features
+
+The process search page (`/consulta-processual`) provides:
+
+### Process Cover Page Layout
+- **Header**: Process number with class badge, tribunal name
+- **CNJ Number**: Displayed when available (format: NNNNNNN-DD.AAAA.J.TR.OOOO)
+- **Actions**: "Monitorar" button to add to watchlist, "Ver no Portal" link to tribunal website
+- **Info Section**: Subject, Relator, Origin
+- **Parties Section**: List of parties involved (when available)
+- **Movements Section**: Chronological list of all case movements
+
+### One-Click Monitoring
+From the process details page, users can:
+1. Click "Monitorar" to add process to watchlist
+2. System captures process number (CNJ format preferred)
+3. Automatic tracking begins with configurable intervals
+
+### Known Limitations
+- Some tribunal portals (STF, STJ) may block automated access from cloud servers
+- When data cannot be extracted, basic info is shown with direct portal link
+- Full functionality requires unblocked access to tribunal websites
