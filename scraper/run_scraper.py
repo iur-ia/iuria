@@ -2,6 +2,7 @@
 """
 Main entry point for running scrapers
 Called from Node.js backend via child_process
+Automatically uses ScraperAPI with Brazilian residential proxies when available
 """
 import asyncio
 import json
@@ -11,7 +12,16 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from tribunais.stf import STFScraper
+from scraper_api import is_scraper_api_available
+
+# Import scrapers - prefer ScraperAPI versions when available
+if is_scraper_api_available():
+    from tribunais.stf_api import STFScraperAPI as STFScraper
+    print("Using ScraperAPI for tribunal access (Brazilian proxies enabled)", file=sys.stderr)
+else:
+    from tribunais.stf import STFScraper
+    print("ScraperAPI not configured - using direct access (may be blocked)", file=sys.stderr)
+
 from tribunais.stj import STJScraper
 from tribunais.trf2 import TRF2Scraper
 from tribunais.tjrj import TJRJScraper
