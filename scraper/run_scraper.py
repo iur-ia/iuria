@@ -14,13 +14,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from scraper_api import is_scraper_api_available
 
-# Import scrapers - prefer ScraperAPI versions when available
+# Import scrapers - priority: ScraperAPI > Scrapling (Playwright stealth) > Direct Playwright
 if is_scraper_api_available():
     from tribunais.stf_api import STFScraperAPI as STFScraper
-    print("Using ScraperAPI for tribunal access (Brazilian proxies enabled)", file=sys.stderr)
+    print("Using ScraperAPI for STF (Brazilian residential proxies)", file=sys.stderr)
 else:
-    from tribunais.stf import STFScraper
-    print("ScraperAPI not configured - using direct access (may be blocked)", file=sys.stderr)
+    try:
+        from scrapling import DynamicFetcher  # Test if scrapling is available
+        from tribunais.stf_scrapling import STFScrapling as STFScraper
+        print("Using Scrapling for STF (stealth Playwright)", file=sys.stderr)
+    except ImportError:
+        from tribunais.stf import STFScraper
+        print("Using direct Playwright for STF (may be blocked)", file=sys.stderr)
 
 from tribunais.stj import STJScraper
 from tribunais.trf2 import TRF2Scraper
