@@ -578,6 +578,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== DATAJUD API ====================
+  app.get("/api/datajud/:tribunal/:numero", async (req, res) => {
+    try {
+      const { tribunal, numero } = req.params;
+      const { spawn } = await import("child_process");
+      const path = await import("path");
+
+      const scriptPath = path.join(process.cwd(), "scraper", "datajud.py");
+
+      const pythonProcess = spawn("python", [scriptPath, tribunal.toUpperCase(), numero]);
+
+      let stdout = "";
+      let stderr = "";
+
+      pythonProcess.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
+      pythonProcess.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
+
+      pythonProcess.on("close", (code: number) => {
+        try {
+          const jsonStart = stdout.indexOf('{');
+          const jsonEnd = stdout.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            const result = JSON.parse(stdout.slice(jsonStart, jsonEnd + 1));
+            return res.json(result);
+          }
+          res.status(500).json({ error: "Erro ao processar resposta do DataJud" });
+        } catch (e) {
+          res.status(500).json({ error: "Erro ao processar resposta do DataJud" });
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao consultar DataJud" });
+    }
+  });
+
   // ==================== CONSULTA PROCESSUAL ====================
   app.get("/api/consultas-processuais", async (req, res) => {
     try {

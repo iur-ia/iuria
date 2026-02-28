@@ -201,28 +201,89 @@ def get_tribunal_info(sigla: str) -> Optional[Dict]:
     # Buscar em TRFs
     for codigo, info in TRIBUNAIS_FEDERAIS.items():
         if info["sigla"] == sigla:
-            ativo = sigla == "TRF2"  # TRF2 está ativo
-            return {**info, "sistema": "eProc/PJe", "ativo": ativo}
+            return {**info, "sistema": "eProc/PJe + DataJud", "ativo": True}
     
     # Buscar em TJs
+    esaj = ["TJSP", "TJBA", "TJCE", "TJAC", "TJAL", "TJAM", "TJSC", "TJMS"]
+    pje = ["TJMG", "TJPE", "TJRS", "TJPR", "TJGO", "TJMA", "TJPI", "TJRN",
+           "TJSE", "TJTO", "TJRO", "TJMT", "TJPA", "TJPB", "TJAP", "TJRR", "TJES", "TJDFT"]
     for codigo, info in TRIBUNAIS_ESTADUAIS.items():
         if info["sigla"] == sigla:
-            ativo = sigla == "TJRJ"  # TJRJ está ativo
-            return {**info, "sistema": "PJe/eSAJ/eProc", "ativo": ativo}
+            if sigla in esaj:
+                sistema = "eSAJ + DataJud"
+            elif sigla in pje:
+                sistema = "PJe + DataJud"
+            else:
+                sistema = "DataJud"
+            return {**info, "sistema": sistema, "ativo": True}
     
     return None
 
 
 def listar_tribunais_ativos() -> list:
     """
-    Retorna lista de tribunais com scraper implementado.
+    Retorna lista de tribunais disponiveis (DataJud cobre todos via API publica do CNJ).
     """
-    return [
-        {"sigla": "STF", "nome": "Supremo Tribunal Federal", "ativo": True},
-        {"sigla": "STJ", "nome": "Superior Tribunal de Justica", "ativo": True},
-        {"sigla": "TRF2", "nome": "Tribunal Regional Federal da 2a Regiao", "ativo": True},
-        {"sigla": "TJRJ", "nome": "Tribunal de Justica do Rio de Janeiro", "ativo": True}
-    ]
+    scrapling = ["STF", "STJ", "TRF1", "TRF2", "TRF3", "TRF4", "TRF5", "TJRJ"]
+    esaj = ["TJSP", "TJBA", "TJCE", "TJAC", "TJAL", "TJAM", "TJSC", "TJMS"]
+    pje = ["TJMG", "TJPE", "TJRS", "TJPR", "TJGO", "TJMA", "TJPI", "TJRN",
+           "TJSE", "TJTO", "TJRO", "TJMT", "TJPA", "TJPB", "TJAP", "TJRR", "TJES", "TJDFT"]
+    datajud_only = ["TST", "TSE", "STM", "TRF6"]
+    
+    nomes = {
+        "STF": "Supremo Tribunal Federal",
+        "STJ": "Superior Tribunal de Justica",
+        "TST": "Tribunal Superior do Trabalho",
+        "TSE": "Tribunal Superior Eleitoral",
+        "STM": "Superior Tribunal Militar",
+        "TRF1": "Tribunal Regional Federal da 1a Regiao",
+        "TRF2": "Tribunal Regional Federal da 2a Regiao",
+        "TRF3": "Tribunal Regional Federal da 3a Regiao",
+        "TRF4": "Tribunal Regional Federal da 4a Regiao",
+        "TRF5": "Tribunal Regional Federal da 5a Regiao",
+        "TRF6": "Tribunal Regional Federal da 6a Regiao",
+        "TJAC": "Tribunal de Justica do Acre",
+        "TJAL": "Tribunal de Justica de Alagoas",
+        "TJAP": "Tribunal de Justica do Amapa",
+        "TJAM": "Tribunal de Justica do Amazonas",
+        "TJBA": "Tribunal de Justica da Bahia",
+        "TJCE": "Tribunal de Justica do Ceara",
+        "TJDFT": "Tribunal de Justica do Distrito Federal",
+        "TJES": "Tribunal de Justica do Espirito Santo",
+        "TJGO": "Tribunal de Justica de Goias",
+        "TJMA": "Tribunal de Justica do Maranhao",
+        "TJMT": "Tribunal de Justica de Mato Grosso",
+        "TJMS": "Tribunal de Justica de Mato Grosso do Sul",
+        "TJMG": "Tribunal de Justica de Minas Gerais",
+        "TJPA": "Tribunal de Justica do Para",
+        "TJPB": "Tribunal de Justica da Paraiba",
+        "TJPR": "Tribunal de Justica do Parana",
+        "TJPE": "Tribunal de Justica de Pernambuco",
+        "TJPI": "Tribunal de Justica do Piaui",
+        "TJRJ": "Tribunal de Justica do Rio de Janeiro",
+        "TJRN": "Tribunal de Justica do Rio Grande do Norte",
+        "TJRS": "Tribunal de Justica do Rio Grande do Sul",
+        "TJRO": "Tribunal de Justica de Rondonia",
+        "TJRR": "Tribunal de Justica de Roraima",
+        "TJSC": "Tribunal de Justica de Santa Catarina",
+        "TJSE": "Tribunal de Justica de Sergipe",
+        "TJSP": "Tribunal de Justica de Sao Paulo",
+        "TJTO": "Tribunal de Justica do Tocantins",
+    }
+    
+    result = []
+    for sigla, nome in nomes.items():
+        if sigla in scrapling:
+            sistema = "Scrapling"
+        elif sigla in esaj:
+            sistema = "eSAJ"
+        elif sigla in pje:
+            sistema = "PJe"
+        else:
+            sistema = "DataJud"
+        result.append({"sigla": sigla, "nome": nome, "ativo": True, "sistema": sistema})
+    
+    return result
 
 
 def listar_todos_tribunais() -> list:

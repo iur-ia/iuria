@@ -94,11 +94,33 @@ The application follows Material Design 3 principles customized for enterprise l
 ## Web Scraping Architecture
 
 ### Tribunal Scrapers
-Located in `scraper/tribunais/`, each file implements scraping logic for a specific court:
-- `stf.py` - Supremo Tribunal Federal (active)
-- `stj.py` - Superior Tribunal de Justiça (planned)
-- `trf2.py` - TRF 2ª Região (planned)
-- `tjrj.py` - TJ Rio de Janeiro (planned)
+Located in `scraper/tribunais/`, scrapers use layered strategy:
+
+**ScraperAPI (Brazilian residential proxies) — highest priority for real-time data:**
+- `stf_api.py` - STF via ScraperAPI
+- `stj_api.py` - STJ via ScraperAPI
+- `trf2_api.py` - TRF2 via ScraperAPI
+- `tjrj_api.py` - TJRJ via ScraperAPI
+
+**Scrapling stealth (fallback after ScraperAPI):**
+- `stf_scrapling.py`, `stj_scrapling.py`, `trf2_scrapling.py`, `tjrj_scrapling.py`
+- `trf1_scrapling.py`, `trf3_scrapling.py`, `trf4_scrapling.py`, `trf5_scrapling.py`
+
+**Parametric system scrapers (1 scraper covers many TJs):**
+- `esaj_scraper.py` - covers TJSP, TJBA, TJCE, TJAC, TJAL, TJAM, TJSC, TJMS (8 TJs)
+- `pje_scraper.py` - covers TJMG, TJPE, TJRS, TJPR, TJGO, TJMA, TJPI, TJRN, TJSE, TJTO, TJRO, TJMT, TJPA, TJPB, TJAP, TJRR, TJES, TJDFT (18 TJs)
+
+**DataJud API (`scraper/datajud.py`) — covers 100% of tribunals:**
+- Public CNJ API, ElasticSearch endpoint
+- Strips number mask before querying (raw 20-digit format)
+- Reformats number back to CNJ mask for display
+- Movement names use `nome` field (human-readable)
+
+### Scraping Priority Order in `run_scraper.py`
+1. DataJud API (always first — fastest, covers all tribunals)
+2. ScraperAPI with Brazilian proxies (real-time data when DataJud is insufficient)
+3. Scrapling DynamicFetcher (stealth Playwright fallback)
+4. Legacy Playwright (last resort)
 
 ### CNJ Parser (`scraper/cnj_parser.py`)
 Parses Brazilian court process numbers and detects tribunal automatically:
@@ -108,6 +130,7 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 ### API Endpoints for Scraping
 - `GET /api/detectar-tribunal/:numero` - Detects tribunal from process number
 - `POST /api/consulta-processual` - Executes web scraping search
+- `GET /api/datajud/:tribunal/:numero` - Direct DataJud lookup
 
 ## Implementation Roadmap
 
@@ -122,16 +145,30 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 - [x] Party search page (Busca por Parte)
 
 ### Phase 2 - Priority Tribunals (Completed)
-- [x] STJ - Superior Tribunal de Justica
-- [x] TRF2 - Tribunal Regional Federal 2a Regiao
-- [x] TJRJ - Tribunal de Justica do Rio de Janeiro
+- [x] STJ - Superior Tribunal de Justica (ScraperAPI + Scrapling)
+- [x] TRF2 - Tribunal Regional Federal 2a Regiao (ScraperAPI + Scrapling)
+- [x] TJRJ - Tribunal de Justica do Rio de Janeiro (ScraperAPI + Scrapling)
 
-### Phase 3 - Federal Expansion
-- [ ] TRF1, TRF3, TRF4, TRF5, TRF6
-- [ ] TJSP - Tribunal de Justiça de São Paulo
+### Phase 3 - Federal Expansion (Completed)
+- [x] TRF1, TRF3, TRF4, TRF5 - via Scrapling scrapers
+- [x] All TRFs also covered by DataJud API
 
-### Phase 4 - State Courts
-- [ ] Remaining 25 State TJs
+### Phase 4 - State Courts (Completed)
+- [x] TJSP, TJBA, TJCE, TJAC, TJAL, TJAM, TJSC, TJMS - via eSAJ scraper
+- [x] TJMG, TJPE, TJRS, TJPR, TJGO, TJMA, TJPI, TJRN, TJSE, TJTO, TJRO, TJMT, TJPA, TJPB, TJAP, TJRR, TJES, TJDFT - via PJe scraper
+- [x] All 35 tribunals covered by DataJud API (100% coverage)
+
+### DataJud Integration (Completed)
+- [x] Public API key configured
+- [x] CNJ number stripping for query (raw 20-digit format)
+- [x] CNJ number reformatting for display (NNNNNNN-DD.AAAA.J.TR.OOOO)
+- [x] Human-readable movement names from `nome` field
+- [x] fonte badge in UI (blue=DataJud, green=tempo real)
+
+### ScraperAPI Integration (Completed)
+- [x] `scraper/scraper_api.py` - ScraperAPI client with Brazilian proxies
+- [x] STF, STJ, TRF2, TJRJ — ScraperAPI scrapers implemented
+- [x] SCRAPER_API_KEY configured as environment secret
 
 ### Phase 5 - Monitoring (Partially Completed)
 - [x] Process monitoring system (watchlist)

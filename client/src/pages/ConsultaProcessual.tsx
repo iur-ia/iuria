@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check } from "lucide-react";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -37,6 +37,9 @@ interface ConsultaResultado {
   erro?: string;
   data_consulta: string;
   total_encontrados: number;
+  fonte?: string;
+  fonte_label?: string;
+  fonte_descricao?: string;
 }
 
 interface TribunalDetectado {
@@ -314,19 +317,6 @@ export default function ConsultaProcessual() {
     e.preventDefault();
     if (!tribunalDetectado?.detectado || !tribunalDetectado.tribunal || !termoBusca.trim()) return;
     
-    if (!tribunalDetectado.info?.ativo) {
-      setResultado({
-        tribunal: tribunalDetectado.tribunal,
-        tipo_busca: "numero",
-        termo_busca: termoBusca,
-        processos: [],
-        erro: `O scraper para ${tribunalDetectado.tribunal} ainda não foi implementado. Disponível em breve!`,
-        data_consulta: new Date().toISOString(),
-        total_encontrados: 0,
-      });
-      return;
-    }
-    
     setResultado(null);
     consultaMutation.mutate({ 
       tribunal: tribunalDetectado.tribunal, 
@@ -336,7 +326,6 @@ export default function ConsultaProcessual() {
   };
 
   const canSubmit = tribunalDetectado?.detectado && 
-                    tribunalDetectado.info?.ativo && 
                     termoBusca.trim().length > 0 &&
                     !consultaMutation.isPending;
 
@@ -395,10 +384,10 @@ export default function ConsultaProcessual() {
                       </span>
                     </div>
                     <Badge 
-                      variant={tribunalDetectado.info?.ativo ? "default" : "secondary"}
+                      variant="default"
                       data-testid="badge-tribunal-status"
                     >
-                      {tribunalDetectado.info?.ativo ? "Disponível" : "Em breve"}
+                      Disponivel
                     </Badge>
                   </div>
                 ) : (
@@ -452,10 +441,44 @@ export default function ConsultaProcessual() {
             <h2 className="text-lg font-semibold" data-testid="text-resultados-titulo">
               Resultados da Consulta
             </h2>
-            <Badge variant={resultado.processos.length > 0 ? "default" : "secondary"} data-testid="badge-total-encontrados">
-              {resultado.total_encontrados} processo(s) encontrado(s)
-            </Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              {resultado.fonte && (
+                <Badge
+                  variant={resultado.fonte === "datajud" ? "secondary" : "default"}
+                  className={resultado.fonte === "datajud"
+                    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+                    : "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20"
+                  }
+                  data-testid="badge-fonte-dados"
+                >
+                  {resultado.fonte === "datajud" ? (
+                    <Database className="h-3 w-3 mr-1" />
+                  ) : (
+                    <Wifi className="h-3 w-3 mr-1" />
+                  )}
+                  {resultado.fonte_label || resultado.fonte}
+                </Badge>
+              )}
+              <Badge variant={resultado.processos.length > 0 ? "default" : "secondary"} data-testid="badge-total-encontrados">
+                {resultado.total_encontrados} processo(s) encontrado(s)
+              </Badge>
+            </div>
           </div>
+
+          {resultado.fonte_descricao && (
+            <div className={`flex items-start gap-2 p-3 rounded-md text-sm ${
+              resultado.fonte === "datajud"
+                ? "bg-blue-500/5 border border-blue-500/20 text-blue-700 dark:text-blue-300"
+                : "bg-green-500/5 border border-green-500/20 text-green-700 dark:text-green-300"
+            }`} data-testid="banner-fonte">
+              {resultado.fonte === "datajud" ? (
+                <Database className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              ) : (
+                <Globe className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              )}
+              <span>{resultado.fonte_descricao}</span>
+            </div>
+          )}
 
           {resultado.erro && (
             <Card className="border-destructive bg-destructive/5" data-testid="card-erro">
@@ -490,52 +513,51 @@ export default function ConsultaProcessual() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Tribunais com Detecção Automática</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Cobertura de Tribunais
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded-md text-sm">
+            <Database className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+            <div>
+              <span className="font-medium text-blue-700 dark:text-blue-300">DataJud CNJ (100% dos tribunais)</span>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Qualquer numero CNJ pode ser consultado via API publica do CNJ. Dados atualizados diariamente.
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
-              <span className="font-medium">STF</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                ADI, HC, RE, Rcl, etc
-              </span>
-              <Badge className="ml-2" variant="default">Disponivel</Badge>
-            </div>
-            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
-              <span className="font-medium">STJ</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                REsp, RHC, HC, etc
-              </span>
-              <Badge className="ml-2" variant="default">Disponivel</Badge>
-            </div>
-            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
-              <span className="font-medium">TRF2</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                RJ/ES - CNJ 4.02
-              </span>
-              <Badge className="ml-2" variant="default">Disponivel</Badge>
-            </div>
-            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
-              <span className="font-medium">TJRJ</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                CNJ 8.19
-              </span>
-              <Badge className="ml-2" variant="default">Disponivel</Badge>
-            </div>
-            <div className="p-2 rounded-md bg-muted/50 border border-muted">
-              <span className="font-medium">Outros TRFs</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                TRF1, TRF3-6
-              </span>
-              <Badge className="ml-2" variant="secondary">Em breve</Badge>
-            </div>
-            <div className="p-2 rounded-md bg-muted/50 border border-muted">
-              <span className="font-medium">Outros TJs</span>
-              <span className="text-xs text-muted-foreground ml-2">
-                TJSP, TJMG, etc
-              </span>
-              <Badge className="ml-2" variant="secondary">Em breve</Badge>
-            </div>
+            {[
+              { sigla: "STF", desc: "ADI, HC, RE, Rcl...", sistema: "Portal STF" },
+              { sigla: "STJ", desc: "REsp, RHC, HC...", sistema: "Portal STJ" },
+              { sigla: "TRF1", desc: "AM, BA, CE, DF, GO, MG...", sistema: "eProc TRF1" },
+              { sigla: "TRF2", desc: "RJ, ES - CNJ 4.02", sistema: "eProc TRF2" },
+              { sigla: "TRF3", desc: "SP, MS - CNJ 4.03", sistema: "PJe TRF3" },
+              { sigla: "TRF4", desc: "PR, RS, SC - CNJ 4.04", sistema: "eProc TRF4" },
+              { sigla: "TRF5", desc: "AL, CE, PB, PE, RN, SE", sistema: "PJe TRF5" },
+              { sigla: "TJRJ", desc: "Rio de Janeiro - CNJ 8.19", sistema: "Scrapling" },
+              { sigla: "TJSP", desc: "São Paulo - CNJ 8.26", sistema: "eSAJ" },
+              { sigla: "TJBA", desc: "Bahia - CNJ 8.05", sistema: "eSAJ" },
+              { sigla: "TJCE", desc: "Ceará - CNJ 8.06", sistema: "eSAJ" },
+              { sigla: "TJSC", desc: "Santa Catarina - CNJ 8.24", sistema: "eSAJ" },
+              { sigla: "TJMS", desc: "Mato Grosso do Sul - CNJ 8.12", sistema: "eSAJ" },
+              { sigla: "TJMG", desc: "Minas Gerais - CNJ 8.13", sistema: "PJe" },
+              { sigla: "TJPE", desc: "Pernambuco - CNJ 8.17", sistema: "PJe" },
+              { sigla: "TJRS", desc: "Rio Grande do Sul - CNJ 8.21", sistema: "PJe" },
+              { sigla: "TJPR", desc: "Paraná - CNJ 8.16", sistema: "PJe" },
+              { sigla: "TJGO", desc: "Goiás - CNJ 8.09", sistema: "PJe" },
+            ].map(({ sigla, desc, sistema }) => (
+              <div key={sigla} className="p-2 rounded-md bg-primary/5 border border-primary/20">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="font-medium">{sigla}</span>
+                  <span className="text-xs text-muted-foreground flex-1">{desc}</span>
+                  <Badge className="text-xs" variant="outline">{sistema}</Badge>
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
