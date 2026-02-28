@@ -61,6 +61,7 @@ class ResultadoBusca:
     termo_busca: str
     processos: List[ProcessoInfo] = field(default_factory=list)
     erro: Optional[str] = None
+    portal_url: Optional[str] = None
     data_consulta: str = field(default_factory=lambda: datetime.now().isoformat())
     
     def to_dict(self):
@@ -70,6 +71,7 @@ class ResultadoBusca:
             "termo_busca": self.termo_busca,
             "processos": [p.to_dict() for p in self.processos],
             "erro": self.erro,
+            "portal_url": self.portal_url,
             "data_consulta": self.data_consulta,
             "total_encontrados": len(self.processos)
         }

@@ -52,6 +52,27 @@ class STFScraperAPI(BaseScraper):
         
         return None, None
     
+    def _is_blocked(self, html_or_text: str) -> bool:
+        """Detect if the portal returned a blocked/captcha/error page"""
+        if not html_or_text:
+            return False
+        text_lower = html_or_text.lower()
+        block_signals = [
+            "acesso bloqueado",
+            "blocked",
+            "captcha",
+            "acesso negado",
+            "access denied",
+            "403 forbidden",
+            "too many requests",
+            "rate limit",
+            "tente novamente mais tarde",
+            "try again later",
+            "cloudflare",
+            "ray id",
+        ]
+        return any(signal in text_lower for signal in block_signals)
+
     async def buscar_por_numero(self, numero: str) -> ResultadoBusca:
         """Search for a case by its number using ScraperAPI"""
         resultado = ResultadoBusca(
@@ -69,30 +90,45 @@ class STFScraperAPI(BaseScraper):
             
             if classe and num:
                 url = f"{self.base_url}/processos/listarProcessos.asp?classe={classe}&numeroProcesso={num}"
+                portal_url = f"{self.base_url}/processos/detalhe.asp?incidente={classe}{num}"
                 
-                soup = self.client.fetch_and_parse(url, render_js=True, premium=True)
+                html = self.client.fetch_html(url, render_js=True, premium=True)
                 
-                if soup:
-                    processos = self._extrair_detalhes_soup(soup, classe, num, url)
-                    resultado.processos = processos
-                    
-                    if not processos:
-                        page_text = soup.get_text()
-                        if 'não encontrado' in page_text.lower() or 'nenhum processo' in page_text.lower():
-                            resultado.erro = f"Processo {numero} não encontrado no STF"
-                        else:
-                            processo = ProcessoInfo(
-                                numero=f"{classe} {num}",
-                                tribunal=self.tribunal_sigla,
-                                url=url,
-                                classe=classe,
-                                assunto="Dados extraídos via ScraperAPI"
-                            )
-                            resultado.processos = [processo]
-                else:
-                    resultado.erro = "Não foi possível acessar o portal do STF"
+                if not html:
+                    resultado.erro = f"O portal do STF não respondeu. Acesse diretamente: {portal_url}"
+                    resultado.processos = [ProcessoInfo(
+                        numero=f"{classe} {num}",
+                        tribunal=self.tribunal_sigla,
+                        url=portal_url,
+                        classe=classe,
+                    )]
+                    return resultado
+
+                if self._is_blocked(html):
+                    portal_link = f"{self.base_url}/processos/listarProcessos.asp?classe={classe}&numeroProcesso={num}"
+                    resultado.erro = f"O STF bloqueou o acesso automático. Acesse o processo diretamente no portal."
+                    resultado.portal_url = portal_link
+                    return resultado
+
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, 'html.parser')
+                processos = self._extrair_detalhes_soup(soup, classe, num, url)
+                resultado.processos = processos
+                
+                if not processos:
+                    page_text = soup.get_text()
+                    if 'não encontrado' in page_text.lower() or 'nenhum processo' in page_text.lower():
+                        resultado.erro = f"Processo {numero} não encontrado no STF"
+                    else:
+                        processo = ProcessoInfo(
+                            numero=f"{classe} {num}",
+                            tribunal=self.tribunal_sigla,
+                            url=url,
+                            classe=classe,
+                        )
+                        resultado.processos = [processo]
             else:
-                resultado.erro = f"Formato de número inválido. Use: CLASSE NUMERO (ex: ADI 1, HC 123456)"
+                resultado.erro = f"Formato de número inválido. Use: CLASSE NUMERO (ex: ADI 1, HC 123456, Pet 13350)"
                 
         except Exception as e:
             resultado.erro = f"Erro ao consultar STF: {str(e)}"

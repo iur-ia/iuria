@@ -74,16 +74,14 @@ class STFScrapling(BaseScraper):
         try:
             page_text = page.get_all_text(ignore_tags=("script", "style"))
             
-            if '403' in page_text or 'Forbidden' in page_text:
-                processo = ProcessoInfo(
-                    numero=f"{classe} {numero}",
-                    tribunal=self.tribunal_sigla,
-                    url=url,
-                    classe=classe,
-                    assunto="Acesso bloqueado - tente novamente mais tarde"
-                )
-                processos.append(processo)
-                return processos
+            block_signals = [
+                "403", "forbidden", "acesso bloqueado", "blocked", "captcha",
+                "acesso negado", "access denied", "rate limit", "tente novamente mais tarde",
+                "cloudflare", "ray id",
+            ]
+            page_lower = page_text.lower()
+            if any(s in page_lower for s in block_signals):
+                return []
             
             if 'não encontrado' in page_text.lower() or 'nenhum processo' in page_text.lower():
                 return []

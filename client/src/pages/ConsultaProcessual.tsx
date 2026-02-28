@@ -35,6 +35,7 @@ interface ConsultaResultado {
   termo_busca: string;
   processos: ProcessoResultado[];
   erro?: string;
+  portal_url?: string;
   data_consulta: string;
   total_encontrados: number;
   fonte?: string;
@@ -485,9 +486,21 @@ export default function ConsultaProcessual() {
               <CardContent className="py-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-destructive">Erro na consulta</p>
                     <p className="text-sm text-muted-foreground">{resultado.erro}</p>
+                    {resultado.portal_url && (
+                      <a
+                        href={resultado.portal_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 mt-3 text-sm font-medium text-primary hover:underline"
+                        data-testid="link-portal-erro"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Abrir no Portal do Tribunal
+                      </a>
+                    )}
                   </div>
                 </div>
               </CardContent>

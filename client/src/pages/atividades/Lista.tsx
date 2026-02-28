@@ -1,11 +1,36 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Filter, Calendar, Clock, Bell, Gavel } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Search, Filter, Calendar, Clock, Bell, Gavel, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -14,11 +39,34 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { insertAtividadeSchema } from "@shared/schema";
 import type { Atividade, Processo, Equipe } from "@shared/schema";
+import { z } from "zod";
+
+const formSchema = insertAtividadeSchema.extend({
+  titulo: z.string().min(1, "Título obrigatório"),
+  tipo: z.string().min(1, "Tipo obrigatório"),
+  data: z.string().min(1, "Data obrigatória"),
+  prioridade: z.string().min(1, "Prioridade obrigatória"),
+  status: z.string().min(1, "Status obrigatório"),
+});
+
+type FormValues = z.infer<typeof formSchema>;
+
+const TIPOS = ["Tarefa", "Intimação", "Audiência", "Compromisso"];
+const PRIORIDADES = ["Alta", "Média", "Baixa"];
+const STATUS_OPTIONS = ["Pendente", "Em Andamento", "Concluído", "Atrasado"];
+
+const NENHUM = "__nenhum__";
 
 export default function ListaAtividades() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("todas");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingAtividade, setEditingAtividade] = useState<Atividade | null>(null);
+  const { toast } = useToast();
 
   const { data: atividades = [], isLoading } = useQuery<Atividade[]>({
     queryKey: ["/api/atividades"],
@@ -31,6 +79,120 @@ export default function ListaAtividades() {
   const { data: equipe = [] } = useQuery<Equipe[]>({
     queryKey: ["/api/equipe"],
   });
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      titulo: "",
+      descricao: "",
+      tipo: "Tarefa",
+      data: new Date().toISOString().split("T")[0],
+      hora: "",
+      prioridade: "Média",
+      status: "Pendente",
+      processoId: null,
+      responsavelId: null,
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: FormValues) => {
+      const res = await apiRequest("POST", "/api/atividades", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/atividades"] });
+      toast({ title: "Atividade criada com sucesso!" });
+      setDialogOpen(false);
+      form.reset();
+    },
+    onError: () => {
+      toast({ title: "Erro ao criar atividade", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<FormValues> }) => {
+      const res = await apiRequest("PATCH", `/api/atividades/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/atividades"] });
+      toast({ title: "Atividade atualizada com sucesso!" });
+      setDialogOpen(false);
+      setEditingAtividade(null);
+      form.reset();
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar atividade", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/atividades/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/atividades"] });
+      toast({ title: "Atividade excluída" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao excluir atividade", variant: "destructive" });
+    },
+  });
+
+  const openCreate = () => {
+    setEditingAtividade(null);
+    form.reset({
+      titulo: "",
+      descricao: "",
+      tipo: "Tarefa",
+      data: new Date().toISOString().split("T")[0],
+      hora: "",
+      prioridade: "Média",
+      status: "Pendente",
+      processoId: null,
+      responsavelId: null,
+    });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (atividade: Atividade) => {
+    setEditingAtividade(atividade);
+    form.reset({
+      titulo: atividade.titulo,
+      descricao: atividade.descricao || "",
+      tipo: atividade.tipo,
+      data: atividade.data,
+      hora: atividade.hora || "",
+      prioridade: atividade.prioridade,
+      status: atividade.status,
+      processoId: atividade.processoId || null,
+      responsavelId: atividade.responsavelId || null,
+    });
+    setDialogOpen(true);
+  };
+
+  const onSubmit = (values: FormValues) => {
+    const payload = {
+      ...values,
+      hora: values.hora || null,
+      descricao: values.descricao || null,
+      processoId: values.processoId || null,
+      responsavelId: values.responsavelId || null,
+    };
+    if (editingAtividade) {
+      updateMutation.mutate({ id: editingAtividade.id, data: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
+
+  const handleDelete = (atividade: Atividade) => {
+    if (window.confirm(`Excluir "${atividade.titulo}"? Esta ação não pode ser desfeita.`)) {
+      deleteMutation.mutate(atividade.id);
+    }
+  };
 
   const getProcessoNumero = (id: string | null) => {
     const proc = processos.find(p => p.id === id);
@@ -60,17 +222,17 @@ export default function ListaAtividades() {
   };
 
   const tipoColors: Record<string, string> = {
-    Tarefa: "bg-purple-100 text-purple-800",
-    Intimação: "bg-orange-100 text-orange-800",
-    Audiência: "bg-green-100 text-green-800",
-    Compromisso: "bg-blue-100 text-blue-800",
+    Tarefa: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+    Intimação: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+    Audiência: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+    Compromisso: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   };
 
   const statusColors: Record<string, string> = {
-    Pendente: "bg-gray-100 text-gray-800",
-    "Em Andamento": "bg-blue-100 text-blue-800",
-    Concluído: "bg-green-100 text-green-800",
-    Atrasado: "bg-red-100 text-red-800",
+    Pendente: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+    "Em Andamento": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    Concluído: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+    Atrasado: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   };
 
   const prioridadeColors: Record<string, string> = {
@@ -78,6 +240,8 @@ export default function ListaAtividades() {
     Média: "text-yellow-600",
     Baixa: "text-green-600",
   };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   if (isLoading) {
     return (
@@ -100,6 +264,7 @@ export default function ListaAtividades() {
         </div>
         <Button
           className="bg-legal-status-active hover:bg-legal-status-active/90"
+          onClick={openCreate}
           data-testid="button-new-activity"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -164,21 +329,11 @@ export default function ListaAtividades() {
 
           <Tabs value={tipoFilter} onValueChange={setTipoFilter} className="mb-4">
             <TabsList>
-              <TabsTrigger value="todas" data-testid="tab-all">
-                Todas
-              </TabsTrigger>
-              <TabsTrigger value="Tarefa" data-testid="tab-tasks">
-                Tarefas
-              </TabsTrigger>
-              <TabsTrigger value="Intimação" data-testid="tab-intimations">
-                Intimações
-              </TabsTrigger>
-              <TabsTrigger value="Audiência" data-testid="tab-hearings">
-                Audiências
-              </TabsTrigger>
-              <TabsTrigger value="Compromisso" data-testid="tab-appointments">
-                Compromissos
-              </TabsTrigger>
+              <TabsTrigger value="todas" data-testid="tab-all">Todas</TabsTrigger>
+              <TabsTrigger value="Tarefa" data-testid="tab-tasks">Tarefas</TabsTrigger>
+              <TabsTrigger value="Intimação" data-testid="tab-intimations">Intimações</TabsTrigger>
+              <TabsTrigger value="Audiência" data-testid="tab-hearings">Audiências</TabsTrigger>
+              <TabsTrigger value="Compromisso" data-testid="tab-appointments">Compromissos</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -217,7 +372,7 @@ export default function ListaAtividades() {
                     <TableCell>{getResponsavelNome(atividade.responsavelId)}</TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div>{new Date(atividade.data).toLocaleDateString("pt-BR")}</div>
+                        <div>{new Date(atividade.data + "T12:00:00").toLocaleDateString("pt-BR")}</div>
                         {atividade.hora && (
                           <div className="text-muted-foreground">{atividade.hora}</div>
                         )}
@@ -234,9 +389,24 @@ export default function ListaAtividades() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" data-testid={`button-view-activity-${atividade.id}`}>
-                        Ver
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEdit(atividade)}
+                          data-testid={`button-edit-activity-${atividade.id}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(atividade)}
+                          data-testid={`button-delete-activity-${atividade.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -251,6 +421,226 @@ export default function ListaAtividades() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setEditingAtividade(null); form.reset(); } }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-atividade">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAtividade ? "Editar Atividade" : "Nova Atividade"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="titulo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Título</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Descreva a atividade..." {...field} data-testid="input-titulo" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="tipo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-tipo">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TIPOS.map((t) => (
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="prioridade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Prioridade</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-prioridade">
+                            <SelectValue placeholder="Selecione" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {PRIORIDADES.map((p) => (
+                            <SelectItem key={p} value={p}>{p}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="data"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-data" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="hora"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hora (opcional)</FormLabel>
+                      <FormControl>
+                        <Input type="time" {...field} value={field.value ?? ""} data-testid="input-hora" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-status">
+                          <SelectValue placeholder="Selecione o status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((s) => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="processoId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Processo (opcional)</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === NENHUM ? null : v)}
+                      value={field.value ?? NENHUM}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-processo">
+                          <SelectValue placeholder="Selecione o processo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NENHUM}>— Nenhum —</SelectItem>
+                        {processos.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.numero}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="responsavelId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Responsável (opcional)</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === NENHUM ? null : v)}
+                      value={field.value ?? NENHUM}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-responsavel">
+                          <SelectValue placeholder="Selecione o responsável" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NENHUM}>— Nenhum —</SelectItem>
+                        {equipe.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="descricao"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Descrição (opcional)</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Detalhes adicionais sobre a atividade..."
+                        {...field}
+                        value={field.value ?? ""}
+                        data-testid="textarea-descricao"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter className="gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  data-testid="button-cancel"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isPending}
+                  data-testid="button-submit-atividade"
+                >
+                  {isPending ? "Salvando..." : editingAtividade ? "Salvar alterações" : "Criar atividade"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
