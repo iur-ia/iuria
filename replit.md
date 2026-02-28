@@ -179,6 +179,39 @@ Parses Brazilian court process numbers and detects tribunal automatically:
 - [ ] Automatic deadline tracking
 - [ ] Process-publication crossreferencing
 
+### Phase 6 - Digital Certificate & Enhanced Access (Completed)
+- [x] TJRJ Playwright interactive scraper (`scraper/tribunais/tjrj_playwright.py`)
+  - Real browser automation: types number, clicks search, waits for Angular to render results
+  - Extracts CNJ numbers, parties, movements from rendered Angular SPA
+  - Priority 1 in TJRJ scraper chain (before ScraperAPI/Scrapling/DataJud)
+- [x] Universal A3 cloud certificate module (`scraper/cert_digital/`)
+  - `base.py`: OAuth2 PKCE abstract interface (RFC 7636)
+  - `certisign.py`: Certisign implementation (api.certisign.com.br)
+  - `birdid.py`: BirdID/Soluti implementation
+  - `vaultid.py`: VaultID/Dinamo implementation
+  - `safesign.py`: SafeSign/Safeweb implementation
+  - `factory.py`: auto-detects provider by name, creates instance
+- [x] CNJ Painel do Advogado integration (`scraper/cnj_painel.py`)
+  - `CNJPainelClient`: authenticated process lookup, intimações listing
+  - `PJeClientAutenticado`: PJe tribunal-specific authenticated client
+- [x] Backend certificate API endpoints (`server/routes.ts`)
+  - `GET /api/certificado/provedores`: list available providers
+  - `POST /api/certificado/iniciar-auth`: start OAuth2 PKCE flow
+  - `POST /api/certificado/trocar-token`: exchange code for token
+  - `GET /api/certificado/status`: check session token status
+  - `DELETE /api/certificado/desconectar`: clear session token
+  - `GET /api/certificado/callback`: OAuth2 redirect handler
+  - `GET /api/scraper-api/status`: check ScraperAPI credits
+- [x] Configurações page (`client/src/pages/Configuracoes.tsx`)
+  - Certificate section: provider select, CPF field, connect button, status display
+  - OAB credentials section: number + state fields for portal authentication
+  - ScraperAPI section: credit usage bar and status indicator
+- [x] ConsultaProcessual UX improvements
+  - Empty movements: shows "consult portal" and "configure certificate" links
+  - Empty results: shows portal link + certificate configuration prompt
+  - Certificate banner: shows when cert is connected
+  - certStatus query: shows certificate state across the page
+
 ### BuscaParte Features
 - [x] Search by party name (nome)
 - [x] Search by CNPJ (company ID)

@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi } from "lucide-react";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 interface Movimentacao {
   data: string;
@@ -72,7 +73,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
+function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResultado; certConfigurado?: boolean }) {
   const [adicionadoMonitoramento, setAdicionadoMonitoramento] = useState(false);
   const { toast } = useToast();
   
@@ -250,9 +251,36 @@ function ProcessoDetalhe({ processo }: { processo: ProcessoResultado }) {
               ))}
             </div>
           ) : (
-            <div className="text-center py-6 text-muted-foreground bg-muted/30 rounded-lg" data-testid="sem-andamentos">
-              <Clock className="h-6 w-6 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Nenhum andamento disponivel</p>
+            <div className="space-y-3" data-testid="sem-andamentos">
+              <div className="text-center py-5 text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                <Clock className="h-6 w-6 mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-medium">Nenhum andamento disponível nesta consulta</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pode ser processo recente, em sigilo ou fora do índice atual
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {processo.url && (
+                  <a
+                    href={processo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                    data-testid="link-portal-andamentos"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Consultar diretamente no portal do tribunal
+                  </a>
+                )}
+                {!certConfigurado && (
+                  <Link href="/configuracoes">
+                    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary cursor-pointer" data-testid="link-config-cert-andamentos">
+                      <Fingerprint className="h-3.5 w-3.5" />
+                      Tentar com certificado digital
+                    </span>
+                  </Link>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -265,7 +293,12 @@ export default function ConsultaProcessual() {
   const [termoBusca, setTermoBusca] = useState<string>("");
   const [tribunalDetectado, setTribunalDetectado] = useState<TribunalDetectado | null>(null);
   const [resultado, setResultado] = useState<ConsultaResultado | null>(null);
-  
+
+  const { data: certStatus } = useQuery<{ configurado: boolean; nome_titular?: string; provedor?: string }>({
+    queryKey: ["/api/certificado/status"],
+    refetchInterval: 120000,
+  });
+
   const debouncedTermo = useDebounce(termoBusca, 500);
   
   useEffect(() => {
@@ -340,6 +373,16 @@ export default function ConsultaProcessual() {
           Digite o número do processo - o tribunal será detectado automaticamente
         </p>
       </div>
+
+      {certStatus?.configurado && (
+        <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-md text-sm" data-testid="banner-cert-configurado">
+          <Fingerprint className="h-4 w-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+          <span className="text-purple-700 dark:text-purple-300">
+            Certificado digital conectado{certStatus.nome_titular ? ` — ${certStatus.nome_titular}` : ""}.
+            Processos sigilosos e intimações pessoais serão acessíveis.
+          </span>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -509,17 +552,40 @@ export default function ConsultaProcessual() {
 
           {resultado.processos.length === 0 && !resultado.erro && (
             <Card data-testid="card-resultado-vazio">
-              <CardContent className="py-8 text-center">
-                <Scale className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground" data-testid="text-nenhum-resultado">
-                  Nenhum processo encontrado para "{resultado.termo_busca}"
-                </p>
+              <CardContent className="py-8">
+                <div className="text-center mb-4">
+                  <Scale className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                  <p className="font-medium" data-testid="text-nenhum-resultado">
+                    Nenhum processo encontrado para "{resultado.termo_busca}"
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Pode ser um processo recente, em sigilo ou que ainda não foi indexado pelo DataJud
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-4">
+                  {resultado.portal_url && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={resultado.portal_url} target="_blank" rel="noopener noreferrer" data-testid="link-portal-vazio">
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Buscar no portal do tribunal
+                      </a>
+                    </Button>
+                  )}
+                  {!certStatus?.configurado && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/configuracoes" data-testid="link-cert-vazio">
+                        <Fingerprint className="h-4 w-4 mr-2" />
+                        Configurar certificado digital
+                      </Link>
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
 
           {resultado.processos.map((processo, index) => (
-            <ProcessoDetalhe key={index} processo={processo} />
+            <ProcessoDetalhe key={index} processo={processo} certConfigurado={certStatus?.configurado} />
           ))}
         </div>
       )}

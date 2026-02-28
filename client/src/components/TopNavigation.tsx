@@ -1,4 +1,4 @@
-import { Bell, Search, User, ChevronDown } from "lucide-react";
+import { Bell, Search, User, ChevronDown, Settings } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -167,7 +167,11 @@ export function TopNavigation() {
                 <User className="mr-2 h-4 w-4" />
                 <span>Meus Dados</span>
               </DropdownMenuItem>
-              <DropdownMenuItem data-testid="menu-settings">
+              <DropdownMenuItem
+                onClick={() => setLocation("/configuracoes")}
+                data-testid="menu-settings"
+              >
+                <Settings className="mr-2 h-4 w-4" />
                 <span>Configurações</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

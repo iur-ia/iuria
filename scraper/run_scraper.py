@@ -49,6 +49,7 @@ def _get_scraping_scraper(tribunal: str):
             (None, None, "tribunais.trf2", "TRF2Scraper"),
         ],
         "TJRJ": [
+            (None, None, "tribunais.tjrj_playwright", "TJRJPlaywright"),
             ("scraper_api", "is_scraper_api_available", "tribunais.tjrj_api", "TJRJScraperAPI"),
             ("scrapling", "DynamicFetcher", "tribunais.tjrj_scrapling", "TJRJScrapling"),
             (None, None, "tribunais.tjrj", "TJRJScraper"),

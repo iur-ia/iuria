@@ -913,6 +913,289 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== CERTIFICADO DIGITAL ====================
+
+  // Listar provedores disponíveis
+  app.get("/api/certificado/provedores", async (req, res) => {
+    try {
+      const { execFileSync } = await import("child_process");
+      const python = process.env.PYTHON_PATH || "python3";
+      const scriptPath = `${process.cwd()}/scraper/cert_digital/factory.py`;
+      
+      const provedores = [
+        {
+          id: "certisign",
+          nome: "Certisign",
+          descricao: "Maior Autoridade Certificadora do Brasil (ICP-Brasil)",
+          website: "https://www.certisign.com.br",
+          instrucoes: "Baixe o app 'Certisign Assina' e use seu certificado A3 em nuvem",
+        },
+        {
+          id: "birdid",
+          nome: "BirdID (Soluti)",
+          descricao: "Certificado em nuvem da Soluti — maior volume de certificados PF",
+          website: "https://www.birdid.com.br",
+          instrucoes: "Baixe o app 'BirdID' da Soluti e ative seu certificado",
+        },
+        {
+          id: "vaultid",
+          nome: "VaultID (Dinamo)",
+          descricao: "Solução corporativa da Dinamo Networks com HSM em nuvem",
+          website: "https://www.vaultid.com.br",
+          instrucoes: "Baixe o app 'VaultID' e configure seu certificado corporativo",
+        },
+        {
+          id: "safesign",
+          nome: "SafeSign (Safeweb)",
+          descricao: "Certificado digital em nuvem da Safeweb Certificadora",
+          website: "https://www.safeweb.com.br",
+          instrucoes: "Baixe o app 'SafeSign' da Safeweb e ative seu certificado A3",
+        },
+      ];
+      
+      res.json({ provedores });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao listar provedores" });
+    }
+  });
+
+  // Iniciar fluxo OAuth2 PKCE com o provedor de certificado
+  app.post("/api/certificado/iniciar-auth", async (req, res) => {
+    try {
+      const { provedor, cpf, redirectUri } = req.body;
+      
+      if (!provedor) {
+        return res.status(400).json({ error: "Provedor é obrigatório" });
+      }
+
+      const baseRedirect = redirectUri || `${req.protocol}://${req.get('host')}/api/certificado/callback`;
+      
+      const { spawnSync } = await import("child_process");
+      const python = process.env.PYTHON_PATH || "python3";
+      
+      const script = `
+import sys
+sys.path.insert(0, '${process.cwd()}/scraper')
+import json
+from cert_digital.factory import criar_provedor
+
+try:
+    provider = criar_provedor(
+        '${provedor}',
+        client_id='${process.env[`CERT_${provedor.toUpperCase()}_CLIENT_ID`] || ""}',
+        redirect_uri='${baseRedirect}',
+        client_secret=${process.env[`CERT_${provedor.toUpperCase()}_CLIENT_SECRET`] ? `'${process.env[`CERT_${provedor.toUpperCase()}_CLIENT_SECRET`]}'` : 'None'},
+    )
+    resultado = provider.iniciar_autorizacao(cpf=${cpf ? `'${cpf}'` : 'None'})
+    print(json.dumps(resultado.to_dict()))
+except Exception as e:
+    print(json.dumps({'erro': str(e), 'sucesso': False}))
+`;
+
+      const result = spawnSync(python, ["-c", script], {
+        encoding: "utf-8",
+        timeout: 15000,
+      });
+
+      const output = result.stdout?.trim();
+      if (!output) {
+        return res.status(500).json({ 
+          error: "Erro ao iniciar autenticação",
+          detalhe: result.stderr?.trim() 
+        });
+      }
+
+      const dados = JSON.parse(output);
+      
+      if (dados.erro) {
+        return res.status(400).json({ error: dados.erro });
+      }
+
+      res.json({
+        url_autorizacao: dados.url_autorizacao,
+        code_verifier: dados.code_verifier,
+        state: dados.state,
+        provedor,
+        instrucoes: `Acesse a URL de autorização e aprove a solicitação no app do ${provedor}`,
+      });
+
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao iniciar fluxo de autenticação: " + error.message });
+    }
+  });
+
+  // Trocar code OAuth2 por token (callback do provedor)
+  app.post("/api/certificado/trocar-token", async (req, res) => {
+    try {
+      const { provedor, code, codeVerifier, redirectUri } = req.body;
+      
+      if (!provedor || !code || !codeVerifier) {
+        return res.status(400).json({ error: "provedor, code e codeVerifier são obrigatórios" });
+      }
+
+      const baseRedirect = redirectUri || `${req.protocol}://${req.get('host')}/api/certificado/callback`;
+
+      const { spawnSync } = await import("child_process");
+      const python = process.env.PYTHON_PATH || "python3";
+      
+      const script = `
+import sys
+sys.path.insert(0, '${process.cwd()}/scraper')
+import json
+from cert_digital.factory import criar_provedor
+
+try:
+    provider = criar_provedor(
+        '${provedor}',
+        client_id='${process.env[`CERT_${provedor.toUpperCase()}_CLIENT_ID`] || ""}',
+        redirect_uri='${baseRedirect}',
+        client_secret=${process.env[`CERT_${provedor.toUpperCase()}_CLIENT_SECRET`] ? `'${process.env[`CERT_${provedor.toUpperCase()}_CLIENT_SECRET`]}'` : 'None'},
+    )
+    resultado = provider.trocar_code_por_token(
+        code=${JSON.stringify(code)},
+        code_verifier=${JSON.stringify(codeVerifier)},
+    )
+    print(json.dumps(resultado.to_dict()))
+except Exception as e:
+    print(json.dumps({'erro': str(e), 'sucesso': False}))
+`;
+
+      const result = spawnSync(python, ["-c", script], {
+        encoding: "utf-8",
+        timeout: 30000,
+      });
+
+      const output = result.stdout?.trim();
+      if (!output) {
+        return res.status(500).json({ 
+          error: "Erro ao trocar token",
+          detalhe: result.stderr?.trim()
+        });
+      }
+
+      const dados = JSON.parse(output);
+      
+      if (!dados.sucesso) {
+        return res.status(400).json({ error: dados.erro || "Falha na autenticação" });
+      }
+
+      if (req.session) {
+        (req.session as any).certificado = {
+          provedor,
+          access_token: dados.access_token,
+          refresh_token: dados.refresh_token,
+          expires_at: dados.expires_at,
+          nome_titular: dados.nome_titular,
+          cpf_titular: dados.cpf_titular,
+          email_titular: dados.email_titular,
+        };
+      }
+
+      res.json({
+        sucesso: true,
+        nome_titular: dados.nome_titular,
+        cpf_titular: dados.cpf_titular,
+        provedor,
+        expires_at: dados.expires_at,
+        mensagem: "Certificado digital conectado com sucesso!",
+      });
+
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao trocar token: " + error.message });
+    }
+  });
+
+  // Verificar status do certificado configurado na sessão
+  app.get("/api/certificado/status", async (req, res) => {
+    try {
+      const cert = (req.session as any)?.certificado;
+      
+      if (!cert || !cert.access_token) {
+        return res.json({
+          configurado: false,
+          mensagem: "Nenhum certificado digital conectado",
+        });
+      }
+
+      const agora = Date.now() / 1000;
+      const valido = cert.expires_at ? cert.expires_at > agora + 60 : true;
+
+      res.json({
+        configurado: true,
+        valido,
+        provedor: cert.provedor,
+        nome_titular: cert.nome_titular,
+        cpf_titular: cert.cpf_titular,
+        email_titular: cert.email_titular,
+        expires_at: cert.expires_at,
+        mensagem: valido 
+          ? `Conectado como ${cert.nome_titular || cert.cpf_titular}` 
+          : "Token expirado — reconecte o certificado",
+      });
+
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao verificar status do certificado" });
+    }
+  });
+
+  // Desconectar certificado da sessão
+  app.delete("/api/certificado/desconectar", async (req, res) => {
+    try {
+      if (req.session) {
+        delete (req.session as any).certificado;
+      }
+      res.json({ sucesso: true, mensagem: "Certificado digital desconectado" });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao desconectar certificado" });
+    }
+  });
+
+  // Callback OAuth2 do provedor (redireciona para o frontend)
+  app.get("/api/certificado/callback", async (req, res) => {
+    const { code, state, error } = req.query;
+    
+    if (error) {
+      return res.redirect(`/configuracoes?cert_error=${encodeURIComponent(String(error))}`);
+    }
+    
+    if (code) {
+      return res.redirect(`/configuracoes?cert_code=${encodeURIComponent(String(code))}&cert_state=${encodeURIComponent(String(state || ""))}`);
+    }
+    
+    res.redirect("/configuracoes?cert_error=callback_invalido");
+  });
+
+  // Verificar status da ScraperAPI
+  app.get("/api/scraper-api/status", async (req, res) => {
+    try {
+      const apiKey = process.env.SCRAPER_API_KEY;
+      if (!apiKey) {
+        return res.json({ configurada: false, mensagem: "SCRAPER_API_KEY não configurada" });
+      }
+
+      const response = await fetch(
+        `https://api.scraperapi.com/account?api_key=${apiKey}`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      
+      if (!response.ok) {
+        return res.json({ configurada: true, online: false, mensagem: "Erro ao verificar créditos" });
+      }
+
+      const data = await response.json() as any;
+      res.json({
+        configurada: true,
+        online: true,
+        requestCount: data.requestCount,
+        requestLimit: data.requestLimit,
+        creditosRestantes: data.requestLimit - data.requestCount,
+        percentualUsado: Math.round((data.requestCount / data.requestLimit) * 100),
+      });
+    } catch (error: any) {
+      res.json({ configurada: true, online: false, mensagem: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
