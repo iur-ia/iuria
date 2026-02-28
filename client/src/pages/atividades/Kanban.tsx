@@ -332,17 +332,50 @@ export default function KanbanTarefas() {
     setDialogOpen(true);
   };
 
+  const TIPO_MAP: Record<string, string> = {
+    tarefa: "Tarefa",
+    prazo: "Tarefa",
+    audiencia: "Audiência",
+    reuniao: "Compromisso",
+  };
+
+  const PRIORIDADE_MAP: Record<string, string> = {
+    alta: "Alta",
+    media: "Média",
+    baixa: "Baixa",
+  };
+
+  const STATUS_MAP: Record<string, string> = {
+    pendente: "Pendente",
+    "em-andamento": "Em Andamento",
+    revisao: "Em Andamento",
+    concluida: "Concluído",
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.titulo.trim()) {
       toast({ title: "Titulo é obrigatório", variant: "destructive" });
       return;
     }
+    if (!formData.prazo) {
+      toast({ title: "Prazo é obrigatório", variant: "destructive" });
+      return;
+    }
+
+    const payload = {
+      titulo: formData.titulo,
+      descricao: formData.descricao || null,
+      tipo: TIPO_MAP[formData.tipo] || "Tarefa",
+      prioridade: PRIORIDADE_MAP[formData.prioridade] || "Média",
+      status: STATUS_MAP[formData.status] || "Pendente",
+      data: formData.prazo,
+    };
 
     if (editingTask) {
-      updateMutation.mutate({ id: editingTask.id, data: formData });
+      updateMutation.mutate({ id: editingTask.id, data: payload });
     } else {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload as typeof formData);
     }
   };
 
