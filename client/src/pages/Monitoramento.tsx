@@ -4,13 +4,19 @@ import { Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
 import { 
-  Bell, Clock, Trash2, Eye, ExternalLink, RefreshCw, 
+  Bell, Clock, Trash2, Eye, ExternalLink, RefreshCw, Plus,
   Scale, Building, AlertCircle, CheckCircle, Loader2,
   Settings
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -189,10 +195,27 @@ function MonitoramentoCard({ monitoramento, onRemover, onAtualizar, onMarcarVist
   );
 }
 
+const TRIBUNAIS = [
+  "STF", "STJ", "TST", "TSE", "STM",
+  "TRF1", "TRF2", "TRF3", "TRF4", "TRF5", "TRF6",
+  "TJAC", "TJAL", "TJAP", "TJAM", "TJBA", "TJCE", "TJDF", "TJES", "TJGO",
+  "TJMA", "TJMT", "TJMS", "TJMG", "TJPA", "TJPB", "TJPR", "TJPE", "TJPI",
+  "TJRJ", "TJRN", "TJRS", "TJRO", "TJRR", "TJSC", "TJSP", "TJSE", "TJTO",
+];
+
+const emptyForm = {
+  numeroProcesso: "", tribunal: "STF", classe: "", assunto: "",
+  relator: "", urlProcesso: "", frequenciaMinutos: 60,
+};
+
 export default function Monitoramento() {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const { toast } = useToast();
+
   const { data: monitoramentos = [], isLoading, refetch } = useQuery<Monitoramento[]>({
     queryKey: ["/api/monitoramentos"],
-    refetchInterval: 30000, // Atualiza a cada 30 segundos
+    refetchInterval: 30000,
   });
 
   const removerMutation = useMutation({
@@ -213,6 +236,28 @@ export default function Monitoramento() {
     },
   });
 
+  const criarMutation = useMutation({
+    mutationFn: async (data: typeof form) => {
+      await apiRequest("POST", "/api/monitoramentos", {
+        ...data,
+        frequenciaMinutos: Number(data.frequenciaMinutos),
+        classe: data.classe || undefined,
+        assunto: data.assunto || undefined,
+        relator: data.relator || undefined,
+        urlProcesso: data.urlProcesso || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/monitoramentos"] });
+      setDialogOpen(false);
+      setForm(emptyForm);
+      toast({ title: "Processo adicionado ao monitoramento!" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao adicionar", description: error?.message || "Verifique os dados e tente novamente", variant: "destructive" });
+    },
+  });
+
   const marcarVistoMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("POST", `/api/monitoramentos/${id}/marcar-visto`);
@@ -221,6 +266,12 @@ export default function Monitoramento() {
       queryClient.invalidateQueries({ queryKey: ["/api/monitoramentos"] });
     },
   });
+
+  const openCreate = () => { setForm(emptyForm); setDialogOpen(true); };
+  const handleSubmit = () => {
+    if (!form.numeroProcesso.trim() || !form.tribunal) return;
+    criarMutation.mutate(form);
+  };
 
   const totalNovos = monitoramentos.reduce((acc, m) => acc + (m.novosAndamentos || 0), 0);
   const monitoramentosComNovos = monitoramentos.filter(m => m.novosAndamentos > 0);
@@ -253,6 +304,10 @@ export default function Monitoramento() {
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? "animate-spin" : ""}`} />
             Atualizar
+          </Button>
+          <Button size="sm" onClick={openCreate} data-testid="button-adicionar">
+            <Plus className="h-4 w-4 mr-1" />
+            Adicionar Processo
           </Button>
         </div>
       </div>
@@ -332,6 +387,69 @@ export default function Monitoramento() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Adicionar Processo ao Monitoramento</DialogTitle>
+            <DialogDescription>Informe os dados do processo que deseja monitorar</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label>Numero do Processo *</Label>
+              <Input
+                value={form.numeroProcesso}
+                onChange={e => setForm({ ...form, numeroProcesso: e.target.value })}
+                placeholder="Ex: 0001234-56.2024.8.19.0001"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Tribunal *</Label>
+                <Select value={form.tribunal} onValueChange={v => setForm({ ...form, tribunal: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TRIBUNAIS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Frequencia de Verificacao</Label>
+                <Select value={String(form.frequenciaMinutos)} onValueChange={v => setForm({ ...form, frequenciaMinutos: parseInt(v) })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {FREQUENCIAS.map(f => <SelectItem key={f.valor} value={String(f.valor)}>{f.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label>Classe Processual</Label>
+              <Input value={form.classe} onChange={e => setForm({ ...form, classe: e.target.value })} placeholder="Ex: Recurso Extraordinario" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Assunto</Label>
+              <Input value={form.assunto} onChange={e => setForm({ ...form, assunto: e.target.value })} placeholder="Ex: Direito Civil" />
+            </div>
+            <div className="grid gap-2">
+              <Label>Relator</Label>
+              <Input value={form.relator} onChange={e => setForm({ ...form, relator: e.target.value })} placeholder="Ex: Min. Fulano" />
+            </div>
+            <div className="grid gap-2">
+              <Label>URL do Processo</Label>
+              <Input value={form.urlProcesso} onChange={e => setForm({ ...form, urlProcesso: e.target.value })} placeholder="https://..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSubmit} disabled={!form.numeroProcesso.trim() || criarMutation.isPending}>
+              {criarMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+              Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

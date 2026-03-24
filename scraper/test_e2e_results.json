@@ -1,0 +1,63 @@
+{
+  "date": "2026-03-24 19:41:17",
+  "total_passed": 120,
+  "total_failed": 0,
+  "total_warnings": 5,
+  "overall": "PASS",
+  "tests": [
+    {
+      "name": "TEST 1: All 92 Tribunals Mapped (No JusBrasil Fallback)",
+      "passed": 12,
+      "failed": 0,
+      "warnings": 2
+    },
+    {
+      "name": "TEST 2: MNI Interface with Digital Certificates",
+      "passed": 13,
+      "failed": 0,
+      "warnings": 0
+    },
+    {
+      "name": "TEST 3: REST Endpoints (Consultation, Movements, Documents, Pending)",
+      "passed": 18,
+      "failed": 0,
+      "warnings": 0
+    },
+    {
+      "name": "TEST 4: Scraper Cascade (MCP → Direct HTTP → Fallback)",
+      "passed": 13,
+      "failed": 0,
+      "warnings": 0
+    },
+    {
+      "name": "TEST 5: STJ Cloudflare Bypass (Patchright + Anti-Detection)",
+      "passed": 8,
+      "failed": 0,
+      "warnings": 0
+    },
+    {
+      "name": "TEST 6: Scraping Tools Installation and Configuration",
+      "passed": 14,
+      "failed": 0,
+      "warnings": 0
+    },
+    {
+      "name": "TEST 7: CAPTCHA Handling, Proxy Rotation, Anti-Detection",
+      "passed": 21,
+      "failed": 0,
+      "warnings": 1
+    },
+    {
+      "name": "TEST 8: End-to-End Connectivity Verification",
+      "passed": 5,
+      "failed": 0,
+      "warnings": 2
+    },
+    {
+      "name": "TEST 9: Full 92-Tribunal Coverage Verification",
+      "passed": 16,
+      "failed": 0,
+      "warnings": 0
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+# iuria LexFutura - Python Dependencies
+# Scraping & Automation
+playwright>=1.40.0
+patchright>=1.40.0
+selenium>=4.15.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+httpx>=0.25.0
+aiohttp>=3.9.0
+requests>=2.31.0
+
+# Browser Fingerprinting
+browserforge>=1.2.0
+
+# CAPTCHA Solving
+2captcha-python>=2.0.0
+
+# SOAP/XML (MNI)
+zeep>=4.2.0
+
+# Cryptography (Certificado A1)
+cryptography>=41.0.0
+
+# PDF Processing
+pdfplumber>=0.10.0
+PyPDF2>=3.0.0
+pytesseract>=0.3.10
+pillow>=10.0.0
+
+# NLP
+spacy>=3.7.0
+
+# Brazilian Calendar
+workalendar>=17.0.0
+
+# Data Processing
+pandas>=2.0.0
+
+# Async
+asyncio-throttle>=1.0.0

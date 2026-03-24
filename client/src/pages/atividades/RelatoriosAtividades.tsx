@@ -1,39 +1,130 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp, CheckCircle2, Clock, AlertCircle } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Download, TrendingUp, CheckCircle2, Clock, AlertCircle, Loader2 } from "lucide-react";
+
+interface Atividade {
+  id: string;
+  titulo: string;
+  tipo: string;
+  status: string;
+  prioridade: string;
+  data: string;
+  responsavelId?: string;
+}
+
+interface EquipeMember {
+  id: string;
+  nome: string;
+}
 
 export default function RelatoriosAtividades() {
+  const { data: atividades = [], isLoading } = useQuery<Atividade[]>({
+    queryKey: ["/api/atividades"],
+  });
+
+  const { data: equipe = [] } = useQuery<EquipeMember[]>({
+    queryKey: ["/api/equipe"],
+  });
+
+  const stats = useMemo(() => {
+    const hoje = new Date().toISOString().split("T")[0];
+    const concluidas = atividades.filter(a => a.status === "Concluida" || a.status === "Concluída");
+    const pendentes = atividades.filter(a => a.status === "Pendente" || a.status === "Em Andamento");
+    const atrasadas = atividades.filter(a => a.data < hoje && (a.status === "Pendente" || a.status === "Em Andamento"));
+    const taxaConclusao = atividades.length > 0 ? Math.round((concluidas.length / atividades.length) * 100) : 0;
+
+    // By tipo
+    const tipoCount: Record<string, number> = {};
+    atividades.forEach(a => {
+      tipoCount[a.tipo] = (tipoCount[a.tipo] || 0) + 1;
+    });
+    const tipoEntries = Object.entries(tipoCount).sort((a, b) => b[1] - a[1]);
+    const totalTipo = atividades.length || 1;
+
+    // By team member
+    const teamStats = equipe.map(m => {
+      const memberAtividades = atividades.filter(a => a.responsavelId === m.id);
+      const memberConcluidas = memberAtividades.filter(a => a.status === "Concluida" || a.status === "Concluída");
+      const taxa = memberAtividades.length > 0 ? Math.round((memberConcluidas.length / memberAtividades.length) * 100) : 0;
+      return {
+        ...m,
+        total: memberAtividades.length,
+        concluidas: memberConcluidas.length,
+        taxa,
+        initials: m.nome.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase(),
+      };
+    }).filter(m => m.total > 0).sort((a, b) => b.taxa - a.taxa).slice(0, 5);
+
+    // Average completion time (simple estimate based on data)
+    const prioridadeStats: Record<string, { total: number; count: number }> = {
+      "Alta": { total: 0, count: 0 },
+      "Media": { total: 0, count: 0 },
+      "Baixa": { total: 0, count: 0 },
+    };
+    concluidas.forEach(a => {
+      const p = a.prioridade || "Media";
+      if (prioridadeStats[p]) {
+        prioridadeStats[p].count += 1;
+      }
+    });
+
+    return {
+      concluidas: concluidas.length,
+      pendentes: pendentes.length,
+      atrasadas: atrasadas.length,
+      taxaConclusao,
+      tipoEntries,
+      totalTipo,
+      teamStats,
+      prioridadeStats,
+    };
+  }, [atividades, equipe]);
+
+  const handleExport = () => {
+    const csvRows = [
+      ["Metrica", "Valor"],
+      ["Atividades Concluidas", stats.concluidas],
+      ["Atividades Pendentes", stats.pendentes],
+      ["Atividades Atrasadas", stats.atrasadas],
+      ["Taxa de Conclusao", `${stats.taxaConclusao}%`],
+    ];
+    const csv = csvRows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `relatorio-atividades-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const tipoColors = ["bg-purple-600", "bg-orange-600", "bg-green-600", "bg-blue-600", "bg-red-600"];
+  const teamColors = ["bg-purple-600", "bg-pink-600", "bg-blue-600", "bg-green-600", "bg-orange-600"];
+
   return (
     <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">
-            Relatórios de Atividades
+            Relatorios de Atividades
           </h1>
           <p className="text-sm text-muted-foreground">
-            Métricas e produtividade da equipe
+            Metricas e produtividade da equipe
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select defaultValue="mes">
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="semana">Esta Semana</SelectItem>
-              <SelectItem value="mes">Este Mês</SelectItem>
-              <SelectItem value="trimestre">Este Trimestre</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" data-testid="button-export">
+          <Button variant="outline" data-testid="button-export" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             Exportar
           </Button>
@@ -44,11 +135,11 @@ export default function RelatoriosAtividades() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Tarefas Concluídas</p>
+              <p className="text-sm text-muted-foreground">Tarefas Concluidas</p>
               <CheckCircle2 className="w-4 h-4 text-green-600" />
             </div>
-            <p className="text-3xl font-bold text-foreground mb-1">42</p>
-            <p className="text-xs text-green-600">+18% vs mês anterior</p>
+            <p className="text-3xl font-bold text-foreground mb-1">{stats.concluidas}</p>
+            <p className="text-xs text-green-600">de {atividades.length} total</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
@@ -57,7 +148,7 @@ export default function RelatoriosAtividades() {
               <p className="text-sm text-muted-foreground">Tarefas Pendentes</p>
               <Clock className="w-4 h-4 text-blue-600" />
             </div>
-            <p className="text-3xl font-bold text-foreground mb-1">18</p>
+            <p className="text-3xl font-bold text-foreground mb-1">{stats.pendentes}</p>
             <p className="text-xs text-blue-600">Em andamento</p>
           </CardContent>
         </Card>
@@ -67,18 +158,18 @@ export default function RelatoriosAtividades() {
               <p className="text-sm text-muted-foreground">Tarefas Atrasadas</p>
               <AlertCircle className="w-4 h-4 text-red-600" />
             </div>
-            <p className="text-3xl font-bold text-foreground mb-1">5</p>
-            <p className="text-xs text-red-600">Requer atenção</p>
+            <p className="text-3xl font-bold text-foreground mb-1">{stats.atrasadas}</p>
+            <p className="text-xs text-red-600">{stats.atrasadas > 0 ? "Requer atencao" : "Nenhuma atrasada"}</p>
           </CardContent>
         </Card>
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-muted-foreground">Taxa de Conclusão</p>
+              <p className="text-sm text-muted-foreground">Taxa de Conclusao</p>
               <TrendingUp className="w-4 h-4 text-green-600" />
             </div>
-            <p className="text-3xl font-bold text-foreground mb-1">87%</p>
-            <p className="text-xs text-green-600">+5% vs mês anterior</p>
+            <p className="text-3xl font-bold text-foreground mb-1">{stats.taxaConclusao}%</p>
+            <p className="text-xs text-green-600">concluidas / total</p>
           </CardContent>
         </Card>
       </div>
@@ -90,42 +181,23 @@ export default function RelatoriosAtividades() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm">Tarefas Jurídicas</span>
-                  <span className="text-sm font-semibold">28 (47%)</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-purple-600 h-2 rounded-full" style={{ width: "47%" }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm">Intimações</span>
-                  <span className="text-sm font-semibold">18 (30%)</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-orange-600 h-2 rounded-full" style={{ width: "30%" }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm">Audiências</span>
-                  <span className="text-sm font-semibold">8 (13%)</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: "13%" }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm">Compromissos</span>
-                  <span className="text-sm font-semibold">6 (10%)</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: "10%" }} />
-                </div>
-              </div>
+              {stats.tipoEntries.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum dado disponivel</p>
+              )}
+              {stats.tipoEntries.map(([tipo, count], idx) => {
+                const pct = Math.round((count / stats.totalTipo) * 100);
+                return (
+                  <div key={tipo}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm">{tipo}</span>
+                      <span className="text-sm font-semibold">{count} ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div className={`${tipoColors[idx % tipoColors.length]} h-2 rounded-full`} style={{ width: `${Math.max(pct, 2)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -136,42 +208,25 @@ export default function RelatoriosAtividades() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
-                    TG
+              {stats.teamStats.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Nenhum dado disponivel</p>
+              )}
+              {stats.teamStats.map((member, idx) => (
+                <div key={member.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-full ${teamColors[idx % teamColors.length]} flex items-center justify-center text-white font-semibold`}>
+                      {member.initials}
+                    </div>
+                    <div>
+                      <p className="font-medium">{member.nome}</p>
+                      <p className="text-xs text-muted-foreground">{member.concluidas} tarefas concluidas</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium">Thiago Gomes</p>
-                    <p className="text-xs text-muted-foreground">18 tarefas concluídas</p>
-                  </div>
+                  <Badge className={member.taxa >= 80 ? "bg-green-100 text-green-800" : member.taxa >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}>
+                    {member.taxa}%
+                  </Badge>
                 </div>
-                <Badge className="bg-green-100 text-green-800">100%</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-pink-600 flex items-center justify-center text-white font-semibold">
-                    MC
-                  </div>
-                  <div>
-                    <p className="font-medium">Maria Costa</p>
-                    <p className="text-xs text-muted-foreground">15 tarefas concluídas</p>
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-800">94%</Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-semibold">
-                    RS
-                  </div>
-                  <div>
-                    <p className="font-medium">Roberto Silva</p>
-                    <p className="text-xs text-muted-foreground">9 tarefas concluídas</p>
-                  </div>
-                </div>
-                <Badge className="bg-yellow-100 text-yellow-800">75%</Badge>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -179,30 +234,24 @@ export default function RelatoriosAtividades() {
 
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle>Tempo Médio de Conclusão</CardTitle>
+          <CardTitle>Resumo por Prioridade</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="p-4 border rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Tarefas Simples</p>
-              <p className="text-2xl font-bold mb-2">2.5 dias</p>
-              <p className="text-xs text-green-600">-0.5 dias vs meta</p>
-            </div>
-            <div className="p-4 border rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Tarefas Médias</p>
-              <p className="text-2xl font-bold mb-2">5.2 dias</p>
-              <p className="text-xs text-green-600">-0.8 dias vs meta</p>
-            </div>
-            <div className="p-4 border rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Tarefas Complexas</p>
-              <p className="text-2xl font-bold mb-2">12.8 dias</p>
-              <p className="text-xs text-red-600">+2.8 dias vs meta</p>
-            </div>
-            <div className="p-4 border rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Média Geral</p>
-              <p className="text-2xl font-bold mb-2">6.8 dias</p>
-              <p className="text-xs text-muted-foreground">Dentro da meta</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(["Alta", "Media", "Baixa"] as const).map(prio => {
+              const total = atividades.filter(a => a.prioridade === prio).length;
+              const concluidas = atividades.filter(a => a.prioridade === prio && (a.status === "Concluida" || a.status === "Concluída")).length;
+              const pendentes = total - concluidas;
+              return (
+                <div key={prio} className="p-4 border rounded-lg">
+                  <p className="text-sm text-muted-foreground mb-1">Prioridade {prio}</p>
+                  <p className="text-2xl font-bold mb-2">{total}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {concluidas} concluidas, {pendentes} pendentes
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
