@@ -1,16 +1,10 @@
 {
-  "date": "2026-03-24 19:41:17",
-  "total_passed": 120,
-  "total_failed": 0,
+  "date": "2026-03-24 19:42:58",
+  "total_passed": 112,
+  "total_failed": 1,
   "total_warnings": 5,
-  "overall": "PASS",
+  "overall": "PARTIAL",
   "tests": [
-    {
-      "name": "TEST 1: All 92 Tribunals Mapped (No JusBrasil Fallback)",
-      "passed": 12,
-      "failed": 0,
-      "warnings": 2
-    },
     {
       "name": "TEST 2: MNI Interface with Digital Certificates",
       "passed": 13,
@@ -25,7 +19,7 @@
     },
     {
       "name": "TEST 4: Scraper Cascade (MCP → Direct HTTP → Fallback)",
-      "passed": 13,
+      "passed": 14,
       "failed": 0,
       "warnings": 0
     },
@@ -49,9 +43,9 @@
     },
     {
       "name": "TEST 8: End-to-End Connectivity Verification",
-      "passed": 5,
+      "passed": 8,
       "failed": 0,
-      "warnings": 2
+      "warnings": 4
     },
     {
       "name": "TEST 9: Full 92-Tribunal Coverage Verification",
