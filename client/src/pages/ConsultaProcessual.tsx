@@ -376,19 +376,6 @@ export default function ConsultaProcessual() {
     e.preventDefault();
     if (!tribunalDetectado?.detectado || !tribunalDetectado.tribunal || !termoBusca.trim()) return;
     
-    if (!tribunalDetectado.info?.ativo) {
-      setResultado({
-        tribunal: tribunalDetectado.tribunal,
-        tipo_busca: "numero",
-        termo_busca: termoBusca,
-        processos: [],
-        erro: `O scraper para ${tribunalDetectado.tribunal} ainda não foi implementado. Disponível em breve!`,
-        data_consulta: new Date().toISOString(),
-        total_encontrados: 0,
-      });
-      return;
-    }
-    
     setResultado(null);
     consultaMutation.mutate({ 
       tribunal: tribunalDetectado.tribunal, 
@@ -398,7 +385,6 @@ export default function ConsultaProcessual() {
   };
 
   const canSubmit = tribunalDetectado?.detectado && 
-                    tribunalDetectado.info?.ativo && 
                     termoBusca.trim().length > 0 &&
                     !consultaMutation.isPending;
 
@@ -440,9 +426,7 @@ export default function ConsultaProcessual() {
             {tribunalDetectado && (
               <div className={`p-3 rounded-md ${
                 tribunalDetectado.detectado 
-                  ? tribunalDetectado.info?.ativo 
-                    ? "bg-primary/10 border border-primary/20" 
-                    : "bg-yellow-500/10 border border-yellow-500/20"
+                  ? "bg-primary/10 border border-primary/20"
                   : "bg-muted"
               }`} data-testid="tribunal-detectado">
                 {tribunalDetectado.detectado ? (
@@ -457,10 +441,10 @@ export default function ConsultaProcessual() {
                       </span>
                     </div>
                     <Badge 
-                      variant={tribunalDetectado.info?.ativo ? "default" : "secondary"}
+                      variant="default"
                       data-testid="badge-tribunal-status"
                     >
-                      {tribunalDetectado.info?.ativo ? "Disponível" : "Em breve"}
+                      Disponível
                     </Badge>
                   </div>
                 ) : (
@@ -563,26 +547,40 @@ export default function ConsultaProcessual() {
               </span>
               <Badge className="ml-2" variant="default">Disponível</Badge>
             </div>
-            <div className="p-2 rounded-md bg-muted/50 border border-muted">
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
               <span className="font-medium">STJ</span>
               <span className="text-xs text-muted-foreground ml-2">
                 REsp, RHC, HC, etc
               </span>
-              <Badge className="ml-2" variant="secondary">Em breve</Badge>
+              <Badge className="ml-2" variant="default">Disponível</Badge>
             </div>
-            <div className="p-2 rounded-md bg-muted/50 border border-muted">
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
               <span className="font-medium">TRFs</span>
               <span className="text-xs text-muted-foreground ml-2">
-                CNJ 4.01-4.06
+                TRF1-TRF6 (Justiça Federal)
               </span>
-              <Badge className="ml-2" variant="secondary">Em breve</Badge>
+              <Badge className="ml-2" variant="default">Disponível</Badge>
             </div>
-            <div className="p-2 rounded-md bg-muted/50 border border-muted">
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
               <span className="font-medium">TJs</span>
               <span className="text-xs text-muted-foreground ml-2">
-                CNJ 8.01-8.27
+                27 Tribunais de Justiça
               </span>
-              <Badge className="ml-2" variant="secondary">Em breve</Badge>
+              <Badge className="ml-2" variant="default">Disponível</Badge>
+            </div>
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
+              <span className="font-medium">TRTs</span>
+              <span className="text-xs text-muted-foreground ml-2">
+                TRT1-TRT24 (Justiça do Trabalho)
+              </span>
+              <Badge className="ml-2" variant="default">Disponível</Badge>
+            </div>
+            <div className="p-2 rounded-md bg-primary/5 border border-primary/20">
+              <span className="font-medium">TST / TSE / STM</span>
+              <span className="text-xs text-muted-foreground ml-2">
+                Tribunais Superiores
+              </span>
+              <Badge className="ml-2" variant="default">Disponível</Badge>
             </div>
           </div>
         </CardContent>

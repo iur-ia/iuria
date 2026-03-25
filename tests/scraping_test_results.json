@@ -1,0 +1,283 @@
+{
+  "direct_http": {
+    "STF": {
+      "tribunal": "STF",
+      "numero": "ADI 7676",
+      "classe": null,
+      "assunto": null,
+      "relator": null,
+      "orgao_julgador": null,
+      "data_ajuizamento": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": null,
+      "erro": "STF API error: HTTPSConnectionPool(host='api.stf.jus.br', port=443): Max retries exceeded with url: /v1/processo/ADI/7676 (Caused by NameResolutionError(\"HTTPSConnection(host='api.stf.jus.br', port=443): Failed to resolve 'api.stf.jus.br' ([Errno -5] No address associated with hostname)\"))",
+      "fonte": "scraping",
+      "metodo": "http",
+      "tempo_ms": 10.193824768066406
+    },
+    "STJ": {
+      "tribunal": "STJ",
+      "numero": "REsp 2189763",
+      "classe": null,
+      "assunto": null,
+      "relator": null,
+      "orgao_julgador": null,
+      "data_ajuizamento": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": null,
+      "erro": "STJ blocked request (403) - requires anti-detection",
+      "fonte": "scraping",
+      "metodo": "http",
+      "tempo_ms": 131.39772415161133
+    },
+    "TRF2": {
+      "tribunal": "TRF2",
+      "numero": "5001234-56.2024.4.02.5101",
+      "classe": null,
+      "assunto": "",
+      "relator": null,
+      "orgao_julgador": null,
+      "data_ajuizamento": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": "https://eproc.trf2.jus.br/eproc/externo_controlador.php?acao=processo_consulta_publica",
+      "erro": null,
+      "fonte": "scraping",
+      "metodo": "eproc_http",
+      "tempo_ms": 795.1169013977051
+    },
+    "TJRJ": {
+      "tribunal": "TJRJ-DCP",
+      "numero": "0072018-74.2024.8.19.0001",
+      "classe": null,
+      "assunto": null,
+      "relator": null,
+      "orgao_julgador": null,
+      "data_ajuizamento": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": "https://www3.tjrj.jus.br/ejud/ConsultaProcesso.aspx",
+      "erro": null,
+      "fonte": "scraping",
+      "metodo": "dcp_http",
+      "tempo_ms": 917.7775382995605
+    }
+  },
+  "mcp_techjustica": {
+    "status": {
+      "status": "offline",
+      "error": "MCP Techjustica: verificar_status failed after 3 attempts: Cannot connect to host mcp.techjustica.com.br:443 ssl:default [Name or service not known]"
+    },
+    "STF_mcp": {
+      "numero": "ADI 7676",
+      "tribunal": "STF",
+      "classe": null,
+      "assunto": null,
+      "orgao_julgador": null,
+      "relator": null,
+      "data_ajuizamento": null,
+      "valor_causa": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": null,
+      "fonte": "mcp_techjustica",
+      "metodo": "mcp"
+    },
+    "STJ_mcp": {
+      "numero": "REsp 2189763",
+      "tribunal": "STJ",
+      "classe": null,
+      "assunto": null,
+      "orgao_julgador": null,
+      "relator": null,
+      "data_ajuizamento": null,
+      "valor_causa": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": null,
+      "fonte": "mcp_techjustica",
+      "metodo": "mcp"
+    },
+    "TJRJ_mcp": {
+      "numero": "0072018-74.2024.8.19.0001",
+      "tribunal": "TJRJ",
+      "classe": null,
+      "assunto": null,
+      "orgao_julgador": null,
+      "relator": null,
+      "data_ajuizamento": null,
+      "valor_causa": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": null,
+      "fonte": "mcp_techjustica",
+      "metodo": "mcp"
+    },
+    "TRF2_mcp": {
+      "numero": "5001234-56.2024.4.02.5101",
+      "tribunal": "TRF2",
+      "classe": null,
+      "assunto": null,
+      "orgao_julgador": null,
+      "relator": null,
+      "data_ajuizamento": null,
+      "valor_causa": null,
+      "situacao": null,
+      "partes": [],
+      "movimentacoes": [],
+      "documentos": [],
+      "url": null,
+      "fonte": "mcp_techjustica",
+      "metodo": "mcp"
+    },
+    "metrics": {
+      "total_requests": 5,
+      "successful": 0,
+      "failed": 5,
+      "cached_hits": 0,
+      "avg_response_ms": 0.0,
+      "total_response_ms": 0.0,
+      "cache_size": 0,
+      "cache_ttl_seconds": 300,
+      "tribunais_suportados": 62
+    }
+  },
+  "mapping": {
+    "total_tribunais": 92,
+    "por_tipo": {
+      "Superior": 5,
+      "Federal": 6,
+      "Estadual": 27,
+      "Trabalho": 24,
+      "Eleitoral": 27,
+      "Militar Estadual": 3
+    },
+    "por_sistema": {
+      "stf_portal": 1,
+      "stj_portal": 1,
+      "pje": 89,
+      "stm_portal": 1,
+      "eproc": 4,
+      "eproc_v2": 3,
+      "projudi": 5,
+      "esaj": 7,
+      "tucujuris": 1,
+      "dcp": 1,
+      "themis": 1
+    },
+    "com_mni": 90
+  },
+  "connectivity": {
+    "STF": {
+      "status": 403,
+      "size": 520,
+      "time_ms": 443,
+      "accessible": false
+    },
+    "STJ": {
+      "status": 403,
+      "size": 15541,
+      "time_ms": 154,
+      "accessible": false
+    },
+    "TRF2-eProc": {
+      "status": 200,
+      "size": 40508,
+      "time_ms": 1556,
+      "accessible": true
+    },
+    "TJRJ-PJe": {
+      "status": 200,
+      "size": 38897,
+      "time_ms": 705,
+      "accessible": true
+    },
+    "TJRJ-DCP": {
+      "status": 200,
+      "size": 9329,
+      "time_ms": 775,
+      "accessible": true
+    },
+    "TJRJ-Portal": {
+      "status": 200,
+      "size": 289398,
+      "time_ms": 2440,
+      "accessible": true
+    },
+    "TRF1-PJe": {
+      "status": 404,
+      "size": 74,
+      "time_ms": 1087,
+      "accessible": false
+    },
+    "TJSP-eSAJ": {
+      "status": 200,
+      "size": 69334,
+      "time_ms": 689,
+      "accessible": true
+    },
+    "TRF4-eProc": {
+      "status": 200,
+      "size": 39666,
+      "time_ms": 648,
+      "accessible": true
+    },
+    "CNJ-PJe": {
+      "status": "error",
+      "error": "Exceeded 30 redirects."
+    }
+  },
+  "resilient": {
+    "metrics": {
+      "metricas_gerais": {
+        "total_consultas": 1,
+        "mcp_sucesso": 0,
+        "mni_sucesso": 0,
+        "mni_publico_sucesso": 0,
+        "scraping_sucesso": 1,
+        "captcha_resolvido": 0,
+        "falhas_totais": 1,
+        "circuit_breaks": 0
+      },
+      "estrategias": {},
+      "circuit_breakers": {},
+      "healthcheck": {},
+      "alertas_manutencao": [],
+      "redundancia": {
+        "fluxo": [
+          "0. MCP Techjustica (API remota, todos os tribunais)",
+          "1. MNI mTLS (certificado A1)",
+          "2. MNI publico (sem certificado)",
+          "3. Scraping com elite stealth (Patchright + browserforge)",
+          "4. 2Captcha se CAPTCHA detectado",
+          "5. Identity proxy se IP bloqueado"
+        ],
+        "mcp_api_configurada": true,
+        "captcha_api_configurada": false,
+        "identity_proxy_configurada": false
+      }
+    },
+    "test_result": {
+      "tribunal": "STF",
+      "numero": "0146432-59.2024.1.00.0000",
+      "erro": "Todas as estrategias falharam",
+      "circuit_state": "closed"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "timestamp": "2026-03-24T19:07:13",
+  "mapping_complete": true,
+  "total_tests": 61,
+  "ok": 11,
+  "partial": 14,
+  "blocked": 9,
+  "fail": 27,
+  "tools_installed": {
+    "curl_cffi": true,
+    "patchright": true,
+    "playwright": true,
+    "scrapling": true,
+    "browserforge": true,
+    "selenium": true,
+    "scrapy": true,
+    "zeep": true
+  },
+  "cloudflare_tribunals": [
+    "STJ",
+    "STF"
+  ],
+  "working_direct_http": [
+    "TJAM_ESAJ",
+    "TJCE_ESAJ",
+    "TJDFT",
+    "TJMT",
+    "TJPA",
+    "TJSP",
+    "TRF4",
+    "TRF5",
+    "TRT15",
+    "TST"
+  ],
+  "needs_browser": [
+    "STF",
+    "STJ",
+    "TJAC",
+    "TJAP",
+    "TJBA_PJE",
+    "TJES",
+    "TJMA",
+    "TJPB",
+    "TJPE",
+    "TJRJ",
+    "TJRR",
+    "TRF1",
+    "TRF2",
+    "TRF3",
+    "TRF6",
+    "TRT1",
+    "TRT2",
+    "TRT3",
+    "TRT4"
+  ]
+}

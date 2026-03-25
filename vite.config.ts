@@ -33,7 +33,10 @@ export default defineConfig({
   },
   server: {
     fs: {
-      strict: true,
+      strict: false,
+      allow: [
+        path.resolve(import.meta.dirname),
+      ],
       deny: ["**/.*"],
     },
   },

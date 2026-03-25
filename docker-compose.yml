@@ -1,0 +1,102 @@
+# iuria LexFutura - DocSmart 3.0
+# Docker Compose for local development and deployment
+
+version: "3.9"
+
+services:
+  # ==================== Main Application ====================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iuria-lexfutura
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - DATABASE_URL=${DATABASE_URL:-}
+      - SESSION_SECRET=${SESSION_SECRET:-iuria-lexfutura-secret-2026}
+      - JWT_SECRET=${JWT_SECRET:-iuria-jwt-secret-2026}
+      # MNI / Certificate
+      - MNI_CERT_PATH=${MNI_CERT_PATH:-}
+      - MNI_CERT_PASSWORD=${MNI_CERT_PASSWORD:-}
+      # 2Captcha
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY:-}
+      # Identity Proxy
+      - IDENTITY_PROXY_URL=${IDENTITY_PROXY_URL:-}
+      - IDENTITY_PROXY_CERT_ID=${IDENTITY_PROXY_CERT_ID:-}
+      - IDENTITY_PROXY_API_KEY=${IDENTITY_PROXY_API_KEY:-}
+      # Residential Proxies
+      - BRIGHTDATA_USERNAME=${BRIGHTDATA_USERNAME:-}
+      - BRIGHTDATA_PASSWORD=${BRIGHTDATA_PASSWORD:-}
+      - OXYLABS_USERNAME=${OXYLABS_USERNAME:-}
+      - OXYLABS_PASSWORD=${OXYLABS_PASSWORD:-}
+      # Supabase / S3
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_KEY=${SUPABASE_KEY:-}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - pdf_storage:/app/uploads/pdfs
+      - cert_storage:/app/certs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/auth/me"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      - db
+    networks:
+      - iuria-network
+
+  # ==================== PostgreSQL (Supabase-compatible) ====================
+  db:
+    image: postgres:16-alpine
+    container_name: iuria-postgres
+    environment:
+      POSTGRES_DB: iuria_lexfutura
+      POSTGRES_USER: ${POSTGRES_USER:-iuria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iuria_2026_secure}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iuria -d iuria_lexfutura"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iuria-network
+
+  # ==================== Monitoring Worker ====================
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iuria-worker
+    command: ["python3", "scraper/workers/monitoring_worker.py", "run_daemon", "300"]
+    environment:
+      - API_BASE_URL=http://app:5000
+      - NODE_ENV=production
+      - TWOCAPTCHA_API_KEY=${TWOCAPTCHA_API_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - iuria-network
+
+volumes:
+  postgres_data:
+  pdf_storage:
+  cert_storage:
+
+networks:
+  iuria-network:
+    driver: bridge

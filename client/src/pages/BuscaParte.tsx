@@ -26,10 +26,47 @@ interface BuscaResultado {
 }
 
 const TRIBUNAIS_BUSCA = [
+  // Tribunais Superiores
   { sigla: "STF", nome: "Supremo Tribunal Federal", ativo: true },
-  { sigla: "STJ", nome: "Superior Tribunal de Justiça", ativo: false },
-  { sigla: "TRF2", nome: "TRF 2ª Região (RJ/ES)", ativo: false },
-  { sigla: "TJRJ", nome: "TJ Rio de Janeiro", ativo: false },
+  { sigla: "STJ", nome: "Superior Tribunal de Justiça", ativo: true },
+  { sigla: "TST", nome: "Tribunal Superior do Trabalho", ativo: true },
+  { sigla: "TSE", nome: "Tribunal Superior Eleitoral", ativo: true },
+  { sigla: "STM", nome: "Superior Tribunal Militar", ativo: true },
+  // TRFs
+  { sigla: "TRF1", nome: "TRF 1ª Região", ativo: true },
+  { sigla: "TRF2", nome: "TRF 2ª Região (RJ/ES)", ativo: true },
+  { sigla: "TRF3", nome: "TRF 3ª Região (SP/MS)", ativo: true },
+  { sigla: "TRF4", nome: "TRF 4ª Região (RS/PR/SC)", ativo: true },
+  { sigla: "TRF5", nome: "TRF 5ª Região (NE)", ativo: true },
+  { sigla: "TRF6", nome: "TRF 6ª Região (MG)", ativo: true },
+  // TJs principais
+  { sigla: "TJSP", nome: "TJ São Paulo", ativo: true },
+  { sigla: "TJRJ", nome: "TJ Rio de Janeiro", ativo: true },
+  { sigla: "TJMG", nome: "TJ Minas Gerais", ativo: true },
+  { sigla: "TJRS", nome: "TJ Rio Grande do Sul", ativo: true },
+  { sigla: "TJPR", nome: "TJ Paraná", ativo: true },
+  { sigla: "TJSC", nome: "TJ Santa Catarina", ativo: true },
+  { sigla: "TJBA", nome: "TJ Bahia", ativo: true },
+  { sigla: "TJPE", nome: "TJ Pernambuco", ativo: true },
+  { sigla: "TJCE", nome: "TJ Ceará", ativo: true },
+  { sigla: "TJDFT", nome: "TJ Distrito Federal", ativo: true },
+  { sigla: "TJGO", nome: "TJ Goiás", ativo: true },
+  { sigla: "TJES", nome: "TJ Espírito Santo", ativo: true },
+  { sigla: "TJPA", nome: "TJ Pará", ativo: true },
+  { sigla: "TJMA", nome: "TJ Maranhão", ativo: true },
+  { sigla: "TJAM", nome: "TJ Amazonas", ativo: true },
+  { sigla: "TJMS", nome: "TJ Mato Grosso do Sul", ativo: true },
+  { sigla: "TJMT", nome: "TJ Mato Grosso", ativo: true },
+  { sigla: "TJPB", nome: "TJ Paraíba", ativo: true },
+  { sigla: "TJAL", nome: "TJ Alagoas", ativo: true },
+  { sigla: "TJPI", nome: "TJ Piauí", ativo: true },
+  { sigla: "TJRN", nome: "TJ Rio Grande do Norte", ativo: true },
+  { sigla: "TJSE", nome: "TJ Sergipe", ativo: true },
+  { sigla: "TJRO", nome: "TJ Rondônia", ativo: true },
+  { sigla: "TJTO", nome: "TJ Tocantins", ativo: true },
+  { sigla: "TJAC", nome: "TJ Acre", ativo: true },
+  { sigla: "TJAP", nome: "TJ Amapá", ativo: true },
+  { sigla: "TJRR", nome: "TJ Roraima", ativo: true },
 ];
 
 export default function BuscaParte() {
@@ -41,9 +78,6 @@ export default function BuscaParte() {
   const [oabUF, setOabUF] = useState("RJ");
 
   const handleToggleTribunal = (sigla: string) => {
-    const tribunal = TRIBUNAIS_BUSCA.find(t => t.sigla === sigla);
-    if (!tribunal?.ativo) return;
-    
     setTribunaisSelecionados(prev => 
       prev.includes(sigla) 
         ? prev.filter(t => t !== sigla)
@@ -58,25 +92,8 @@ export default function BuscaParte() {
     setResultados([]);
     setIsLoading(true);
     
-    const tribunaisAtivos = tribunaisSelecionados.filter(sigla => {
-      const t = TRIBUNAIS_BUSCA.find(tb => tb.sigla === sigla);
-      return t?.ativo;
-    });
-
-    if (tribunaisAtivos.length === 0) {
-      setResultados([{
-        tribunal: "Nenhum",
-        termo: termo,
-        processos: [],
-        erro: "Nenhum tribunal selecionado possui scraper ativo. O STF é o único disponível no momento.",
-        total: 0
-      }]);
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const promises = tribunaisAtivos.map(async (tribunal) => {
+      const promises = tribunaisSelecionados.map(async (tribunal) => {
         try {
           const payload: Record<string, string> = {
             tribunal,
@@ -235,15 +252,9 @@ export default function BuscaParte() {
                     <Checkbox
                       checked={tribunaisSelecionados.includes(t.sigla)}
                       onCheckedChange={() => handleToggleTribunal(t.sigla)}
-                      disabled={!t.ativo}
                     />
                     <div className="flex-1">
                       <span className="font-medium text-sm">{t.sigla}</span>
-                      {!t.ativo && (
-                        <Badge variant="secondary" className="ml-1 text-xs">
-                          Em breve
-                        </Badge>
-                      )}
                     </div>
                   </label>
                 ))}
@@ -264,7 +275,7 @@ export default function BuscaParte() {
                 ) : (
                   <>
                     <Search className="h-4 w-4 mr-2" />
-                    Buscar em {tribunaisSelecionados.filter(s => TRIBUNAIS_BUSCA.find(t => t.sigla === s)?.ativo).length} tribunal(is)
+                    Buscar em {tribunaisSelecionados.length} tribunal(is)
                   </>
                 )}
               </Button>

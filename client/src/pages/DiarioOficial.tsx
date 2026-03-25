@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,30 +12,34 @@ import {
   AlertCircle, Briefcase, ExternalLink, Newspaper 
 } from "lucide-react";
 
-interface Publicacao {
+interface PublicacaoDje {
   id: string;
-  data: string;
-  caderno: string;
+  diario: string;
+  tribunal: string;
+  dataPublicacao: string;
+  caderno?: string;
   pagina?: string;
   conteudo: string;
-  tribunal: string;
-  diario: string;
-  url?: string;
-}
-
-interface BuscaResultado {
-  tribunal: string;
-  termo: string;
-  publicacoes: Publicacao[];
-  erro?: string;
-  total: number;
+  conteudoResumo?: string;
+  processoNumero?: string;
+  oabRelacionada?: string;
+  cnpjRelacionado?: string;
+  urlPublicacao?: string;
 }
 
 const DIARIOS_DISPONIVEIS = [
-  { sigla: "DJE-STF", nome: "DJE - Supremo Tribunal Federal", ativo: false },
-  { sigla: "DJE-STJ", nome: "DJE - Superior Tribunal de Justiça", ativo: false },
-  { sigla: "DJE-TJRJ", nome: "DJE - TJ Rio de Janeiro", ativo: false },
-  { sigla: "DJEM-TRF2", nome: "DJEM - TRF 2ª Região", ativo: false },
+  { sigla: "DJE-STF", nome: "DJE - Supremo Tribunal Federal", ativo: true },
+  { sigla: "DJE-STJ", nome: "DJE - Superior Tribunal de Justica", ativo: true },
+  { sigla: "DJE-TST", nome: "DJE - Tribunal Superior do Trabalho", ativo: true },
+  { sigla: "DJE-TJRJ", nome: "DJE - TJ Rio de Janeiro", ativo: true },
+  { sigla: "DJE-TJSP", nome: "DJE - TJ Sao Paulo", ativo: true },
+  { sigla: "DJE-TJMG", nome: "DJE - TJ Minas Gerais", ativo: true },
+  { sigla: "DJEM-TRF1", nome: "DJEM - TRF 1a Regiao", ativo: true },
+  { sigla: "DJEM-TRF2", nome: "DJEM - TRF 2a Regiao", ativo: true },
+  { sigla: "DJEM-TRF3", nome: "DJEM - TRF 3a Regiao", ativo: true },
+  { sigla: "DJEM-TRF4", nome: "DJEM - TRF 4a Regiao", ativo: true },
+  { sigla: "DJEM-TRF5", nome: "DJEM - TRF 5a Regiao", ativo: true },
+  { sigla: "DJEM-TRF6", nome: "DJEM - TRF 6a Regiao", ativo: true },
 ];
 
 const UFS_BRASIL = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
@@ -46,13 +51,34 @@ export default function DiarioOficial() {
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
   const [diariosSelecionados, setDiariosSelecionados] = useState<string[]>([]);
-  const [resultados, setResultados] = useState<BuscaResultado[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+
+  // Fetch publicacoes from API when search is triggered
+  const { data: publicacoes = [], isLoading, isFetching } = useQuery<PublicacaoDje[]>({
+    queryKey: ["/api/publicacoes-dje/busca", searchTerm],
+    queryFn: async () => {
+      if (!searchTerm) return [];
+      const res = await fetch(`/api/publicacoes-dje/busca?termo=${encodeURIComponent(searchTerm)}`);
+      if (!res.ok) throw new Error("Erro na busca");
+      return res.json();
+    },
+    enabled: !!searchTerm,
+  });
+
+  // Also fetch recent publicacoes for browsing
+  const { data: recentPublicacoes = [] } = useQuery<PublicacaoDje[]>({
+    queryKey: ["/api/publicacoes-dje"],
+    queryFn: async () => {
+      const res = await fetch("/api/publicacoes-dje?limit=20");
+      if (!res.ok) throw new Error("Erro");
+      return res.json();
+    },
+  });
 
   const handleToggleDiario = (sigla: string) => {
     const diario = DIARIOS_DISPONIVEIS.find(d => d.sigla === sigla);
     if (!diario?.ativo) return;
-    
     setDiariosSelecionados(prev => 
       prev.includes(sigla) 
         ? prev.filter(d => d !== sigla)
@@ -62,18 +88,23 @@ export default function DiarioOficial() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!termo.trim() || isLoading) return;
+    if (!termo.trim()) return;
 
-    setResultados([{
-      tribunal: "Sistema",
-      termo: termo,
-      publicacoes: [],
-      erro: "A busca em Diarios Oficiais esta em desenvolvimento. Em breve voce podera pesquisar publicacoes por CNPJ e OAB.",
-      total: 0
-    }]);
+    // Build search term: for OAB include UF, for CNPJ use directly
+    const fullTerm = tipoBusca === "oab" ? `${termo} ${oabUF}` : termo;
+    setSearchTerm(fullTerm);
+    setHasSearched(true);
   };
 
-  const totalPublicacoes = resultados.reduce((acc, r) => acc + r.total, 0);
+  // Filter publicacoes by selected diarios
+  const filteredPublicacoes = searchTerm ? publicacoes.filter(p => {
+    if (diariosSelecionados.length === 0) return true;
+    return diariosSelecionados.includes(p.diario);
+  }) : [];
+
+  const displayResults = filteredPublicacoes;
+  const totalPublicacoes = displayResults.length;
+  const isSearching = isLoading || isFetching;
 
   return (
     <div className="p-6 space-y-6">
@@ -192,17 +223,11 @@ export default function DiarioOficial() {
                     <Checkbox
                       checked={diariosSelecionados.includes(d.sigla)}
                       onCheckedChange={() => handleToggleDiario(d.sigla)}
-                      disabled={!d.ativo}
                     />
                     <div className="flex-1">
-                      <span className={`text-sm ${!d.ativo ? "text-muted-foreground" : ""}`}>
+                      <span className="text-sm">
                         {d.nome}
                       </span>
-                      {!d.ativo && (
-                        <Badge variant="secondary" className="ml-2 text-xs">
-                          Em breve
-                        </Badge>
-                      )}
                     </div>
                   </label>
                 ))}
@@ -211,10 +236,10 @@ export default function DiarioOficial() {
 
             <Button 
               type="submit" 
-              disabled={!termo.trim() || isLoading}
+              disabled={!termo.trim() || isSearching}
               data-testid="button-buscar"
             >
-              {isLoading ? (
+              {isSearching ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
                 <Search className="h-4 w-4 mr-2" />
@@ -225,7 +250,8 @@ export default function DiarioOficial() {
         </CardContent>
       </Card>
 
-      {resultados.length > 0 && (
+      {/* Search Results */}
+      {hasSearched && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -237,59 +263,119 @@ export default function DiarioOficial() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {resultados.map((resultado, idx) => (
-              <div key={idx}>
-                {resultado.erro && (
-                  <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-amber-800 dark:text-amber-200">
-                        Funcionalidade em Desenvolvimento
-                      </p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300">
-                        {resultado.erro}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {resultado.publicacoes.length > 0 && (
-                  <div className="space-y-3">
-                    {resultado.publicacoes.map((pub) => (
-                      <Card key={pub.id}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Badge variant="outline">{pub.diario}</Badge>
-                                <span className="text-sm text-muted-foreground">
-                                  <Calendar className="h-3 w-3 inline mr-1" />
-                                  {pub.data}
-                                </span>
-                                {pub.pagina && (
-                                  <span className="text-sm text-muted-foreground">
-                                    Pag. {pub.pagina}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            {pub.url && (
-                              <Button variant="outline" size="sm" asChild>
-                                <a href={pub.url} target="_blank" rel="noopener noreferrer">
-                                  <ExternalLink className="h-4 w-4 mr-1" />
-                                  Ver
-                                </a>
-                              </Button>
+            {isSearching ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+                <span className="text-muted-foreground">Buscando publicacoes...</span>
+              </div>
+            ) : displayResults.length === 0 ? (
+              <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800">
+                <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-800 dark:text-amber-200">
+                    Nenhuma publicacao encontrada
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Nao foram encontradas publicacoes para o termo "{searchTerm}". 
+                    Tente outros termos de busca ou verifique se existem publicacoes registradas no sistema.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {displayResults.map((pub) => (
+                  <Card key={pub.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline">{pub.diario}</Badge>
+                            <Badge variant="secondary">{pub.tribunal}</Badge>
+                            <span className="text-sm text-muted-foreground">
+                              <Calendar className="h-3 w-3 inline mr-1" />
+                              {new Date(pub.dataPublicacao).toLocaleDateString("pt-BR")}
+                            </span>
+                            {pub.caderno && (
+                              <span className="text-sm text-muted-foreground">
+                                {pub.caderno}
+                              </span>
+                            )}
+                            {pub.pagina && (
+                              <span className="text-sm text-muted-foreground">
+                                Pag. {pub.pagina}
+                              </span>
                             )}
                           </div>
-                          <p className="text-sm">{pub.conteudo}</p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
+                          {pub.processoNumero && (
+                            <p className="text-xs font-mono text-muted-foreground mb-1">
+                              Processo: {pub.processoNumero}
+                            </p>
+                          )}
+                        </div>
+                        {pub.urlPublicacao && (
+                          <Button variant="outline" size="sm" asChild>
+                            <a href={pub.urlPublicacao} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="h-4 w-4 mr-1" />
+                              Ver
+                            </a>
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-sm line-clamp-4">{pub.conteudoResumo || pub.conteudo}</p>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            ))}
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent publications (always shown) */}
+      {!hasSearched && recentPublicacoes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Publicacoes Recentes
+              <Badge variant="secondary">{recentPublicacoes.length}</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recentPublicacoes.map((pub) => (
+                <Card key={pub.id}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="outline">{pub.diario}</Badge>
+                          <Badge variant="secondary">{pub.tribunal}</Badge>
+                          <span className="text-sm text-muted-foreground">
+                            <Calendar className="h-3 w-3 inline mr-1" />
+                            {new Date(pub.dataPublicacao).toLocaleDateString("pt-BR")}
+                          </span>
+                        </div>
+                        {pub.processoNumero && (
+                          <p className="text-xs font-mono text-muted-foreground mb-1">
+                            Processo: {pub.processoNumero}
+                          </p>
+                        )}
+                      </div>
+                      {pub.urlPublicacao && (
+                        <Button variant="outline" size="sm" asChild>
+                          <a href={pub.urlPublicacao} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            Ver
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-sm line-clamp-3">{pub.conteudoResumo || pub.conteudo}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -307,7 +393,7 @@ export default function DiarioOficial() {
                 enquanto a busca por CNPJ permite rastrear publicacoes de uma empresa.
               </p>
               <p className="text-sm text-muted-foreground mt-2">
-                <strong>Proximas implementacoes:</strong> DJE-STF, DJE-STJ, DJE-TJRJ, DJEM-TRF2
+                <strong>Diarios suportados:</strong> DJE-STF, DJE-STJ, DJE-TST, DJE-TJRJ, DJE-TJSP, DJE-TJMG, DJEM-TRF1 a TRF6
               </p>
             </div>
           </div>

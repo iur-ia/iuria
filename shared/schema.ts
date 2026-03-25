@@ -131,6 +131,8 @@ export const documentos = pgTable("documentos", {
   caminho: text("caminho"),
   enviadoPor: varchar("enviado_por").references(() => equipe.id),
   versao: integer("versao").notNull().default(1),
+  conteudoMarkdown: text("conteudo_markdown"), // Extracted text in markdown format (OCR/text extraction)
+  metodoExtracao: text("metodo_extracao"), // pdfplumber, PyPDF2, pdftotext, tesseract_ocr, mammoth, plain_text
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -332,3 +334,211 @@ export const insertVerificacaoMonitoramentoSchema = createInsertSchema(verificac
 
 export type InsertVerificacaoMonitoramento = z.infer<typeof insertVerificacaoMonitoramentoSchema>;
 export type VerificacaoMonitoramento = typeof verificacoesMonitoramento.$inferSelect;
+
+// ==================== NOVAS TABELAS (PRD iuria LexFutura) ====================
+
+// Prazos processuais - Calculados automaticamente pelo motor de prazos
+export const prazos = pgTable("prazos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  processoId: varchar("processo_id").references(() => processos.id),
+  monitoramentoId: varchar("monitoramento_id").references(() => monitoramentos.id),
+  
+  // Informações do prazo
+  tipo: text("tipo").notNull(), // "recurso", "contestacao", "manifestacao", "cumprimento", "diligencia", "audiencia", "outro"
+  descricao: text("descricao").notNull(),
+  fundamentoLegal: text("fundamento_legal"), // ex: "Art. 335 CPC", "Art. 1.003 CPC"
+  
+  // Datas
+  dataIntimacao: date("data_intimacao").notNull(), // Data da intimação/publicação
+  dataInicio: date("data_inicio").notNull(), // Início da contagem (dia seguinte útil)
+  dataVencimento: date("data_vencimento").notNull(), // Data final do prazo
+  diasTotais: integer("dias_totais").notNull(), // Prazo em dias (úteis ou corridos)
+  diasUteis: boolean("dias_uteis").notNull().default(true), // true=úteis, false=corridos
+  
+  // Controle
+  status: text("status").notNull().default("pendente"), // "pendente", "proximo", "vencido", "cumprido", "prorrogado"
+  prioridade: text("prioridade").notNull().default("media"), // "critica", "alta", "media", "baixa"
+  
+  // Origem do andamento que gerou o prazo
+  andamentoOrigem: text("andamento_origem"), // Texto do andamento que gerou o prazo
+  dataAndamento: date("data_andamento"), // Data do andamento original
+  
+  // Responsável
+  responsavelId: varchar("responsavel_id").references(() => equipe.id),
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  
+  // Observações
+  observacoes: text("observacoes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPrazoSchema = createInsertSchema(prazos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPrazo = z.infer<typeof insertPrazoSchema>;
+export type Prazo = typeof prazos.$inferSelect;
+
+// Feriados - Calendário para cálculo de prazos
+export const feriados = pgTable("feriados", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  data: date("data").notNull(),
+  nome: text("nome").notNull(),
+  tipo: text("tipo").notNull(), // "nacional", "estadual", "municipal", "forense"
+  estado: text("estado"), // UF para feriados estaduais (ex: "RJ", "SP")
+  municipio: text("municipio"), // Para feriados municipais
+  recorrente: boolean("recorrente").notNull().default(true), // Se repete anualmente
+  ativo: boolean("ativo").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertFeriadoSchema = createInsertSchema(feriados).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFeriado = z.infer<typeof insertFeriadoSchema>;
+export type Feriado = typeof feriados.$inferSelect;
+
+// Alertas/Notificações
+export const alertas = pgTable("alertas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  
+  // Tipo e referência
+  tipo: text("tipo").notNull(), // "prazo_vencendo", "prazo_vencido", "novo_andamento", "publicacao_dje", "sistema"
+  titulo: text("titulo").notNull(),
+  mensagem: text("mensagem").notNull(),
+  
+  // Referências opcionais
+  processoId: varchar("processo_id").references(() => processos.id),
+  monitoramentoId: varchar("monitoramento_id").references(() => monitoramentos.id),
+  prazoId: varchar("prazo_id").references(() => prazos.id),
+  
+  // Controle de leitura
+  lido: boolean("lido").notNull().default(false),
+  lidoEm: timestamp("lido_em"),
+  
+  // Prioridade e canal
+  prioridade: text("prioridade").notNull().default("media"), // "critica", "alta", "media", "baixa"
+  canal: text("canal").notNull().default("sistema"), // "sistema", "email", "whatsapp"
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAlertaSchema = createInsertSchema(alertas).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAlerta = z.infer<typeof insertAlertaSchema>;
+export type Alerta = typeof alertas.$inferSelect;
+
+// Certificados Digitais - Para automação MNI
+export const certificadosDigitais = pgTable("certificados_digitais", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  usuarioId: varchar("usuario_id").references(() => users.id),
+  
+  // Informações do certificado
+  nome: text("nome").notNull(), // Nome amigável (ex: "Certificado OAB/RJ")
+  tipo: text("tipo").notNull().default("A1"), // "A1", "A3_nuvem"
+  titular: text("titular").notNull(), // Nome do titular no certificado
+  cpfCnpj: text("cpf_cnpj"), // CPF ou CNPJ do titular
+  
+  // Arquivo (A1 - armazenado criptografado)
+  arquivoCriptografado: text("arquivo_criptografado"), // Base64 do .pfx criptografado
+  
+  // Validade
+  validoAte: timestamp("valido_ate").notNull(),
+  ativo: boolean("ativo").notNull().default(true),
+  
+  // Tribunais autorizados
+  tribunaisAutorizados: text("tribunais_autorizados"), // JSON array de siglas: ["TJRJ","TRF2"]
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCertificadoDigitalSchema = createInsertSchema(certificadosDigitais).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertCertificadoDigital = z.infer<typeof insertCertificadoDigitalSchema>;
+export type CertificadoDigital = typeof certificadosDigitais.$inferSelect;
+
+// Peças Processuais - PDFs e documentos extraídos via MNI/Scraping
+export const pecasProcessuais = pgTable("pecas_processuais", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  processoId: varchar("processo_id").references(() => processos.id),
+  monitoramentoId: varchar("monitoramento_id").references(() => monitoramentos.id),
+  
+  // Metadados da peça
+  titulo: text("titulo").notNull(),
+  tipo: text("tipo").notNull(), // "peticao", "decisao", "sentenca", "acordao", "despacho", "intimacao", "outros"
+  numeroSequencial: integer("numero_sequencial"), // Ordem no processo
+  dataPeca: date("data_peca"),
+  
+  // Arquivo
+  urlOrigem: text("url_origem"), // URL no portal do tribunal
+  caminhoArquivo: text("caminho_arquivo"), // Caminho no storage local
+  tamanhoBytes: integer("tamanho_bytes"),
+  formatoArquivo: text("formato_arquivo").default("pdf"), // "pdf", "html", "rtf"
+  
+  // Fonte
+  fonte: text("fonte").notNull().default("mni"), // "mni", "scraping", "upload_manual"
+  tribunal: text("tribunal"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPecaProcessualSchema = createInsertSchema(pecasProcessuais).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPecaProcessual = z.infer<typeof insertPecaProcessualSchema>;
+export type PecaProcessual = typeof pecasProcessuais.$inferSelect;
+
+// Publicações DJE/DJEM - Diários de Justiça Eletrônicos
+export const publicacoesDje = pgTable("publicacoes_dje", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Diário
+  diario: text("diario").notNull(), // "DJE-STF", "DJE-STJ", "DJE-TJRJ", "DJEM-TRF2"
+  tribunal: text("tribunal").notNull(),
+  dataPublicacao: date("data_publicacao").notNull(),
+  caderno: text("caderno"), // "Judicial", "Administrativo"
+  pagina: text("pagina"),
+  
+  // Conteúdo
+  conteudo: text("conteudo").notNull(),
+  conteudoResumo: text("conteudo_resumo"), // Resumo para exibição
+  
+  // Referências
+  processoNumero: text("processo_numero"),
+  oabRelacionada: text("oab_relacionada"),
+  cnpjRelacionado: text("cnpj_relacionado"),
+  
+  // URL
+  urlPublicacao: text("url_publicacao"),
+  
+  // Associações
+  processoId: varchar("processo_id").references(() => processos.id),
+  monitoramentoId: varchar("monitoramento_id").references(() => monitoramentos.id),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPublicacaoDjeSchema = createInsertSchema(publicacoesDje).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPublicacaoDje = z.infer<typeof insertPublicacaoDjeSchema>;
+export type PublicacaoDje = typeof publicacoesDje.$inferSelect;

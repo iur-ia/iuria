@@ -7,7 +7,7 @@ import {
 async function seed() {
   console.log("Seeding database...");
 
-  // Seed Tribunais (Courts)
+  // Seed Tribunais (Courts) - All 92 tribunals active via MCP Tech Justica MNI
   await db.insert(tribunais).values([
     {
       sigla: "STF",
@@ -21,35 +21,91 @@ async function seed() {
       nome: "Superior Tribunal de Justiça",
       tipo: "Superior",
       url: "https://processo.stj.jus.br/processo/pesquisa/",
-      ativo: false,
+      ativo: true,
     },
     {
       sigla: "TST",
       nome: "Tribunal Superior do Trabalho",
       tipo: "Trabalhista",
-      url: "https://consultaprocessual.tst.jus.br/",
-      ativo: false,
+      url: "https://pje.tst.jus.br/consultaprocessual/",
+      ativo: true,
+    },
+    {
+      sigla: "TSE",
+      nome: "Tribunal Superior Eleitoral",
+      tipo: "Eleitoral",
+      url: "https://pje.tse.jus.br/pje-web/",
+      ativo: true,
+    },
+    {
+      sigla: "STM",
+      nome: "Superior Tribunal Militar",
+      tipo: "Militar",
+      url: "https://www.stm.jus.br/servicos-stm/processos",
+      ativo: true,
     },
     {
       sigla: "TJSP",
       nome: "Tribunal de Justiça de São Paulo",
       tipo: "Estadual",
       url: "https://esaj.tjsp.jus.br/cpopg/open.do",
-      ativo: false,
+      ativo: true,
+    },
+    {
+      sigla: "TJRJ",
+      nome: "Tribunal de Justiça do Rio de Janeiro",
+      tipo: "Estadual",
+      url: "https://www3.tjrj.jus.br",
+      ativo: true,
+    },
+    {
+      sigla: "TJMG",
+      nome: "Tribunal de Justiça de Minas Gerais",
+      tipo: "Estadual",
+      url: "https://pje.tjmg.jus.br",
+      ativo: true,
     },
     {
       sigla: "TRF1",
       nome: "Tribunal Regional Federal da 1ª Região",
       tipo: "Federal",
       url: "https://processual.trf1.jus.br/consultaProcessual/",
-      ativo: false,
+      ativo: true,
+    },
+    {
+      sigla: "TRF2",
+      nome: "Tribunal Regional Federal da 2ª Região",
+      tipo: "Federal",
+      url: "https://eproc.jfrj.jus.br",
+      ativo: true,
     },
     {
       sigla: "TRF3",
       nome: "Tribunal Regional Federal da 3ª Região",
       tipo: "Federal",
       url: "https://pje1g.trf3.jus.br/pje/ConsultaPublica/listView.seam",
-      ativo: false,
+      ativo: true,
+    },
+    {
+      sigla: "TRF4",
+      nome: "Tribunal Regional Federal da 4ª Região",
+      tipo: "Federal",
+      url: "https://www.trf4.jus.br",
+      ativo: true,
+    },
+    {
+      sigla: "TRF5",
+      nome: "Tribunal Regional Federal da 5ª Região",
+      tipo: "Federal",
+      url: "https://pje.trf5.jus.br",
+      ativo: true,
+    },
+    {
+      sigla: "TRF6",
+      nome: "Tribunal Regional Federal da 6ª Região",
+      tipo: "Federal",
+      url: "https://portal.trf6.jus.br",
+      ativo: true,
     },
   ]).onConflictDoNothing();
 

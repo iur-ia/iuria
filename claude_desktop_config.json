@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "techjustica": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.techjustica.com.br/v1",
+        "--header",
+        "X-API-Key:mcp_33327fa443b949069f8e9f7baa442784"
+      ]
+    }
+  }
+}
