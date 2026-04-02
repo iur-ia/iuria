@@ -1,3 +1,4 @@
+import { safeStorage } from "@/lib/safeStorage";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
@@ -167,12 +168,12 @@ export default function App() {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" })
       .then(() => {
         setUser(null);
-        localStorage.removeItem("iuria_token");
+        safeStorage.removeItem("iuria_token");
         queryClient.clear();
       })
       .catch(() => {
         setUser(null);
-        localStorage.removeItem("iuria_token");
+        safeStorage.removeItem("iuria_token");
       });
   };
 
