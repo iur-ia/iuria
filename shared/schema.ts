@@ -542,3 +542,31 @@ export const insertPublicacaoDjeSchema = createInsertSchema(publicacoesDje).omit
 
 export type InsertPublicacaoDje = z.infer<typeof insertPublicacaoDjeSchema>;
 export type PublicacaoDje = typeof publicacoesDje.$inferSelect;
+
+// ==================== LEXOS IA - Peticoes IA ====================
+
+// Peticoes geradas por IA
+export const peticoesIa = pgTable("peticoes_ia", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tipo: text("tipo").notNull(), // "Peticao Inicial", "Contestacao", "Recurso de Apelacao", etc.
+  instancia: text("instancia").notNull(), // "1a Instancia", "2a Instancia (TJ/TRF)", etc.
+  area: text("area").notNull(), // "Civel", "Trabalhista", "Penal", etc.
+  clienteId: varchar("cliente_id").references(() => clientes.id),
+  processoId: varchar("processo_id").references(() => processos.id),
+  fatos: text("fatos").notNull(),
+  pedido: text("pedido").notNull(),
+  tom: text("tom").notNull().default("combativo"), // "combativo" | "reflexivo"
+  tutela: boolean("tutela").notNull().default(false),
+  statusGeracao: text("status_geracao").notNull().default("pendente"), // "pendente", "gerando", "concluido", "erro"
+  documentoGerado: text("documento_gerado"), // Conteudo da peticao gerada
+  conselhoMemorandum: text("conselho_memorandum"), // JSON com deliberacoes do conselho
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPeticaoIaSchema = createInsertSchema(peticoesIa).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertPeticaoIa = z.infer<typeof insertPeticaoIaSchema>;
+export type PeticaoIa = typeof peticoesIa.$inferSelect;

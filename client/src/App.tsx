@@ -31,6 +31,9 @@ const Monitoramento = lazy(() => import("@/pages/Monitoramento"));
 const DiarioOficial = lazy(() => import("@/pages/DiarioOficial"));
 const ProcessoDetalhe = lazy(() => import("@/pages/ProcessoDetalhe"));
 const CertificadosDigitais = lazy(() => import("@/pages/CertificadosDigitais"));
+const ConselhoMinistros = lazy(() => import("@/pages/ConselhoMinistros"));
+const PeticoesIA = lazy(() => import("@/pages/PeticoesIA"));
+const ConfiguracaoDNA = lazy(() => import("@/pages/ConfiguracaoDNA"));
 
 function GestaoIndex() {
   return (
@@ -120,6 +123,9 @@ function Router() {
         <Route path="/busca-parte" component={BuscaParte} />
         <Route path="/monitoramento" component={Monitoramento} />
         <Route path="/diarios" component={DiarioOficial} />
+        <Route path="/lexos/conselho" component={ConselhoMinistros} />
+        <Route path="/lexos/peticoes" component={PeticoesIA} />
+        <Route path="/lexos/config-dna" component={ConfiguracaoDNA} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

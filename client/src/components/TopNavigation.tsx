@@ -113,6 +113,15 @@ const menuItems = [
       { title: "Contratos", href: "/documentos/contratos" },
     ],
   },
+  {
+    title: "LEXOS IA",
+    href: "/lexos",
+    submenu: [
+      { title: "Conselho de Ministros", href: "/lexos/conselho" },
+      { title: "Peticoes IA", href: "/lexos/peticoes" },
+      { title: "Config. DNA", href: "/lexos/config-dna" },
+    ],
+  },
 ];
 
 interface TopNavigationProps {
