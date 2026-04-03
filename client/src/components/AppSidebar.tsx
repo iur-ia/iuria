@@ -1,4 +1,4 @@
-import { Home, LayoutDashboard, Activity, Scale, DollarSign, FileText, ChevronDown, Brain, Sliders } from "lucide-react";
+import { Home, LayoutDashboard, Activity, Scale, DollarSign, FileText, ChevronDown, Brain, Sliders, Clock, BarChart3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -58,6 +58,18 @@ const menuItems = [
     title: "Documentos",
     icon: FileText,
     url: "/documentos",
+    badge: null,
+  },
+  {
+    title: "Timesheet",
+    icon: Clock,
+    url: "/timesheet",
+    badge: null,
+  },
+  {
+    title: "Relatorios",
+    icon: BarChart3,
+    url: "/relatorios-gerenciais",
     badge: null,
   },
   {

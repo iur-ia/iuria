@@ -71,6 +71,8 @@ const menuItems = [
       { title: "Equipe", href: "/gestao/equipe" },
       { title: "Relatorios", href: "/gestao/relatorios" },
       { title: "Certificados Digitais", href: "/gestao/certificados" },
+      { title: "Timesheet", href: "/timesheet" },
+      { title: "Relatorios Gerenciais", href: "/relatorios-gerenciais" },
     ],
   },
   {

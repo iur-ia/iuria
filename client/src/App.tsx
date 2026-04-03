@@ -35,6 +35,8 @@ const CertificadosDigitais = lazy(() => import("@/pages/CertificadosDigitais"));
 const ConselhoMinistros = lazy(() => import("@/pages/ConselhoMinistros"));
 const PeticoesIA = lazy(() => import("@/pages/PeticoesIA"));
 const ConfiguracaoDNA = lazy(() => import("@/pages/ConfiguracaoDNA"));
+const TimesheetPage = lazy(() => import("@/pages/Timesheet"));
+const RelatoriosGerenciais = lazy(() => import("@/pages/RelatoriosGerenciais"));
 
 function GestaoIndex() {
   return (
@@ -127,6 +129,8 @@ function Router() {
         <Route path="/lexos/conselho" component={ConselhoMinistros} />
         <Route path="/lexos/peticoes" component={PeticoesIA} />
         <Route path="/lexos/config-dna" component={ConfiguracaoDNA} />
+        <Route path="/timesheet" component={TimesheetPage} />
+        <Route path="/relatorios-gerenciais" component={RelatoriosGerenciais} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

@@ -570,3 +570,27 @@ export const insertPeticaoIaSchema = createInsertSchema(peticoesIa).omit({
 
 export type InsertPeticaoIa = z.infer<typeof insertPeticaoIaSchema>;
 export type PeticaoIa = typeof peticoesIa.$inferSelect;
+
+// ==================== TIMESHEET ====================
+
+// Registro de horas trabalhadas
+export const timesheets = pgTable("timesheets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  advogadoId: varchar("advogado_id").references(() => equipe.id),
+  clienteId: varchar("cliente_id").references(() => clientes.id),
+  processoId: varchar("processo_id").references(() => processos.id),
+  data: date("data").notNull(),
+  horasMinutos: text("horas_minutos").notNull(), // "HH:MM"
+  categoria: text("categoria").notNull(), // "Consultoria", "Reuniao", "Audiencia", "Pesquisa", "Redacao", "Administrativo"
+  descricao: text("descricao").notNull(),
+  valorHora: decimal("valor_hora", { precision: 10, scale: 2 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTimesheetSchema = createInsertSchema(timesheets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTimesheet = z.infer<typeof insertTimesheetSchema>;
+export type Timesheet = typeof timesheets.$inferSelect;
