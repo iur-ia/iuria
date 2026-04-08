@@ -10,8 +10,8 @@
  *   - Base URL: MCP_TECHJUSTICA_URL env var or default endpoint
  */
 
-const MCP_API_KEY = process.env.MCP_TECHJUSTICA_API_KEY || "mcp_33327fa443b949069f8e9f7baa442784";
-const MCP_BASE_URL = process.env.MCP_TECHJUSTICA_URL || "https://mcp.techjustica.com.br/v1";
+const MCP_API_KEY = process.env.MCP_TECJUSTICA_TOKEN || "Bearer mcp_33327fa443b949069f8e9f7baa442784";
+const MCP_BASE_URL = process.env.MCP_TECJUSTICA_URL || "https://tecjusticamcp-lite-production.up.railway.app/mcp";
 
 // All supported tribunais
 const TRIBUNAIS_MCP = {
@@ -171,7 +171,7 @@ class MCPTechjusticaClient {
     let lastError: Error | null = null;
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        const url = `${this.baseUrl}/messages`;
+        const url = this.baseUrl;
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -180,8 +180,7 @@ class MCPTechjusticaClient {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-API-Key": this.apiKey,
-            "Authorization": `Bearer ${this.apiKey}`,
+            "Authorization": this.apiKey.startsWith("Bearer ") ? this.apiKey : `Bearer ${this.apiKey}`,
             "User-Agent": "iuria-lexfutura/3.0 MCPClient/1.0",
             "Accept": "application/json",
           },

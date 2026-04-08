@@ -1,3 +1,4 @@
+import { safeStorage } from "./safeStorage";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
@@ -8,7 +9,7 @@ async function throwIfResNotOk(res: Response) {
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem("iuria_token");
+  const token = safeStorage.getItem("iuria_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

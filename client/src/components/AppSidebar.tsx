@@ -1,4 +1,4 @@
-import { Home, LayoutDashboard, Activity, Scale, DollarSign, FileText, ChevronDown } from "lucide-react";
+import { Home, LayoutDashboard, Activity, Scale, DollarSign, FileText, ChevronDown, Brain, Sliders, Clock, BarChart3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -59,6 +59,29 @@ const menuItems = [
     icon: FileText,
     url: "/documentos",
     badge: null,
+  },
+  {
+    title: "Timesheet",
+    icon: Clock,
+    url: "/timesheet",
+    badge: null,
+  },
+  {
+    title: "Relatorios",
+    icon: BarChart3,
+    url: "/relatorios-gerenciais",
+    badge: null,
+  },
+  {
+    title: "LexOS IA",
+    icon: Brain,
+    url: "/lexos",
+    badge: null,
+    submenu: [
+      { title: "Conselho IA", url: "/lexos/conselho" },
+      { title: "Peticoes IA", url: "/lexos/peticoes" },
+      { title: "Config. DNA", url: "/lexos/config-dna" },
+    ],
   },
 ];
 

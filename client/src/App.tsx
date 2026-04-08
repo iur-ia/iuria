@@ -1,3 +1,4 @@
+import { safeStorage } from "@/lib/safeStorage";
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
@@ -31,6 +32,11 @@ const Monitoramento = lazy(() => import("@/pages/Monitoramento"));
 const DiarioOficial = lazy(() => import("@/pages/DiarioOficial"));
 const ProcessoDetalhe = lazy(() => import("@/pages/ProcessoDetalhe"));
 const CertificadosDigitais = lazy(() => import("@/pages/CertificadosDigitais"));
+const ConselhoMinistros = lazy(() => import("@/pages/ConselhoMinistros"));
+const PeticoesIA = lazy(() => import("@/pages/PeticoesIA"));
+const ConfiguracaoDNA = lazy(() => import("@/pages/ConfiguracaoDNA"));
+const TimesheetPage = lazy(() => import("@/pages/Timesheet"));
+const RelatoriosGerenciais = lazy(() => import("@/pages/RelatoriosGerenciais"));
 
 function GestaoIndex() {
   return (
@@ -120,6 +126,11 @@ function Router() {
         <Route path="/busca-parte" component={BuscaParte} />
         <Route path="/monitoramento" component={Monitoramento} />
         <Route path="/diarios" component={DiarioOficial} />
+        <Route path="/lexos/conselho" component={ConselhoMinistros} />
+        <Route path="/lexos/peticoes" component={PeticoesIA} />
+        <Route path="/lexos/config-dna" component={ConfiguracaoDNA} />
+        <Route path="/timesheet" component={TimesheetPage} />
+        <Route path="/relatorios-gerenciais" component={RelatoriosGerenciais} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
@@ -161,12 +172,12 @@ export default function App() {
     fetch("/api/auth/logout", { method: "POST", credentials: "include" })
       .then(() => {
         setUser(null);
-        localStorage.removeItem("iuria_token");
+        safeStorage.removeItem("iuria_token");
         queryClient.clear();
       })
       .catch(() => {
         setUser(null);
-        localStorage.removeItem("iuria_token");
+        safeStorage.removeItem("iuria_token");
       });
   };
 

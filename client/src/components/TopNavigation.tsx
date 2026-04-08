@@ -71,6 +71,8 @@ const menuItems = [
       { title: "Equipe", href: "/gestao/equipe" },
       { title: "Relatorios", href: "/gestao/relatorios" },
       { title: "Certificados Digitais", href: "/gestao/certificados" },
+      { title: "Timesheet", href: "/timesheet" },
+      { title: "Relatorios Gerenciais", href: "/relatorios-gerenciais" },
     ],
   },
   {
@@ -111,6 +113,15 @@ const menuItems = [
       { title: "Todos os Documentos", href: "/documentos" },
       { title: "Peticoes", href: "/documentos/peticoes" },
       { title: "Contratos", href: "/documentos/contratos" },
+    ],
+  },
+  {
+    title: "LEXOS IA",
+    href: "/lexos",
+    submenu: [
+      { title: "Conselho de Ministros", href: "/lexos/conselho" },
+      { title: "Peticoes IA", href: "/lexos/peticoes" },
+      { title: "Config. DNA", href: "/lexos/config-dna" },
     ],
   },
 ];

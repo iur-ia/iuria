@@ -1,3 +1,4 @@
+import { safeStorage } from "@/lib/safeStorage";
 import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
@@ -241,7 +242,7 @@ export default function KanbanTarefas() {
   // Column management state
   const [columns, setColumns] = useState<KanbanColumn[]>(() => {
     try {
-      const saved = localStorage.getItem("kanban-columns");
+      const saved = safeStorage.getItem("kanban-columns");
       if (saved) return JSON.parse(saved);
     } catch {}
     return DEFAULT_COLUMNS;
@@ -254,7 +255,7 @@ export default function KanbanTarefas() {
 
   const saveColumns = useCallback((newColumns: KanbanColumn[]) => {
     setColumns(newColumns);
-    localStorage.setItem("kanban-columns", JSON.stringify(newColumns));
+    safeStorage.setItem("kanban-columns", JSON.stringify(newColumns));
   }, []);
 
   // Pointer sensor with small distance to distinguish click from drag

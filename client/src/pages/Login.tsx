@@ -1,3 +1,4 @@
+import { safeStorage } from "@/lib/safeStorage";
 import { useState } from "react";
 import { Scale, Lock, User, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +39,7 @@ export default function Login({ onLogin }: LoginProps) {
       }
       // Store JWT token for API calls
       if (data.token) {
-        localStorage.setItem("iuria_token", data.token);
+        safeStorage.setItem("iuria_token", data.token);
       }
       onLogin(data.user);
     } catch {
