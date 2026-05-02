@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap, Archive, BookOpen, Eye } from "lucide-react";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap, Archive, BookOpen, Eye, Radar } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -433,6 +433,7 @@ export default function ConsultaProcessual() {
   const [termoBusca, setTermoBusca] = useState<string>("");
   const [tribunalDetectado, setTribunalDetectado] = useState<TribunalDetectado | null>(null);
   const [resultado, setResultado] = useState<ConsultaResultado | null>(null);
+  const [scrapingFallback, setScrapingFallback] = useState<{ loading: boolean; data: any | null; error: string | null }>({ loading: false, data: null, error: null });
 
   const { data: certStatus } = useQuery<{ configurado: boolean; nome_titular?: string; provedor?: string }>({
     queryKey: ["/api/certificado/status"],
@@ -492,10 +493,24 @@ export default function ConsultaProcessual() {
     },
   });
 
+  const handleTentarScraping = async () => {
+    const numero = termoBusca.trim();
+    if (!numero) return;
+    setScrapingFallback({ loading: true, data: null, error: null });
+    try {
+      const res = await fetch(`/api/pesquisa/processo/${encodeURIComponent(numero)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Erro");
+      setScrapingFallback({ loading: false, data: json, error: null });
+    } catch (err) {
+      setScrapingFallback({ loading: false, data: null, error: String(err) });
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tribunalDetectado?.detectado || !tribunalDetectado.tribunal || !termoBusca.trim()) return;
-    
+    setScrapingFallback({ loading: false, data: null, error: null });
     setResultado(null);
     consultaMutation.mutate({ 
       tribunal: tribunalDetectado.tribunal, 
@@ -739,6 +754,18 @@ export default function ConsultaProcessual() {
                       </a>
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTentarScraping}
+                    disabled={scrapingFallback.loading}
+                    data-testid="button-tentar-scraping-direto"
+                  >
+                    {scrapingFallback.loading
+                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      : <Radar className="h-4 w-4 mr-2" />}
+                    Tentar via Scraping Direto
+                  </Button>
                   {!certStatus?.configurado && (
                     <Button variant="outline" size="sm" asChild>
                       <Link href="/configuracoes" data-testid="link-cert-vazio">
@@ -755,6 +782,85 @@ export default function ConsultaProcessual() {
           {resultado.processos.map((processo, index) => (
             <ProcessoDetalhe key={index} processo={processo} certConfigurado={certStatus?.configurado} />
           ))}
+
+          {/* ── Painel de Scraping Direto (fallback) ── */}
+          {(scrapingFallback.loading || scrapingFallback.data || scrapingFallback.error) && (
+            <Card data-testid="card-scraping-fallback" className="border-primary/20">
+              <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Radar className="h-4 w-4 text-primary" />
+                    Resultado — Scraping Direto
+                  </CardTitle>
+                  {scrapingFallback.data && (
+                    <Badge
+                      variant="secondary"
+                      className="bg-primary/10 text-primary border-primary/20 text-xs"
+                      data-testid="badge-via-scraping-direto"
+                    >
+                      via Scraping Direto · {scrapingFallback.data.sourceLabel}
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {scrapingFallback.loading && (
+                  <div className="py-6 flex flex-col items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="text-sm">Consultando portais dos tribunais diretamente... (até 20s)</p>
+                  </div>
+                )}
+                {scrapingFallback.error && (
+                  <p className="text-sm text-destructive flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" /> {scrapingFallback.error}
+                  </p>
+                )}
+                {scrapingFallback.data && !scrapingFallback.loading && (() => {
+                  const proc = scrapingFallback.data.data;
+                  if (!proc) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        {scrapingFallback.data.error || "Processo não encontrado via scraping direto."}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="space-y-3 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {proc.classe && <div><span className="font-medium text-muted-foreground">Classe:</span> {proc.classe}</div>}
+                        {proc.assunto && <div><span className="font-medium text-muted-foreground">Assunto:</span> {proc.assunto}</div>}
+                        {proc.vara && <div><span className="font-medium text-muted-foreground">Vara/Órgão:</span> {proc.vara}</div>}
+                      </div>
+                      {(proc.partes || []).length > 0 && (
+                        <div>
+                          <p className="font-medium mb-1">Partes</p>
+                          {proc.partes.slice(0, 5).map((p: string, i: number) => (
+                            <div key={i} className="text-muted-foreground flex items-start gap-1.5">
+                              <span className="mt-1.5 w-1 h-1 shrink-0 rounded-full bg-muted-foreground/50" />
+                              {p}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(proc.movimentacoes || []).length > 0 && (
+                        <div>
+                          <p className="font-medium mb-1">Últimas Movimentações</p>
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                            {proc.movimentacoes.slice(0, 10).map((m: any, i: number) => (
+                              <div key={i} className="border-l-2 border-muted pl-3">
+                                <span className="font-mono text-xs text-muted-foreground">{m.data}</span>
+                                <p>{m.descricao}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

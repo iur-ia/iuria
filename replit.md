@@ -19,11 +19,23 @@ Preferred communication style: Simple, everyday language.
 ### Design System
 Adheres to Material Design 3 principles, customized for legal contexts, featuring color-coded status indicators, professional typography (Inter, JetBrains Mono), and responsive layouts.
 
-### Web Scraping and Data Acquisition
-- **Layered Scraping Strategy**: Utilizes DataJud API (CNJ's public API) as primary, followed by ScraperAPI with Brazilian proxies, Scrapling (stealth Playwright), and legacy Playwright as fallbacks.
-- **Tribunal Coverage**: Comprehensive coverage for all 35 Brazilian tribunals, including STF, STJ, TRFs, and various TJs, using parametric scrapers (eSAJ, PJe) and specific implementations.
-- **CNJ Parser**: Automatically detects tribunals and formats process numbers (`NNNNNNN-DD.AAAA.J.TR.OOOO`).
-- **Digital Certificate Integration**: Supports A3 cloud certificates (Certisign, BirdID, VaultID, SafeSign) for authenticated access to court portals (e.g., CNJ Painel do Advogado, PJe).
+### Web Scraping and Data Acquisition — TypeScript Engine (server/scraping/)
+- **Primary Layer**: DataJud API (CNJ's official public API) — covers 100% of Brazilian tribunals, free, no auth needed.
+- **Proxy Layer**: ScraperAPI (`SCRAPER_API_KEY`) — bypasses anti-bot for e-SAJ portals (TJSP, TJBA, TJSC, TJCE, TJPE, TJMA, TJMS, TJAL, TJRN), uses cheerio for HTML parsing.
+- **Specialty APIs**: BrasilAPI (`brasilapi.com.br/api/cnpj/v1/{cnpj}`) for CNPJ, ReceitaWS as fallback.
+- **Jurisprudência**: STJ SCON scraping, STF Jurisprudência API, TRF1–6 via DataJud, doutrina via CNJ Biblioteca / LexML / Senado.
+- **Module structure**:
+  - `server/scraping/types.ts` — shared interfaces, TribunalInfo map, `identificarTribunalCNJ()`
+  - `server/scraping/utils.ts` — `fetchUrl()` (ScraperAPI-aware), `htmlToMarkdown()`, `withRetry()`, `makeLogger()`
+  - `server/scraping/cnpjScraper.ts` — BrasilAPI + ReceitaWS fallback
+  - `server/scraping/stjScraper.ts` — STJ SCON + DataJud STJ
+  - `server/scraping/stfScraper.ts` — STF Jurisprudência API + DataJud STF
+  - `server/scraping/trfScraper.ts` — TRF1–6 via DataJud
+  - `server/scraping/esajScraper.ts` — e-SAJ portals via DataJud + ScraperAPI fallback
+  - `server/scraping/doutrinaScraper.ts` — CNJ Biblioteca, LexML, Senado, STF portal
+  - `server/scraping/orchestrator.ts` — routes by CNJ number segment/TR code, exports `pesquisarProcesso`, `pesquisarJurisprudencia`, `pesquisarDoutrina`, `pesquisarCnpj`
+- **CNJ Number Parsing**: `NNNNNNN-DD.AAAA.J.TR.OOOO` — J=segmento (1=STF, 3=STJ, 4=Federal, 8=Estadual), TR=tribunal code
+- **Python scraper** (`scraper/`): legacy Playwright-based Python scraper still used by `/api/consulta-processual`
 
 ### OCR → Markdown Pipeline
 - **Purpose**: Extracts text from legal documents and converts it into Markdown for AI consumption.
@@ -40,6 +52,16 @@ Enables users to track legal processes with configurable check intervals, automa
 - **Financial Management**: Dedicated section for financial tracking.
 - **CRM/Team Management**: Sections for managing clients and internal teams.
 - **Acervo (Digital Dossier)**: Internal dossier module for judicial and administrative processes. Includes Kanban for administrative processes (criação→instrução→decisão→arquivamento), timeline of andamentos, document attachments, and "Salvar no Acervo" button in ConsultaProcessual. Tables: `acervo_processos`, `acervo_andamentos`, `acervo_documentos`, `acervo_tramitacoes`.
+- **Processos a Acompanhar**: Watchlist feature for monitoring processes; table `processos_acompanhados`.
+- **Pesquisa Jurídica** (`/pesquisa-juridica`): 4-tab deep search UI — Processos (CNJ number → tribunal scraping), Jurisprudência (STF/STJ/TRFs, with tribunal filter), Doutrina (CNJ/LexML/Senado), Empresas (CNPJ lookup). Each tab shows source badge, duration, "Enviar ao LexOS" button that injects markdownContent into sessionStorage for the IA chat.
+- **Fallback Scraping na Consulta Processual**: When DataJud returns 0 results, "Tentar via Scraping Direto" button appears and calls `/api/pesquisa/processo/:numero`, showing result with "via Scraping Direto" badge.
+
+## API Endpoints — Pesquisa Jurídica
+- `GET /api/pesquisa/processo/:numero` — orchestrates tribunal detection → DataJud → portal scraping
+- `GET /api/pesquisa/jurisprudencia?q=&tribunal=` — STF/STJ/TRFs (tribunal=TODOS searches all)
+- `GET /api/pesquisa/doutrina?q=` — CNJ Biblioteca, LexML, Senado, STF portal
+- `GET /api/pesquisa/cnpj/:cnpj` — BrasilAPI + ReceitaWS fallback
+All return `{ source, sourceLabel, data, markdownContent, durationMs, logs, error? }`.
 
 ## External Dependencies
 
@@ -48,6 +70,7 @@ Enables users to track legal processes with configurable check intervals, automa
 - **Form & Validation**: React Hook Form, Zod, `@hookform/resolvers`
 - **Charting**: Recharts
 - **Date Utilities**: date-fns
-- **Web Scraping**: Playwright (Python), ScraperAPI, Scrapling, DataJud API
+- **Web Scraping (TypeScript)**: cheerio (HTML parsing), ScraperAPI (proxy), DataJud API, BrasilAPI
+- **Web Scraping (Python)**: Playwright, ScraperAPI, Scrapling (legacy `scraper/` dir)
 - **Document OCR**: PyMuPDF, pdfminer.six, python-docx
 - **Digital Certificates**: Certisign, BirdID, VaultID, SafeSign (via custom integrations)

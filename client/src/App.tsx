@@ -21,6 +21,7 @@ import Peticoes from "@/pages/documentos/Peticoes";
 import Contratos from "@/pages/documentos/Contratos";
 import ConsultaProcessual from "@/pages/ConsultaProcessual";
 import ProcessosAcompanhar from "@/pages/ProcessosAcompanhar";
+import PesquisaJuridica from "@/pages/pesquisa-juridica";
 import BuscaParte from "@/pages/BuscaParte";
 import Monitoramento from "@/pages/Monitoramento";
 import AcervoJudicial from "@/pages/acervo/AcervoJudicial";
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/busca-parte" component={BuscaParte} />
       <Route path="/monitoramento" component={Monitoramento} />
       <Route path="/acompanhamentos" component={ProcessosAcompanhar} />
+      <Route path="/pesquisa-juridica" component={PesquisaJuridica} />
       <Route path="/diarios" component={DiarioOficial} />
       <Route path="/configuracoes" component={Configuracoes} />
       <Route path="/configuracoes/dna" component={ConfiguracaoDNA} />

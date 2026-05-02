@@ -2415,6 +2415,71 @@ except Exception as e:
     }
   });
 
+  // ==================== PESQUISA JURÍDICA (Motor de Scraping) ====================
+
+  app.get("/api/pesquisa/processo/:numero", async (req, res) => {
+    try {
+      const { pesquisarProcesso } = await import("./scraping/orchestrator");
+      const numero = decodeURIComponent(req.params.numero).trim();
+      if (!numero) return res.status(400).json({ error: "Número de processo obrigatório" });
+
+      console.log(`[pesquisa] Processo: ${numero}`);
+      const resultado = await pesquisarProcesso(numero);
+      res.json(resultado);
+    } catch (error) {
+      console.error("[pesquisa/processo]", error);
+      res.status(500).json({ error: "Erro ao pesquisar processo", details: String(error) });
+    }
+  });
+
+  app.get("/api/pesquisa/jurisprudencia", async (req, res) => {
+    try {
+      const { pesquisarJurisprudencia } = await import("./scraping/orchestrator");
+      const q = String(req.query.q || "").trim();
+      const tribunal = String(req.query.tribunal || "").trim();
+      if (!q) return res.status(400).json({ error: "Parâmetro 'q' obrigatório" });
+
+      console.log(`[pesquisa] Jurisprudência: "${q}" tribunal="${tribunal}"`);
+      const resultado = await pesquisarJurisprudencia(q, tribunal);
+      res.json(resultado);
+    } catch (error) {
+      console.error("[pesquisa/jurisprudencia]", error);
+      res.status(500).json({ error: "Erro ao pesquisar jurisprudência", details: String(error) });
+    }
+  });
+
+  app.get("/api/pesquisa/doutrina", async (req, res) => {
+    try {
+      const { pesquisarDoutrina } = await import("./scraping/orchestrator");
+      const q = String(req.query.q || "").trim();
+      if (!q) return res.status(400).json({ error: "Parâmetro 'q' obrigatório" });
+
+      console.log(`[pesquisa] Doutrina: "${q}"`);
+      const resultado = await pesquisarDoutrina(q);
+      res.json(resultado);
+    } catch (error) {
+      console.error("[pesquisa/doutrina]", error);
+      res.status(500).json({ error: "Erro ao pesquisar doutrina", details: String(error) });
+    }
+  });
+
+  app.get("/api/pesquisa/cnpj/:cnpj", async (req, res) => {
+    try {
+      const { pesquisarCnpj } = await import("./scraping/orchestrator");
+      const cnpj = req.params.cnpj.replace(/\D/g, "");
+      if (!cnpj || cnpj.length !== 14) {
+        return res.status(400).json({ error: "CNPJ deve ter 14 dígitos" });
+      }
+
+      console.log(`[pesquisa] CNPJ: ${cnpj}`);
+      const resultado = await pesquisarCnpj(cnpj);
+      res.json(resultado);
+    } catch (error) {
+      console.error("[pesquisa/cnpj]", error);
+      res.status(500).json({ error: "Erro ao consultar CNPJ", details: String(error) });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -1,0 +1,258 @@
+import type {
+  ScrapingResult,
+  ProcessoScrapeData,
+  JurisprudenciaItem,
+  DoutrinaItem,
+  EmpresaData,
+} from "./types";
+import { identificarTribunalCNJ, TRIBUNAIS } from "./types";
+import { makeLogger, fetchJson, withRetry } from "./utils";
+import { buscarProcessoEsaj } from "./esajScraper";
+import { buscarProcessoStj, buscarJurisprudenciaStj } from "./stjScraper";
+import { buscarJurisprudenciaStf } from "./stfScraper";
+import { buscarProcessoTrf, buscarJurisprudenciaTrf } from "./trfScraper";
+import { buscarCnpj } from "./cnpjScraper";
+import { buscarDoutrina } from "./doutrinaScraper";
+
+const DATAJUD_AUTH = "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==";
+
+interface DataJudHit {
+  _source?: {
+    numeroProcesso?: string;
+    classe?: { descricao?: string };
+    assuntos?: { descricao?: string }[];
+    tribunal?: string;
+    orgaoJulgador?: { nome?: string };
+    partes?: { nome?: string; tipo?: string }[];
+    movimentos?: { dataHora?: string; nome?: string; complementosTabelados?: { descricao?: string }[] }[];
+    dataAjuizamento?: string;
+    relator?: string;
+  };
+}
+
+const TRIBUNAL_INDICE: Record<string, string> = {
+  TJSP: "api_publica_tjsp",
+  TJRJ: "api_publica_tjrj",
+  TJMG: "api_publica_tjmg",
+  TJRS: "api_publica_tjrs",
+  TJBA: "api_publica_tjba",
+  TJSC: "api_publica_tjsc",
+  TJCE: "api_publica_tjce",
+  TJPE: "api_publica_tjpe",
+  TJMA: "api_publica_tjma",
+  TJMS: "api_publica_tjms",
+  TJAL: "api_publica_tjal",
+  TJRN: "api_publica_tjrn",
+  TRF1: "api_publica_trf1",
+  TRF2: "api_publica_trf2",
+  TRF3: "api_publica_trf3",
+  TRF4: "api_publica_trf4",
+  TRF5: "api_publica_trf5",
+  TRF6: "api_publica_trf6",
+  STJ: "api_publica_stj",
+  STF: "api_publica_stf",
+};
+
+async function buscarDataJudGenerico(
+  numero: string,
+  sigla: string,
+  log: (l: "info" | "warn" | "error", m: string) => void
+): Promise<ProcessoScrapeData | null> {
+  const indice = TRIBUNAL_INDICE[sigla];
+  if (!indice) return null;
+
+  log("info", `DataJud genérico: ${sigla} — ${numero}`);
+
+  try {
+    const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
+    const data = await withRetry(() =>
+      fetchJson<{ hits?: { hits?: DataJudHit[] } }>(
+        `https://api.datajud.cnj.jus.br/${indice}/_search`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
+          body,
+          timeoutMs: 18000,
+        }
+      )
+    );
+
+    const src = data?.hits?.hits?.[0]?._source;
+    if (!src) return null;
+
+    return {
+      numero: src.numeroProcesso || numero,
+      tribunal: sigla,
+      classe: src.classe?.descricao || undefined,
+      assunto: src.assuntos?.[0]?.descricao || undefined,
+      vara: src.orgaoJulgador?.nome || undefined,
+      partes: (src.partes || []).map(p => `${p.tipo || "Parte"}: ${p.nome || ""}`),
+      movimentacoes: (src.movimentos || []).slice(0, 50).map(m => ({
+        data: m.dataHora?.slice(0, 10) || "",
+        descricao: m.nome || "",
+        detalhes: m.complementosTabelados?.map(c => c.descricao).join("; ") || undefined,
+      })),
+      documentos: [],
+    };
+  } catch (err) {
+    log("warn", `DataJud ${sigla} falhou: ${err}`);
+    return null;
+  }
+}
+
+export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<ProcessoScrapeData | null>> {
+  const t0 = Date.now();
+  const { logs, log } = makeLogger();
+
+  log("info", `Orquestrador: pesquisar processo ${numero}`);
+
+  const tribunal = identificarTribunalCNJ(numero);
+  if (!tribunal) {
+    log("warn", `Número CNJ não reconhecido: ${numero}`);
+    return {
+      source: "datajud",
+      sourceLabel: "DataJud CNJ",
+      data: null,
+      markdownContent: "",
+      durationMs: Date.now() - t0,
+      logs,
+      error: `Formato de número CNJ inválido ou tribunal não identificado: ${numero}`,
+    };
+  }
+
+  log("info", `Tribunal identificado: ${tribunal.sigla} (segmento ${tribunal.segmento}, TR ${tribunal.codigoTR})`);
+
+  let processo: ProcessoScrapeData | null = null;
+  let sourceLabel = `${tribunal.sigla} — DataJud`;
+
+  if (tribunal.sigla === "STJ") {
+    const r = await buscarProcessoStj(numero);
+    logs.push(...r.logs);
+    processo = r.data;
+    sourceLabel = r.sourceLabel;
+  } else if (tribunal.sigla === "STF") {
+    processo = await buscarDataJudGenerico(numero, "STF", log);
+    sourceLabel = "STF — DataJud";
+  } else if (tribunal.sigla.startsWith("TRF")) {
+    const r = await buscarProcessoTrf(numero, tribunal);
+    logs.push(...r.logs);
+    processo = r.data;
+    sourceLabel = r.sourceLabel;
+  } else if (tribunal.usaEsaj) {
+    const r = await buscarProcessoEsaj(numero, tribunal);
+    logs.push(...r.logs);
+    processo = r.data;
+    sourceLabel = r.sourceLabel;
+  } else {
+    processo = await buscarDataJudGenerico(numero, tribunal.sigla, log);
+    sourceLabel = `${tribunal.sigla} — DataJud`;
+
+    if (!processo && tribunal.sigla in TRIBUNAIS) {
+      log("info", `Tentando scraping direto para ${tribunal.sigla}`);
+    }
+  }
+
+  const md = processo
+    ? [
+        `# Processo ${tribunal.sigla} — ${processo.numero}`,
+        `**Fonte:** ${sourceLabel}`,
+        processo.classe ? `**Classe:** ${processo.classe}` : "",
+        processo.assunto ? `**Assunto:** ${processo.assunto}` : "",
+        processo.vara ? `**Vara/Órgão:** ${processo.vara}` : "",
+        "",
+        "## Partes",
+        processo.partes.length > 0 ? processo.partes.map(p => `- ${p}`).join("\n") : "Não disponível",
+        "",
+        "## Últimas Movimentações",
+        processo.movimentacoes.slice(0, 15).map(m =>
+          `- **${m.data}** — ${m.descricao}${m.detalhes ? ` (${m.detalhes})` : ""}`
+        ).join("\n"),
+      ].filter(Boolean).join("\n")
+    : "";
+
+  return {
+    source: tribunal.sigla.startsWith("TRF") ? "trf" : tribunal.usaEsaj ? "esaj" : tribunal.sigla === "STJ" ? "stj" : tribunal.sigla === "STF" ? "stf" : "datajud",
+    sourceLabel,
+    data: processo,
+    markdownContent: md,
+    durationMs: Date.now() - t0,
+    logs,
+    error: processo ? undefined : `Processo ${numero} não encontrado`,
+  };
+}
+
+export async function pesquisarJurisprudencia(
+  q: string,
+  tribunal: string
+): Promise<ScrapingResult<JurisprudenciaItem[]>> {
+  const t0 = Date.now();
+  const { logs, log } = makeLogger();
+  const trib = tribunal.toUpperCase().trim();
+
+  log("info", `Pesquisar jurisprudência: "${q}" tribunal="${trib}"`);
+
+  if (trib === "STF") {
+    return buscarJurisprudenciaStf(q);
+  }
+  if (trib === "STJ") {
+    return buscarJurisprudenciaStj(q);
+  }
+  if (trib.startsWith("TRF")) {
+    return buscarJurisprudenciaTrf(q, trib);
+  }
+  if (!trib || trib === "TODOS") {
+    const [stf, stj, trf] = await Promise.allSettled([
+      buscarJurisprudenciaStf(q),
+      buscarJurisprudenciaStj(q),
+      buscarJurisprudenciaTrf(q, ""),
+    ]);
+
+    const allItems: JurisprudenciaItem[] = [
+      ...(stf.status === "fulfilled" ? stf.value.data : []),
+      ...(stj.status === "fulfilled" ? stj.value.data : []),
+      ...(trf.status === "fulfilled" ? trf.value.data : []),
+    ];
+
+    const md = allItems.length > 0
+      ? [
+          `# Jurisprudência — "${q}" (Todos os Tribunais)`,
+          "",
+          ...allItems.map((item, i) => [
+            `## ${i + 1}. ${item.tribunal} — ${item.numero || "Acórdão"}`,
+            item.relator ? `**Relator:** ${item.relator}` : "",
+            item.data ? `**Data:** ${item.data}` : "",
+            "",
+            item.ementa,
+            item.link ? `[Ver íntegra](${item.link})` : "",
+            "",
+          ].filter(Boolean).join("\n")),
+        ].join("\n")
+      : `Nenhum resultado para "${q}".`;
+
+    return {
+      source: "datajud",
+      sourceLabel: "STF / STJ / TRFs — Múltiplas Fontes",
+      data: allItems,
+      markdownContent: md,
+      durationMs: Date.now() - t0,
+      logs: [
+        ...(stf.status === "fulfilled" ? stf.value.logs : []),
+        ...(stj.status === "fulfilled" ? stj.value.logs : []),
+        ...(trf.status === "fulfilled" ? trf.value.logs : []),
+      ],
+    };
+  }
+
+  log("warn", `Tribunal "${trib}" não suportado para jurisprudência`);
+  return {
+    source: "datajud",
+    sourceLabel: trib,
+    data: [],
+    markdownContent: `Tribunal "${trib}" não suportado.`,
+    durationMs: Date.now() - t0,
+    logs,
+  };
+}
+
+export { buscarDoutrina as pesquisarDoutrina };
+export { buscarCnpj as pesquisarCnpj };

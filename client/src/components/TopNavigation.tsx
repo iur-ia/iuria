@@ -46,6 +46,7 @@ const menuItems = [
       { title: "Busca por Parte", href: "/busca-parte" },
       { title: "Monitoramento", href: "/monitoramento" },
       { title: "Processos a Acompanhar", href: "/acompanhamentos" },
+      { title: "Pesquisa Jurídica", href: "/pesquisa-juridica" },
       { title: "Diários Oficiais", href: "/diarios" },
       { title: "Incompletos", href: "/processos/incompletos" },
       { title: "Movimentados", href: "/processos/movimentados" },
