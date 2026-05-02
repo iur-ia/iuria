@@ -23,7 +23,7 @@ import {
   acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, lte, and } from "drizzle-orm";
+import { eq, desc, lte, and, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -119,7 +119,8 @@ export interface IStorage {
   getVerificacoesByMonitoramento(monitoramentoId: string): Promise<VerificacaoMonitoramento[]>;
 
   // Acervo de Processos
-  getAcervoProcessos(filters?: { tipo?: string; tribunal?: string; fase?: string; responsavelId?: string; statusInterno?: string }): Promise<AcervoProcesso[]>;
+  getAcervoProcessos(filters?: { tipo?: string; tribunal?: string; fase?: string; responsavelId?: string; statusInterno?: string; prazoAte?: string }): Promise<AcervoProcesso[]>;
+  getUltimoAndamentoPorAcervo(acervoIds: string[]): Promise<Record<string, AcervoAndamento>>;
   getAcervoProcesso(id: string): Promise<AcervoProcesso | undefined>;
   getAcervoProcessoByNumero(numero: string): Promise<AcervoProcesso | undefined>;
   createAcervoProcesso(processo: InsertAcervoProcesso): Promise<AcervoProcesso>;
@@ -480,19 +481,32 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== ACERVO ====================
 
-  async getAcervoProcessos(filters?: { tipo?: string; tribunal?: string; fase?: string; responsavelId?: string; statusInterno?: string }): Promise<AcervoProcesso[]> {
+  async getAcervoProcessos(filters?: { tipo?: string; tribunal?: string; fase?: string; responsavelId?: string; statusInterno?: string; prazoAte?: string }): Promise<AcervoProcesso[]> {
     const conditions = [];
     if (filters?.tipo) conditions.push(eq(acervoProcessos.tipo, filters.tipo));
     if (filters?.tribunal) conditions.push(eq(acervoProcessos.tribunal, filters.tribunal));
     if (filters?.fase) conditions.push(eq(acervoProcessos.fase, filters.fase));
     if (filters?.responsavelId) conditions.push(eq(acervoProcessos.responsavelId, filters.responsavelId));
     if (filters?.statusInterno) conditions.push(eq(acervoProcessos.statusInterno, filters.statusInterno));
+    if (filters?.prazoAte) conditions.push(lte(acervoProcessos.prazo, filters.prazoAte));
     if (conditions.length > 0) {
       return db.select().from(acervoProcessos)
         .where(and(...conditions))
         .orderBy(desc(acervoProcessos.createdAt));
     }
     return db.select().from(acervoProcessos).orderBy(desc(acervoProcessos.createdAt));
+  }
+
+  async getUltimoAndamentoPorAcervo(acervoIds: string[]): Promise<Record<string, AcervoAndamento>> {
+    if (acervoIds.length === 0) return {};
+    const todos = await db.select().from(acervoAndamentos)
+      .where(inArray(acervoAndamentos.acervoId, acervoIds))
+      .orderBy(desc(acervoAndamentos.data), desc(acervoAndamentos.createdAt));
+    const mapa: Record<string, AcervoAndamento> = {};
+    for (const a of todos) {
+      if (!mapa[a.acervoId]) mapa[a.acervoId] = a;
+    }
+    return mapa;
   }
 
   async getAcervoProcesso(id: string): Promise<AcervoProcesso | undefined> {

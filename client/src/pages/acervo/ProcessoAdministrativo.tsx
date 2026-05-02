@@ -122,6 +122,15 @@ export default function ProcessoAdministrativo() {
     prazo: "",
     observacoes: "",
     fase: "criacao",
+    responsavelId: "",
+  });
+
+  const { data: equipe = [] } = useQuery<any[]>({
+    queryKey: ["/api/equipe"],
+    queryFn: async () => {
+      const res = await fetch("/api/equipe");
+      return res.json();
+    },
   });
 
   const { data: processos = [], isLoading } = useQuery<AcervoProcesso[]>({
@@ -139,6 +148,7 @@ export default function ProcessoAdministrativo() {
         tipo: "administrativo",
         statusInterno: "ativo",
         prazo: form.prazo || null,
+        responsavelId: form.responsavelId || null,
       });
       return res.json();
     },
@@ -147,7 +157,7 @@ export default function ProcessoAdministrativo() {
       setShowDialog(false);
       setForm({
         titulo: "", numero: `ADM-${Date.now()}`, tipoAdministrativo: "outro",
-        interessado: "", prazo: "", observacoes: "", fase: "criacao",
+        interessado: "", prazo: "", observacoes: "", fase: "criacao", responsavelId: "",
       });
       toast({ title: "Processo administrativo criado" });
     },
@@ -298,6 +308,22 @@ export default function ProcessoAdministrativo() {
                 />
               </div>
             </div>
+            {equipe.length > 0 && (
+              <div>
+                <Label htmlFor="admin-responsavel">Responsável</Label>
+                <Select value={form.responsavelId} onValueChange={(v) => setForm({ ...form, responsavelId: v })}>
+                  <SelectTrigger id="admin-responsavel" data-testid="select-admin-responsavel">
+                    <SelectValue placeholder="Selecionar responsável..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {equipe.map((m: any) => (
+                      <SelectItem key={m.id} value={m.id}>{m.nome} — {m.cargo}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label htmlFor="admin-obs">Observações</Label>
               <Textarea

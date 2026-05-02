@@ -28,6 +28,7 @@ interface ProcessoResultado {
   tribunal: string;
   url?: string;
   data_consulta?: string;
+  acervoId?: string;
 }
 
 interface ConsultaResultado {
@@ -75,7 +76,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResultado; certConfigurado?: boolean }) {
   const [adicionadoMonitoramento, setAdicionadoMonitoramento] = useState(false);
-  const [salvoAcervo, setSalvoAcervo] = useState(false);
+  const [salvoAcervo, setSalvoAcervo] = useState(!!processo.acervoId);
   const { toast } = useToast();
 
   const acervoMutation = useMutation({

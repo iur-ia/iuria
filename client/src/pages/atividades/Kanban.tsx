@@ -365,7 +365,7 @@ export default function KanbanTarefas() {
 
     const payload = {
       titulo: formData.titulo,
-      descricao: formData.descricao || null,
+      descricao: formData.descricao || undefined,
       tipo: TIPO_MAP[formData.tipo] || "Tarefa",
       prioridade: PRIORIDADE_MAP[formData.prioridade] || "Média",
       status: STATUS_MAP[formData.status] || "Pendente",
@@ -375,7 +375,7 @@ export default function KanbanTarefas() {
     if (editingTask) {
       updateMutation.mutate({ id: editingTask.id, data: payload });
     } else {
-      createMutation.mutate(payload as typeof formData);
+      createMutation.mutate(payload as unknown as typeof formData);
     }
   };
 

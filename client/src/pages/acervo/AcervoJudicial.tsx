@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Scale, Search, Clock, FileText, Users, Building, ExternalLink,
+  Scale, Search, Clock, FileText, Users, User, Building, ExternalLink,
   Plus, Trash2, ChevronRight, AlertCircle, CheckCircle2, Archive,
   RefreshCw, BookOpen, StickyNote, Filter, X,
 } from "lucide-react";
@@ -143,12 +143,15 @@ function AndamentosTab({ acervoId }: { acervoId: string }) {
           <div className="space-y-3 pl-8">
             {andamentos.map((and: any, i: number) => (
               <div key={and.id} className="relative" data-testid={`andamento-item-${i}`}>
-                <div className="absolute -left-5 top-2 h-2 w-2 rounded-full bg-primary" />
-                <div className="p-3 rounded-md bg-muted/40 border">
+                <div className={`absolute -left-5 top-2 h-2 w-2 rounded-full ${and.critico ? "bg-destructive" : "bg-primary"}`} />
+                <div className={`p-3 rounded-md border ${and.critico ? "bg-destructive/5 border-destructive/30" : "bg-muted/40"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-xs font-semibold text-primary">{and.data}</span>
+                        <span className={`text-xs font-semibold ${and.critico ? "text-destructive" : "text-primary"}`}>{and.data}</span>
+                        {and.critico && (
+                          <Badge variant="destructive" className="text-xs">Crítico</Badge>
+                        )}
                         <Badge variant="outline" className="text-xs">
                           {and.tipo === "manual" ? "Manual" : "Automático"}
                         </Badge>
@@ -156,7 +159,7 @@ function AndamentosTab({ acervoId }: { acervoId: string }) {
                           <Badge variant="secondary" className="text-xs">{and.origem}</Badge>
                         )}
                       </div>
-                      <p className="text-sm font-medium">{and.descricao}</p>
+                      <p className={`text-sm font-medium ${and.critico ? "text-destructive" : ""}`}>{and.descricao}</p>
                       {and.detalhes && (
                         <p className="text-xs text-muted-foreground mt-1">{and.detalhes}</p>
                       )}
@@ -485,30 +488,48 @@ function ProcessoFicha({ processo, onClose }: { processo: AcervoProcesso; onClos
   );
 }
 
+type ProcessoEnriquecido = AcervoProcesso & {
+  ultimoAndamento?: { data: string; descricao: string } | null;
+  responsavelNome?: string | null;
+};
+
 export default function AcervoJudicial() {
   const { toast } = useToast();
   const [busca, setBusca] = useState("");
   const [filtroTribunal, setFiltroTribunal] = useState<string>("__all__");
   const [filtroFase, setFiltroFase] = useState<string>("__all__");
   const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
-  const [fichaAberta, setFichaAberta] = useState<AcervoProcesso | null>(null);
+  const [filtroResponsavel, setFiltroResponsavel] = useState<string>("__all__");
+  const [filtroPrazoAte, setFiltroPrazoAte] = useState<string>("");
+  const [fichaAberta, setFichaAberta] = useState<ProcessoEnriquecido | null>(null);
   const [showNovoDialog, setShowNovoDialog] = useState(false);
   const [novoProcesso, setNovoProcesso] = useState({ numero: "", tribunal: "", classe: "", assunto: "" });
 
-  const filtrosAtivos = (filtroTribunal !== "__all__" ? 1 : 0) + (filtroFase !== "__all__" ? 1 : 0) + (filtroStatus !== "__all__" ? 1 : 0);
+  const filtrosAtivos = (filtroTribunal !== "__all__" ? 1 : 0) + (filtroFase !== "__all__" ? 1 : 0) +
+    (filtroStatus !== "__all__" ? 1 : 0) + (filtroResponsavel !== "__all__" ? 1 : 0) + (filtroPrazoAte ? 1 : 0);
 
   const buildQueryParams = () => {
-    const p = new URLSearchParams({ tipo: "judicial" });
+    const p = new URLSearchParams({ tipo: "judicial", enriquecer: "true" });
     if (filtroTribunal !== "__all__") p.set("tribunal", filtroTribunal);
     if (filtroFase !== "__all__") p.set("fase", filtroFase);
     if (filtroStatus !== "__all__") p.set("statusInterno", filtroStatus);
+    if (filtroResponsavel !== "__all__") p.set("responsavelId", filtroResponsavel);
+    if (filtroPrazoAte) p.set("prazoAte", filtroPrazoAte);
     return p.toString();
   };
 
-  const { data: processos = [], isLoading } = useQuery<AcervoProcesso[]>({
-    queryKey: ["/api/acervo", "judicial", filtroTribunal, filtroFase, filtroStatus],
+  const { data: processos = [], isLoading } = useQuery<ProcessoEnriquecido[]>({
+    queryKey: ["/api/acervo", "judicial", filtroTribunal, filtroFase, filtroStatus, filtroResponsavel, filtroPrazoAte],
     queryFn: async () => {
       const res = await fetch(`/api/acervo?${buildQueryParams()}`);
+      return res.json();
+    },
+  });
+
+  const { data: equipe = [] } = useQuery<any[]>({
+    queryKey: ["/api/equipe"],
+    queryFn: async () => {
+      const res = await fetch("/api/equipe");
       return res.json();
     },
   });
@@ -616,12 +637,35 @@ export default function AcervoJudicial() {
                 </SelectContent>
               </Select>
             )}
+            {equipe.length > 0 && (
+              <Select value={filtroResponsavel} onValueChange={setFiltroResponsavel}>
+                <SelectTrigger className="h-8 text-xs w-36" data-testid="select-filtro-responsavel">
+                  <SelectValue placeholder="Responsável" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos responsáveis</SelectItem>
+                  {equipe.map((m: any) => (
+                    <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">Prazo até:</span>
+              <Input
+                type="date"
+                className="h-8 text-xs w-36"
+                value={filtroPrazoAte}
+                onChange={(e) => setFiltroPrazoAte(e.target.value)}
+                data-testid="input-filtro-prazo"
+              />
+            </div>
             {filtrosAtivos > 0 && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-8 text-xs px-2"
-                onClick={() => { setFiltroStatus("__all__"); setFiltroFase("__all__"); setFiltroTribunal("__all__"); }}
+                onClick={() => { setFiltroStatus("__all__"); setFiltroFase("__all__"); setFiltroTribunal("__all__"); setFiltroResponsavel("__all__"); setFiltroPrazoAte(""); }}
                 data-testid="button-limpar-filtros"
               >
                 <X className="h-3 w-3 mr-1" />
@@ -671,10 +715,36 @@ export default function AcervoJudicial() {
                         {processo.assunto && (
                           <p className="text-xs text-muted-foreground truncate mt-0.5">{processo.assunto}</p>
                         )}
+                        {processo.responsavelNome && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <User className="h-3 w-3" />
+                            {processo.responsavelNome}
+                          </p>
+                        )}
                       </div>
                       <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-1" />
                     </div>
-                    {processo.dataUltimaSincronizacao && (
+                    {(processo.prazo || processo.ultimoAndamento) && (
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        {processo.prazo && (
+                          <div className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 text-amber-500" />
+                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                              Prazo: {new Date(processo.prazo + "T12:00:00").toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                        )}
+                        {processo.ultimoAndamento && (
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <span className="text-xs text-muted-foreground truncate">
+                              {processo.ultimoAndamento.data}: {processo.ultimoAndamento.descricao}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!processo.prazo && !processo.ultimoAndamento && processo.dataUltimaSincronizacao && (
                       <div className="flex items-center gap-1 mt-2">
                         <RefreshCw className="h-3 w-3 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground">

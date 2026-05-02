@@ -1046,7 +1046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   movimentacoes: dados.movimentacoes || [],
                   url: dados.url_portal,
                 });
-                if (pjeAcervoId) pjeProcessoObj.acervoId = pjeAcervoId;
+                if (pjeAcervoId) (pjeProcessoObj as any).acervoId = pjeAcervoId;
                 return res.json(resultado);
               }
             }
@@ -1977,7 +1977,24 @@ except Exception as e:
       if (req.query.fase) filters.fase = req.query.fase as string;
       if (req.query.responsavelId) filters.responsavelId = req.query.responsavelId as string;
       if (req.query.statusInterno) filters.statusInterno = req.query.statusInterno as string;
+      if (req.query.prazoAte) filters.prazoAte = req.query.prazoAte as string;
       const processos = await storage.getAcervoProcessos(Object.keys(filters).length > 0 ? filters : undefined);
+
+      // Enrich with último andamento and responsável name when requested
+      if (req.query.enriquecer === "true" && processos.length > 0) {
+        const ids = processos.map((p) => p.id);
+        const ultimosAndamentos = await storage.getUltimoAndamentoPorAcervo(ids);
+        const equipeMembers = await storage.getEquipe();
+        const equipeMap: Record<string, string> = {};
+        for (const m of equipeMembers) equipeMap[m.id] = m.nome;
+        const enriched = processos.map((p) => ({
+          ...p,
+          ultimoAndamento: ultimosAndamentos[p.id] || null,
+          responsavelNome: p.responsavelId ? equipeMap[p.responsavelId] || null : null,
+        }));
+        return res.json(enriched);
+      }
+
       res.json(processos);
     } catch (error) {
       res.status(500).json({ error: "Erro ao buscar acervo" });
