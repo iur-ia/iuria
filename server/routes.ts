@@ -437,10 +437,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Documento sem caminho de arquivo" });
       }
 
-      // Validação de segurança: caminho deve estar dentro do diretório uploads gerenciado
-      const resolvedPath = path.resolve(documento.caminho);
-      const resolvedUploadDir = path.resolve(uploadDir);
-      if (!resolvedPath.startsWith(resolvedUploadDir + path.sep)) {
+      // Validação de segurança: caminho deve estar em um diretório confiável (TRUSTED_DIRS)
+      // Inclui uploads/ e scraper/downloads/ — mesma política do fluxo de background
+      if (!isCaminhoSeguro(documento.caminho)) {
         return res.status(403).json({ error: "Caminho de arquivo não permitido" });
       }
 
