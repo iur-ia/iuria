@@ -897,6 +897,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DTO para entradas de movimentação vindas de diversas fontes (DataJud, PJe, scrapers)
+  type MovimentacaoInput = {
+    data?: string;
+    dataHora?: string;
+    descricao?: string;
+    texto?: string;
+    complementoTabela?: string;
+    detalhes?: string;
+    [key: string]: unknown;
+  };
+
+  // Keywords que classificam um andamento como evento crítico
+  const PALAVRAS_CRITICAS = [
+    "intima", "intimação", "despacho", "sentença", "acórdão", "decisão",
+    "prazo", "liminar", "tutela", "urgente", "embargo", "recurso", "agravo",
+    "mandado", "citação", "penhora", "bloqueio", "leilão", "hasta", "arquivamento",
+  ];
+  function detectarCritico(descricao: string): boolean {
+    const lower = descricao.toLowerCase();
+    return PALAVRAS_CRITICAS.some((p) => lower.includes(p));
+  }
+
+  // Normaliza uma movimentação para data + descricao limpos
+  function normalizarMovimentacao(mov: MovimentacaoInput): { data: string; descricao: string; detalhes: string | null } | null {
+    const data = (mov.data ?? (typeof mov.dataHora === "string" ? mov.dataHora.split("T")[0] : "") ?? "").trim();
+    const descricao = (mov.descricao ?? mov.texto ?? "").trim();
+    if (!data || !descricao) return null;
+    const detalhes = (mov.complementoTabela ?? mov.detalhes ?? null);
+    return { data, descricao, detalhes: typeof detalhes === "string" ? detalhes : null };
+  }
+
   // Helper: sincroniza processo consultado com o acervo (se já estiver cadastrado)
   async function sincronizarProcessoComAcervo(processo: {
     numero?: string; numero_unico?: string; tribunal?: string; classe?: string;
@@ -918,24 +949,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dataUltimaSincronizacao: new Date(),
       });
       // Sincroniza andamentos idempotentemente
-      const movimentacoes: any[] = Array.isArray(processo.movimentacoes) ? processo.movimentacoes : [];
+      const movimentacoes: MovimentacaoInput[] = Array.isArray(processo.movimentacoes)
+        ? (processo.movimentacoes as MovimentacaoInput[])
+        : [];
       if (movimentacoes.length > 0) {
         const andamentosExistentes = await storage.getAcervoAndamentos(existente.id);
-        const chaves = new Set(andamentosExistentes.map((a: any) => `${a.data}|${a.descricao}`));
+        const chaves = new Set(andamentosExistentes.map((a) => `${a.data}|${a.descricao}`));
         for (const mov of movimentacoes) {
-          const data = mov.data || mov.dataHora?.split("T")[0] || "";
-          const descricao = mov.descricao || mov.texto || "";
-          if (!data || !descricao) continue;
-          const chave = `${data}|${descricao}`;
+          const norm = normalizarMovimentacao(mov);
+          if (!norm) continue;
+          const chave = `${norm.data}|${norm.descricao}`;
           if (!chaves.has(chave)) {
             await storage.createAcervoAndamento({
               acervoId: existente.id,
-              data,
-              descricao,
-              detalhes: mov.complementoTabela || mov.detalhes || null,
+              data: norm.data,
+              descricao: norm.descricao,
+              detalhes: norm.detalhes,
               tipo: "automatico",
               origem: "consulta",
-              critico: false,
+              critico: detectarCritico(norm.descricao),
             });
             chaves.add(chave);
           }
@@ -2053,24 +2085,24 @@ except Exception as e:
           dataUltimaSincronizacao: new Date(),
         });
 
-        // Sincronizar andamentos — normaliza variantes de formato (data/dataHora, descricao/texto)
-        if (Array.isArray(movimentacoes) && movimentacoes.length > 0) {
+        // Sincronizar andamentos — normaliza variantes de formato via normalizarMovimentacao
+        const movs: MovimentacaoInput[] = Array.isArray(movimentacoes) ? (movimentacoes as MovimentacaoInput[]) : [];
+        if (movs.length > 0) {
           const andamentosExistentes = await storage.getAcervoAndamentos(existente.id);
           const chaves = new Set(andamentosExistentes.map((a) => `${a.data}|${a.descricao}`));
-          for (const mov of movimentacoes) {
-            const data = (mov.data || mov.dataHora?.split?.("T")?.[0] || "").trim();
-            const descricao = (mov.descricao || mov.texto || "").trim();
-            if (!data || !descricao) continue;
-            const chave = `${data}|${descricao}`;
+          for (const mov of movs) {
+            const norm = normalizarMovimentacao(mov);
+            if (!norm) continue;
+            const chave = `${norm.data}|${norm.descricao}`;
             if (!chaves.has(chave)) {
               await storage.createAcervoAndamento({
                 acervoId: existente.id,
-                data,
-                descricao,
-                detalhes: mov.complementoTabela || mov.detalhes || null,
+                data: norm.data,
+                descricao: norm.descricao,
+                detalhes: norm.detalhes,
                 tipo: "automatico",
                 origem: "consulta",
-                critico: false,
+                critico: detectarCritico(norm.descricao),
               });
               chaves.add(chave);
             }
@@ -2093,23 +2125,23 @@ except Exception as e:
         statusInterno: "ativo",
       });
 
-      // Criar andamentos iniciais — normaliza variantes de formato
-      if (Array.isArray(movimentacoes) && movimentacoes.length > 0) {
+      // Criar andamentos iniciais — normaliza e detecta criticidade
+      const movsNovos: MovimentacaoInput[] = Array.isArray(movimentacoes) ? (movimentacoes as MovimentacaoInput[]) : [];
+      if (movsNovos.length > 0) {
         const chaves = new Set<string>();
-        for (const mov of movimentacoes) {
-          const data = (mov.data || mov.dataHora?.split?.("T")?.[0] || "").trim();
-          const descricao = (mov.descricao || mov.texto || "").trim();
-          if (!data || !descricao) continue;
-          const chave = `${data}|${descricao}`;
+        for (const mov of movsNovos) {
+          const norm = normalizarMovimentacao(mov);
+          if (!norm) continue;
+          const chave = `${norm.data}|${norm.descricao}`;
           if (!chaves.has(chave)) {
             await storage.createAcervoAndamento({
               acervoId: processo.id,
-              data,
-              descricao,
-              detalhes: mov.complementoTabela || mov.detalhes || null,
+              data: norm.data,
+              descricao: norm.descricao,
+              detalhes: norm.detalhes,
               tipo: "automatico",
               origem: "consulta",
-              critico: false,
+              critico: detectarCritico(norm.descricao),
             });
             chaves.add(chave);
           }
