@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Scale, Search, Clock, FileText, Users, Building, ExternalLink,
   Plus, Trash2, ChevronRight, AlertCircle, CheckCircle2, Archive,
-  RefreshCw, BookOpen, StickyNote,
+  RefreshCw, BookOpen, StickyNote, Filter, X,
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { AcervoProcesso } from "@shared/schema";
@@ -487,17 +488,33 @@ function ProcessoFicha({ processo, onClose }: { processo: AcervoProcesso; onClos
 export default function AcervoJudicial() {
   const { toast } = useToast();
   const [busca, setBusca] = useState("");
+  const [filtroTribunal, setFiltroTribunal] = useState<string>("__all__");
+  const [filtroFase, setFiltroFase] = useState<string>("__all__");
+  const [filtroStatus, setFiltroStatus] = useState<string>("__all__");
   const [fichaAberta, setFichaAberta] = useState<AcervoProcesso | null>(null);
   const [showNovoDialog, setShowNovoDialog] = useState(false);
   const [novoProcesso, setNovoProcesso] = useState({ numero: "", tribunal: "", classe: "", assunto: "" });
 
+  const filtrosAtivos = (filtroTribunal !== "__all__" ? 1 : 0) + (filtroFase !== "__all__" ? 1 : 0) + (filtroStatus !== "__all__" ? 1 : 0);
+
+  const buildQueryParams = () => {
+    const p = new URLSearchParams({ tipo: "judicial" });
+    if (filtroTribunal !== "__all__") p.set("tribunal", filtroTribunal);
+    if (filtroFase !== "__all__") p.set("fase", filtroFase);
+    if (filtroStatus !== "__all__") p.set("statusInterno", filtroStatus);
+    return p.toString();
+  };
+
   const { data: processos = [], isLoading } = useQuery<AcervoProcesso[]>({
-    queryKey: ["/api/acervo", "judicial"],
+    queryKey: ["/api/acervo", "judicial", filtroTribunal, filtroFase, filtroStatus],
     queryFn: async () => {
-      const res = await fetch("/api/acervo?tipo=judicial");
+      const res = await fetch(`/api/acervo?${buildQueryParams()}`);
       return res.json();
     },
   });
+
+  // Tribunais únicos para o filtro
+  const tribunaisUnicos = Array.from(new Set(processos.map(p => p.tribunal).filter(Boolean))) as string[];
 
   const criarMutation = useMutation({
     mutationFn: async () => {
@@ -552,7 +569,7 @@ export default function AcervoJudicial() {
               Novo
             </Button>
           </div>
-          <div className="relative">
+          <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               data-testid="input-busca-acervo"
@@ -561,6 +578,56 @@ export default function AcervoJudicial() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
             />
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+              <SelectTrigger className="h-8 text-xs w-32" data-testid="select-filtro-status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos status</SelectItem>
+                <SelectItem value="ativo">Ativo</SelectItem>
+                <SelectItem value="arquivado">Arquivado</SelectItem>
+                <SelectItem value="suspenso">Suspenso</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filtroFase} onValueChange={setFiltroFase}>
+              <SelectTrigger className="h-8 text-xs w-36" data-testid="select-filtro-fase">
+                <SelectValue placeholder="Fase" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas fases</SelectItem>
+                <SelectItem value="conhecimento">Conhecimento</SelectItem>
+                <SelectItem value="recursal">Recursal</SelectItem>
+                <SelectItem value="execucao">Execução</SelectItem>
+                <SelectItem value="arquivado">Arquivado</SelectItem>
+              </SelectContent>
+            </Select>
+            {tribunaisUnicos.length > 0 && (
+              <Select value={filtroTribunal} onValueChange={setFiltroTribunal}>
+                <SelectTrigger className="h-8 text-xs w-28" data-testid="select-filtro-tribunal">
+                  <SelectValue placeholder="Tribunal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">Todos</SelectItem>
+                  {tribunaisUnicos.map(t => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {filtrosAtivos > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs px-2"
+                onClick={() => { setFiltroStatus("__all__"); setFiltroFase("__all__"); setFiltroTribunal("__all__"); }}
+                data-testid="button-limpar-filtros"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Limpar ({filtrosAtivos})
+              </Button>
+            )}
           </div>
         </div>
 

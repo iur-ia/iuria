@@ -897,6 +897,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper: sincroniza processo consultado com o acervo (se já estiver cadastrado)
+  async function sincronizarProcessoComAcervo(processo: {
+    numero?: string; numero_unico?: string; tribunal?: string; classe?: string;
+    assunto?: string; relator?: string; partes?: unknown[]; movimentacoes?: unknown[]; url?: string;
+  }): Promise<string | null> {
+    try {
+      const numero = processo.numero_unico || processo.numero;
+      if (!numero) return null;
+      const existente = await storage.getAcervoProcessoByNumero(numero);
+      if (!existente) return null;
+      // Atualiza dados básicos
+      await storage.updateAcervoProcesso(existente.id, {
+        tribunal: processo.tribunal || existente.tribunal,
+        classe: processo.classe || existente.classe,
+        assunto: processo.assunto || existente.assunto,
+        relator: processo.relator || existente.relator,
+        partes: processo.partes ? JSON.stringify(processo.partes) : existente.partes,
+        urlPortal: processo.url || existente.urlPortal,
+        dataUltimaSincronizacao: new Date(),
+      });
+      // Sincroniza andamentos idempotentemente
+      const movimentacoes: any[] = Array.isArray(processo.movimentacoes) ? processo.movimentacoes : [];
+      if (movimentacoes.length > 0) {
+        const andamentosExistentes = await storage.getAcervoAndamentos(existente.id);
+        const chaves = new Set(andamentosExistentes.map((a: any) => `${a.data}|${a.descricao}`));
+        for (const mov of movimentacoes) {
+          const data = mov.data || mov.dataHora?.split("T")[0] || "";
+          const descricao = mov.descricao || mov.texto || "";
+          if (!data || !descricao) continue;
+          const chave = `${data}|${descricao}`;
+          if (!chaves.has(chave)) {
+            await storage.createAcervoAndamento({
+              acervoId: existente.id,
+              data,
+              descricao,
+              detalhes: mov.complementoTabela || mov.detalhes || null,
+              tipo: "automatico",
+              origem: "consulta",
+              critico: false,
+            });
+            chaves.add(chave);
+          }
+        }
+      }
+      return existente.id;
+    } catch (_err) {
+      return null;
+    }
+  }
+
   app.post("/api/consulta-processual", async (req, res) => {
     try {
       const validationResult = consultaProcessualSchema.safeParse(req.body);
@@ -984,6 +1034,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   erro: null,
                   usuarioId: null,
                 });
+                // Auto-sync com acervo (se processo já estiver cadastrado)
+                const pjeProcessoObj = resultado.processos[0];
+                const pjeAcervoId = await sincronizarProcessoComAcervo({
+                  numero: dados.numero,
+                  tribunal: dados.tribunal || tribunal,
+                  classe: dados.classe,
+                  assunto: dados.assunto,
+                  relator: dados.relator,
+                  partes: dados.partes || [],
+                  movimentacoes: dados.movimentacoes || [],
+                  url: dados.url_portal,
+                });
+                if (pjeAcervoId) pjeProcessoObj.acervoId = pjeAcervoId;
                 return res.json(resultado);
               }
             }
@@ -1056,6 +1119,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               erro: null,
               usuarioId: null
             });
+            // Auto-sync com acervo (se processo já estiver cadastrado)
+            const acervoId = await sincronizarProcessoComAcervo(processo);
+            if (acervoId) processo.acervoId = acervoId;
           }
           
           if (resultado.erro && (!resultado.processos || resultado.processos.length === 0)) {
@@ -1905,8 +1971,13 @@ except Exception as e:
 
   app.get("/api/acervo", async (req, res) => {
     try {
-      const tipo = req.query.tipo as string | undefined;
-      const processos = await storage.getAcervoProcessos(tipo);
+      const filters: Record<string, string> = {};
+      if (req.query.tipo) filters.tipo = req.query.tipo as string;
+      if (req.query.tribunal) filters.tribunal = req.query.tribunal as string;
+      if (req.query.fase) filters.fase = req.query.fase as string;
+      if (req.query.responsavelId) filters.responsavelId = req.query.responsavelId as string;
+      if (req.query.statusInterno) filters.statusInterno = req.query.statusInterno as string;
+      const processos = await storage.getAcervoProcessos(Object.keys(filters).length > 0 ? filters : undefined);
       res.json(processos);
     } catch (error) {
       res.status(500).json({ error: "Erro ao buscar acervo" });

@@ -119,7 +119,7 @@ export interface IStorage {
   getVerificacoesByMonitoramento(monitoramentoId: string): Promise<VerificacaoMonitoramento[]>;
 
   // Acervo de Processos
-  getAcervoProcessos(tipo?: string): Promise<AcervoProcesso[]>;
+  getAcervoProcessos(filters?: { tipo?: string; tribunal?: string; fase?: string; responsavelId?: string; statusInterno?: string }): Promise<AcervoProcesso[]>;
   getAcervoProcesso(id: string): Promise<AcervoProcesso | undefined>;
   getAcervoProcessoByNumero(numero: string): Promise<AcervoProcesso | undefined>;
   createAcervoProcesso(processo: InsertAcervoProcesso): Promise<AcervoProcesso>;
@@ -480,10 +480,16 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== ACERVO ====================
 
-  async getAcervoProcessos(tipo?: string): Promise<AcervoProcesso[]> {
-    if (tipo) {
+  async getAcervoProcessos(filters?: { tipo?: string; tribunal?: string; fase?: string; responsavelId?: string; statusInterno?: string }): Promise<AcervoProcesso[]> {
+    const conditions = [];
+    if (filters?.tipo) conditions.push(eq(acervoProcessos.tipo, filters.tipo));
+    if (filters?.tribunal) conditions.push(eq(acervoProcessos.tribunal, filters.tribunal));
+    if (filters?.fase) conditions.push(eq(acervoProcessos.fase, filters.fase));
+    if (filters?.responsavelId) conditions.push(eq(acervoProcessos.responsavelId, filters.responsavelId));
+    if (filters?.statusInterno) conditions.push(eq(acervoProcessos.statusInterno, filters.statusInterno));
+    if (conditions.length > 0) {
       return db.select().from(acervoProcessos)
-        .where(eq(acervoProcessos.tipo, tipo))
+        .where(and(...conditions))
         .orderBy(desc(acervoProcessos.createdAt));
     }
     return db.select().from(acervoProcessos).orderBy(desc(acervoProcessos.createdAt));

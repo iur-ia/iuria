@@ -1,0 +1,919 @@
+# Sistema SaaS de Gestão de Administração Judicial no Brasil — Estrutura Básica, Funcionalidades Obrigatórias, Stack Técnica e Integrações
+
+> Documento técnico preparado em 2 de maio de 2026 para advogado brasileiro (OAB/RJ) que projeta SaaS para Administradores Judiciais (Lei 11.101/2005, com redação da Lei 14.112/2020) e Administradores da Massa Insolvente Civil (CPC/1973, arts. 748–786‑A, mantidos vigentes pelo art. 1.052 do CPC/2015).
+
+---
+
+## TL;DR
+
+- **Stack recomendada (2026):** Next.js 15 (App Router) + TypeScript + Tailwind/shadcn‑ui no front; **tRPC + Hono** rodando em Edge/Node como camada de API tipada; **PostgreSQL gerenciado no Supabase** (autenticação, Storage, Realtime e Row‑Level Security para multi‑tenant); **Drizzle ORM** (preferido para edge/serverless e fluxos de "vibe coding") com Prisma como alternativa para times que valorizam ecossistema mais maduro; **Inngest** ou **Trigger.dev v3** para jobs longos; **Resend** + **Twilio/Z‑API** (WhatsApp) para comunicações; **Asaas** (pagamentos PJ brasileiros, regulado pelo BACEN, código 461) para o billing do SaaS e contas da massa, com **Stripe** complementar para clientes internacionais; **Vercel AI SDK** com **Anthropic Claude Sonnet/Opus 4.x** e **GPT‑5/4o** via AI Gateway. Para **vibe coding**: prototipar UI no **Lovable** (full‑stack com Supabase nativo) → migrar para **Cursor + GitHub** para refinamento sério → deploy em **Vercel + Supabase** (com Cloudflare R2 para anexos volumosos).
+- **Arquitetura:** monolito modular em Next.js com DDD aplicado ao domínio falimentar, **multi‑tenant por `tenant_id` com RLS no Postgres** (cada escritório de AJ é um tenant; cada processo é um *workspace* dentro do tenant); núcleo organizado em módulos de Cadastro, Processos, Prazos/Tarefas, Credores, Massa, Tesouraria, Realização do Ativo, AGC, Plano de RJ, Relatórios, Prestação de Contas, Comunicações/Editais, GED, Jurisprudência, IA, Portal do Credor, Portal do Devedor, BI e Admin do SaaS. Compliance LGPD (controlador/operador, DPO, base legal — art. 7º), audit log imutável, criptografia em repouso e trânsito, e logs de IA com citação obrigatória de fonte verificável (anti‑alucinação).
+- **Integrações brasileiras prioritárias:** API Pública do **DataJud/CNJ** (consulta nacional via APIKey), **MNI 2.2.x** para PJe (peticionamento e consulta — cobertura desigual entre tribunais), e adaptadores para **eproc, ESAJ, Projudi, eSAJ TJSP/TJRJ**, idealmente intermediados por agregadores (Escavador, JusBrasil, Codilo, Digesto, Judit) por causa da fragmentação; **PDPJ‑Br/Jus.br** + **Domicílio Judicial Eletrônico** (Resolução CNJ 455/2022); **BrasilAPI/ViaCEP/Receita Federal**; **Asaas/Open Finance Brasil** para conta da massa; **ONR / RI Digital** (Lei 13.465/2017, Provimento CNJ 89/2019) com APIs para certidões, matrícula online, e‑Protocolo, monitor registral; **CENPROT/IEPTB**; **JUCERJA** e demais juntas via **REGIN**; **e‑Notariado/CNB**; **SCR/Bacen** (acesso indireto via instituição autorizada); **D4Sign/Clicksign/ZapSign/Autentique** + **gov.br** (assinatura ICP‑Brasil e avançada da Lei 14.063/2020); **DJEN nacional** para editais (art. 7º, §2º; art. 99 da Lei 11.101/05); leiloeiros (Sodré Santoro, Superbid, Mega Leilões, Frazão, Zukerman) — em sua maioria **sem API pública padronizada**, exigindo integração caso a caso ou via portais judiciais. **SisbaJud, RenaJud, InfoJud** são acessíveis apenas a magistrados/servidores: o sistema do AJ deve recepcionar e organizar respostas, não consultar diretamente.
+
+---
+
+## 1. Stack Técnica Recomendada
+
+### 1.1 Visão geral e justificativa
+
+O perfil do usuário (advogado, OAB/RJ, vibe coding) e o domínio (jurídico complexo, longa cauda regulatória, multi‑tenant, alta integração com órgãos públicos brasileiros) recomendam fortemente um stack **TypeScript ponta‑a‑ponta**, **serverless‑friendly**, com forte ecossistema de IA, componentes UI prontos e fácil reprodutibilidade em ferramentas como Lovable, v0 e Cursor. As escolhas abaixo refletem popularidade real em 2025–2026 e adequação ao perfil "solo founder + IA agente + futura equipe".
+
+### 1.2 Frontend
+
+| Decisão | Recomendação |
+|---|---|
+| Framework | **Next.js 15** (App Router, Server Components, Server Actions) |
+| Linguagem | **TypeScript** estrito (`"strict": true`) |
+| UI | **Tailwind CSS v4** + **shadcn/ui** (Radix + Tailwind, totalmente copiado para o repo, ideal para customização forense) |
+| State client | **TanStack Query** + **Zustand** quando necessário |
+| Forms | **React Hook Form** + **Zod** (mesmos schemas do back) |
+| Tabelas/relatórios | **TanStack Table** + **Recharts**/**Tremor** para BI |
+| i18n | `next-intl` (PT‑BR padrão; preparar EN para insolvência transnacional, art. 167‑A da Lei 11.101/05) |
+
+Justificativa: o trinômio Next.js 15 + Tailwind + shadcn/ui é o stack canônico do Vercel, do v0 e do Lovable; a saída de um prompt em Lovable já vem nesse formato, eliminando atrito ao migrar para Cursor.
+
+### 1.3 Backend / API
+
+| Camada | Recomendação | Por quê |
+|---|---|---|
+| API tipada interna | **tRPC v11** dentro do mesmo monorepo Next.js | Type‑safety end‑to‑end sem schemas duplicados; ideal para vibe coding (o agente "vê" o tipo do backend ao gerar componente) |
+| API pública/REST (portais e integrações) | **Hono** rodando como Route Handler do Next.js (ou Cloudflare Worker) | Web Standards (Request/Response), edge‑native, baixa cold start, ideal para webhooks e integrações com cartórios |
+| Validação | **Zod v3+** | Idêntica entre client/server |
+| Alternativas | **NestJS** (caso a equipe cresça e queira DI/módulos enterprise); **Fastify** (alta performance) | Não recomendados como ponto de partida pela curva e boilerplate |
+
+Para um SaaS jurídico em estágio inicial com IA‑driven development, a combinação **Next.js Route Handlers + tRPC + Hono** apresenta a menor fricção. NestJS torna‑se relevante após ~50 endpoints ou quando entrar uma equipe formal.
+
+### 1.4 Banco de dados
+
+| Provedor | Recomendação |
+|---|---|
+| **Supabase** (Postgres gerenciado) | **Recomendado** — único que combina Auth, Storage, Realtime, Edge Functions, RLS nativo e ecossistema dominante em vibe coding (Lovable/Bolt usam por padrão) |
+| Neon | Ótimo para serverless puro com branching de DB; mais simples mas sem Auth/Storage |
+| Vercel Postgres (Neon white‑label) | Conveniente se já estiver na Vercel; perde recursos do Supabase |
+
+Padrão: **PostgreSQL 15+** com extensões `pgcrypto`, `pg_trgm` (busca textual em peças), `uuid-ossp`, `vector` (pgvector para RAG jurisprudencial) e `pg_audit` para audit log.
+
+### 1.5 ORM
+
+| ORM | Recomendação |
+|---|---|
+| **Drizzle** | **Recomendado** para novo projeto: schema em TypeScript puro, ~7 kB, edge‑native, sem `prisma generate`, tipos instantâneos, excelente para Supabase com `prepare: false` em transaction pooling |
+| Prisma 7 | Ecosistema maior, Prisma Studio, migrations declarativas; em 2025 removeu engine Rust e tornou‑se serverless‑friendly. Preferível se o time vier de Prisma ou exigir migrations geradas automaticamente |
+
+Para "vibe coding": Drizzle vence porque o LLM vê todo o schema em TS e infere tipos sem etapa de codegen.
+
+### 1.6 Autenticação
+
+| Provedor | Quando usar |
+|---|---|
+| **Supabase Auth** | **Recomendado** se DB já é Supabase. Suporta MFA, OAuth (Google/Microsoft 365), magic link, integração nativa com RLS via `auth.uid()` |
+| Clerk | Melhor UX/onboarding pronto; integra com Supabase mas adiciona vendor extra |
+| Auth.js (NextAuth) | Open‑source, máxima flexibilidade; exige mais código |
+
+**Login adicional obrigatório:** **gov.br** (OIDC) para permitir cadastro/assinatura de credores PF nos portais externos, e **certificado ICP‑Brasil A1/A3** via componente WebPKI (D4Sign/Clicksign expõem) para o AJ assinar peças.
+
+### 1.7 Storage
+
+| Provedor | Uso |
+|---|---|
+| **Supabase Storage** | Documentos do dia‑a‑dia, anexos do credor (até alguns GB) |
+| **Cloudflare R2** | Arquivamento de longa duração (autos integrais, vídeos de AGC), zero egress fee — crítico em RJs com 10 mil+ credores |
+| AWS S3 | Plano B para escala enterprise |
+
+### 1.8 Filas / Jobs
+
+| Tecnologia | Caso de uso |
+|---|---|
+| **Inngest** | **Recomendado** para a maioria dos workflows: serverless‑native, generoso free tier (50k execuções/mês), durable workflows para fluxos como "consultar processo no DataJud → baixar movimentações → atualizar timeline → notificar prazos" |
+| Trigger.dev v3 | Jobs longos (>5 min): OCR de 10 mil páginas, geração de PDF de QGC, treinamento de embeddings jurisprudenciais; Bun‑workers, sem timeout serverless; permite self‑hosting |
+| BullMQ + Redis (Upstash) | Apenas se já houver Redis e necessidade de altíssimo throughput |
+
+### 1.9 Email, SMS e WhatsApp
+
+- **Resend** (transacional, com React Email para templates de ofícios) — recomendado.
+- **Postmark** como alternativa enterprise.
+- **Twilio** ou **Z‑API** para WhatsApp Business — Z‑API tem melhor custo BR.
+- **Zenvia** para SMS no Brasil.
+
+### 1.10 Observabilidade, segurança e qualidade
+
+- **Sentry** (erros front + back).
+- **Axiom** ou **Better Stack** para logs estruturados.
+- **Vercel Analytics** + **PostHog** (produto + sessão).
+- **Checkly** (synthetic monitoring para integrações com tribunais — críticas).
+- **Snyk** + **Dependabot** + **GitHub Advanced Security**.
+
+### 1.11 Pagamentos
+
+| Caso | Solução |
+|---|---|
+| **Billing do SaaS (assinaturas dos AJs)** | **Asaas** — instituição de pagamento e SCD autorizada pelo BACEN (código 461), PCI‑DSS, suporta PIX/boleto/cartão recorrente, NF‑e automatizada, split, antecipação. Único provedor brasileiro que oferece "Conta Digital" via API |
+| Conta operacional da massa | Conta judicial (CEF/BB) + conta operacional integrada via **Asaas** ou Open Finance |
+| Internacional (futuro) | **Stripe** (clientes do exterior em RJ transnacional) |
+| Cobrança de credores em UPI/leilão | **Iugu**, **PagSeguro** ou Asaas para boletos |
+
+### 1.12 IA / LLM
+
+- **Vercel AI SDK** (unificado, suporta Anthropic, OpenAI, Google e provedores via AI Gateway).
+- **Anthropic Claude Sonnet 4.5** (default — melhor para análise documental e raciocínio jurídico longo); **Claude Opus 4.6** com adaptive thinking para tarefas críticas.
+- **GPT‑4o/GPT‑5** via OpenAI ou Azure (OCR + extração estruturada de balanços).
+- **Google Gemini** Pro/Flash para multimodalidade (planta cadastral, fotos do auto de arrecadação).
+- **pgvector** no Supabase ou **Pinecone** para RAG sobre jurisprudência.
+- **Anti‑alucinação obrigatória:** toda saída da IA deve trazer (i) citação com hash do documento‑fonte, (ii) confidence score, (iii) carimbo "verificado pelo AJ" antes de produzir efeito jurídico, e (iv) gravação completa do prompt+resposta em audit log.
+
+### 1.13 Compatibilidade com vibe coding
+
+| Ferramenta | Adequação ao SaaS jurídico | Observações |
+|---|---|---|
+| **Lovable** | ⭐⭐⭐⭐⭐ MVP/prototipação | Stack default Lovable = Next.js + Supabase + shadcn — alinhado com a recomendação. Edição visual e GitHub sync. Ideal para validar telas com AJs reais antes do Cursor |
+| **v0 (Vercel)** | ⭐⭐⭐⭐ Componentes pontuais | Excelente para gerar telas isoladas (formulário de habilitação, dashboard) com Tailwind/shadcn |
+| **Cursor** | ⭐⭐⭐⭐⭐ Produção | IDE definitiva para refinar e manter código complexo (RLS, integrações, IA) |
+| **Bolt.new** | ⭐⭐⭐ Demos rápidas | Browser‑based; útil para protótipos descartáveis; menos previsível em produção |
+| **Replit Agent 3** | ⭐⭐⭐ Full‑stack autônomo | Boa para integrar Stripe/Asaas e deploy em uma só plataforma; custo pode escalar |
+| **Windsurf** | ⭐⭐⭐⭐ Alternativa ao Cursor | Cascade para tarefas multi‑arquivo |
+| **Claude Code (Anthropic)** | ⭐⭐⭐⭐⭐ Refactor/agents | Excelente para tarefas multi‑arquivo, geração de migrations Drizzle e revisões jurídicas |
+| Aider | ⭐⭐⭐ CLI | Para times técnicos que preferem terminal |
+
+**Fluxo recomendado (vibe coding jurídico):**
+1. **Lovable** — prototipar fluxos críticos (cadastro de processo, habilitação de crédito, AGC) com Supabase real.
+2. Conectar **GitHub** (sync bidirecional) e migrar para **Cursor + Claude Code** assim que o app passar de ~30 telas.
+3. **Vercel** para deploy front + Route Handlers; **Supabase Cloud** para DB/Auth/Storage; **Cloudflare R2** para arquivos pesados; **Inngest Cloud** para jobs.
+4. Templates de partida: **T3 Stack** (`create-t3-app`) com Drizzle, ou os starters oficiais do Supabase para Next.js.
+
+---
+
+## 2. Arquitetura do Sistema
+
+### 2.1 Padrão arquitetural
+
+**Monolito modular em Next.js (modular monolith)**, organizado por *bounded contexts* do DDD, com separação clara de:
+
+- **Apresentação** — `app/` (Next.js App Router), Server Components.
+- **Aplicação** — casos de uso (`/use-cases`), orquestração de regras.
+- **Domínio** — entidades, agregados, eventos de domínio (`Crédito`, `MassaFalida`, `Plano`, `AGC`).
+- **Infraestrutura** — repositories Drizzle, clients (DataJud, MNI, Asaas, e‑mails), filas Inngest.
+
+Microserviços só se justificam após PMF e escala >10 mil processos ativos. Antes disso, o overhead operacional é desproporcional.
+
+### 2.2 Bounded contexts mapeados ao domínio falimentar
+
+1. **Identity & Access** (Tenant, User, Role, Permission).
+2. **Case Management** (Processo, Fase, Evento, Timeline).
+3. **Creditor Verification** (Credor, Crédito, Habilitação, Divergência, Impugnação, QGC).
+4. **Estate Management** (Inventário, Bem, Avaliação, Restituição).
+5. **Treasury** (Conta da Massa, Lançamento, Conciliação, Ordem de Pagamento art. 83/84).
+6. **Asset Realization** (Plano de Venda, Edital, Praça, Arrematação).
+7. **Creditors' Assembly** (AGC, Convocação, Procuração, Voto, Quórum, Ata).
+8. **Recovery Plan** (Plano de RJ, Cumprimento, Supervisão 2 anos do art. 61).
+9. **Reporting** (RAM, Relatório do art. 22 III "e", Relatório Final art. 155, Prestação de Contas).
+10. **Communications** (Ofícios, Editais DJEN, e‑mails, WhatsApp).
+11. **Document** (GED, OCR, classificação).
+12. **Knowledge** (Jurisprudência STF/STJ, normativos CNJ, doutrina).
+13. **AI Assistance** (orquestrador de LLM com guard‑rails e citation enforcement).
+14. **External Portals** (Credor, Devedor).
+15. **Analytics & BI**.
+16. **SaaS Admin** (tenants, billing, suporte).
+
+### 2.3 Multi‑tenancy
+
+**Padrão recomendado: shared schema + `tenant_id` + Postgres Row‑Level Security (RLS).**
+
+- Toda tabela transacional tem `tenant_id UUID NOT NULL`.
+- Cada `Case` (processo) tem também `case_id` (workspace).
+- **Policies RLS** filtram automaticamente: `USING (tenant_id = auth.tenant_id())` via JWT custom claim.
+- Casos sensíveis (insolvência transnacional, segredo de justiça) usam **schema dedicado** ou banco separado por contrato premium.
+- **Service role key** somente em jobs server‑side, jamais exposta ao client; uso explícito e auditado.
+- Pitfall conhecido: views por padrão burlam RLS; usar `security_invoker = true` (Postgres 15+) ou esquema não exposto.
+
+### 2.4 Estratégia de testes
+
+| Camada | Ferramenta | Cobertura mínima |
+|---|---|---|
+| Unit | **Vitest** | 80% domínio + use‑cases |
+| Integration | Vitest + DB de teste (Supabase local via Docker) | Repositories + RLS policies |
+| E2E | **Playwright** | Fluxos críticos: novo processo, habilitação, AGC, fechamento de mês |
+| Contratos | **Pact** ou OpenAPI snapshots | Integrações DataJud/MNI/Asaas |
+| RLS | Testes específicos com diferentes JWTs simulados | Cobertura 100% de tabelas com tenant_id |
+| Acessibilidade | axe-core no Playwright | WCAG 2.2 AA (Resolução CNJ 401/2021 sobre acessibilidade) |
+
+### 2.5 CI/CD
+
+- **GitHub Actions** com matriz: lint (Biome ou ESLint), typecheck, vitest, playwright, build.
+- **Preview deployments** automáticos no Vercel para cada PR.
+- **Migrations** Drizzle aplicadas em staging via job pós‑merge; produção em janela controlada.
+- **Feature flags** (Vercel Edge Config ou Statsig) para liberar módulos por tenant.
+- **Backups** automáticos do Supabase + snapshots do R2 + replicação cross‑region (DR).
+
+### 2.6 Estratégia de deploy
+
+- **Vercel** para front + Route Handlers + Edge Functions.
+- **Supabase Cloud** (região São Paulo — `gru1`) para DB/Auth/Storage.
+- **Inngest Cloud** ou **Trigger.dev Cloud** para workflows.
+- **Cloudflare R2** para arquivos.
+- **DNS no Cloudflare** + **Cloudflare WAF** para portais externos (proteção contra abuso por credores).
+
+---
+
+## 3. Módulos Funcionais Obrigatórios
+
+> Para cada módulo: **MVP** (fase 1, indispensável) | **V1‑V2** (desejável, expansão) | **V3+** (avançado).
+> A numeração das funcionalidades é normativa para fim de roadmap.
+
+### A. Cadastro e Configuração
+
+**MVP**
+1. Cadastro do escritório/AJ (PF ou PJ) com CNPJ/CPF, endereço, dados bancários, OAB, certidões de regularidade junto ao órgão de classe (Resolução CNJ 393/2021, art. 4º).
+2. Cadastro de equipe com **RBAC granular** (sócio, advogado, contador interno, assistente, estagiário, auditor externo); permissões por módulo + ação + tenant.
+3. Cadastro de auxiliares externos (leiloeiros, peritos, contadores, avaliadores) com vínculo a processo.
+4. Configurações de tribunal padrão por comarca, modelos de documento, marca branca (logo, cores) para portais externos.
+5. Política de retenção e classificação de documentos (LGPD).
+
+**V1‑V2**
+6. Suporte multi‑escritório (matriz/filial) e cooperação entre AJs.
+7. Cadastro de marketplace de auxiliares (busca de leiloeiros credenciados etc.).
+
+### B. Processos (Cases)
+
+**MVP**
+1. Cadastro com tipo: **Falência**, **RJ ordinária**, **RJ ME‑EPP** (art. 70‑A), **Recuperação Extrajudicial** (art. 161), **Insolvência Civil** (CPC/73 art. 748+).
+2. **Triagem inicial** — wizard que classifica devedor empresário (art. 966 CC) → Lei 11.101 vs. devedor civil → CPC/73 + arts. 955‑965 CC.
+3. Vinculação de partes: devedor, credores, juízo, MP, Fazenda, comitê.
+4. **Linha do tempo** (timeline) com todos os eventos automáticos e manuais.
+5. Gestão de despachos, decisões, sentenças com upload + OCR.
+6. **Controle de fases** processuais conforme catálogo do prompt mestre (deferimento, fase administrativa do art. 7º, plano, AGC, supervisão, encerramento).
+7. Importação de processos por número CNJ (DataJud) ou OAB.
+
+**V1‑V2**
+8. Detecção automática de movimentações relevantes (LLM classifica push do tribunal).
+9. Insolvência transnacional (Capítulo VI‑A, arts. 167‑A a 167‑Y, Resolução CNJ 394/2021).
+10. Cooperação direta com juízos estrangeiros (UNCITRAL Model Law).
+
+### C. Prazos e Tarefas
+
+**MVP**
+1. Calendário com prazos legais e judiciais; integração Google Calendar / Microsoft 365 (CalDAV).
+2. **Engine de regras de geração automática** a partir de eventos‑gatilho. Exemplos canônicos:
+   - Decretação de falência → criar tarefas de comunicações obrigatórias (RFB, INSS, JUCESP/JUCERJA, ONR, CENPROT) em D+5; arrecadação em D+15; auto de arrecadação; venda em D+180 (art. 22, III, "j").
+   - Deferimento de RJ → publicação edital art. 52 §1º; **prazo de 15 dias** para credores apresentarem habilitações ao AJ (art. 7º, §1º); **prazo de 45 dias** para AJ publicar lista do art. 7º, §2º; **60 dias** para devedor apresentar plano (art. 53); AGC em até 150 dias (art. 56, §1º); supervisão por 2 anos (art. 61).
+   - Aprovação do plano → rotina de monitoramento mensal art. 22, II, "c"+"h".
+3. Alertas multicanal (e‑mail, push web, **WhatsApp via Z‑API**, dashboard).
+4. Atribuição de responsável e workflow de aprovação interna.
+5. **Risco operacional** classificado em BAIXO/MEDIO/ALTO/CRITICO baseado em (i) prazo restante, (ii) impacto (destituição vs. simples ofício), (iii) presença de crédito ≥ R$ 1 mi, (iv) atos do art. 64.
+6. SLA por tipo de tarefa; mural de prazos vencendo nas próximas 72h.
+
+**V1‑V2**
+7. Sugestão de redistribuição de carga via IA quando equipe estiver sobrecarregada.
+8. Templates de checklist (Diligência inicial pós‑decretação, Pré‑AGC).
+
+### D. Credores e Verificação de Créditos
+
+**MVP**
+1. Cadastro de credores PF/PJ com qualificação completa (CPF/CNPJ via BrasilAPI/Receita), endereço (ViaCEP), conta bancária, e‑mail, procuradores.
+2. Habilitação de créditos com upload de documentos (contratos, notas fiscais, CCBs, sentenças trabalhistas).
+3. Análise documental com OCR + sugestão de classificação por IA (com revisão humana obrigatória).
+4. **Classificação conforme art. 83 da Lei 11.101/05 (com redação da Lei 14.112/2020):**
+   - I — Trabalhistas (limitados a 150 SM/credor) e acidentes do trabalho;
+   - II — Garantia real (limitada ao valor do bem);
+   - III — Tributários, exceto extraconcursais e multas;
+   - VI — Quirografários (incluindo saldos não cobertos e créditos antes "com privilégio especial/geral", revogados pela 14.112);
+   - VII — Multas contratuais e penas pecuniárias (inclui multas tributárias);
+   - VIII — Subordinados (lei/contrato; sócios/administradores sem vínculo empregatício; em condições não comutativas);
+   - IX — Juros vencidos após decretação;
+   - **Extraconcursais (art. 84)** com sub‑hierarquia I‑A a I‑E (incluindo DIP financing, restituições do art. 86, honorários do AJ relativos à massa, créditos trabalhistas pós‑falência, atos da RJ art. 67).
+   - **ME‑EPP** com regra própria (art. 41, IV);
+   - **Trabalhistas** verificados via Justiça do Trabalho (art. 6º, §2º).
+5. **Geração automática da lista do art. 7º, §2º** (segundo edital) a partir do passivo do devedor + habilitações/divergências.
+6. Impugnações e divergências com autuação separada (art. 8º).
+7. **QGC — Quadro Geral de Credores** consolidado (art. 18) assinado pelo juiz e AJ.
+8. **Insolvência civil:** classificação conforme **CC arts. 955‑965** (privilégio geral, especial, e quirografário) — *engine separada*.
+9. **Portal do Credor** (ver módulo P) com login gov.br, autoatendimento de habilitação e acompanhamento.
+10. Importação em lote de credores via planilha + validação assistida por IA.
+
+**V1‑V2**
+11. Reconciliação automática com a contabilidade da devedora (entrada por SPED/ECD).
+12. Detecção de duplicidades por similaridade (mesmo crédito habilitado por cessionário e cedente).
+13. Workflow de cessão de crédito (art. 83, §5º — créditos cedidos preservam natureza).
+14. Incidente de classificação de crédito público (art. 7º‑A) — fluxo Fazenda Pública 30 dias.
+
+### E. Massa Falida / Massa Insolvente
+
+**MVP**
+1. **Inventário de bens** (móveis, imóveis, semoventes, intangíveis, créditos a receber, participações societárias, ativos digitais, criptoativos).
+2. Avaliação com laudo (valor de mercado, valor de liquidação, data de avaliação, perito responsável).
+3. **Termo de arrecadação** (art. 110), com fotos, geolocalização, lacre.
+4. **Lacração e custódia** — selo digital, hash do documento, cadeia de custódia.
+5. Restituições (art. 85 e 86) e pedidos de restituição em dinheiro (extraconcursal I‑C).
+6. Vinculação ativos ↔ ônus reais (penhora anterior, alienação fiduciária — não integra massa, art. 49 §3º).
+
+**V1‑V2**
+7. Integração com **ONR/RI Digital** para certidão e averbação em matrícula.
+8. Inventário de **ativos digitais** (domínios, e‑mails, redes sociais, dados, marcas no INPI).
+9. Mapa interativo de imóveis (Google Maps).
+10. Captação de receitas pendentes via Open Finance (consentimento do devedor) — extratos auxiliares.
+
+### F. Financeiro / Tesouraria da Massa
+
+**MVP**
+1. Múltiplas contas: **conta judicial** (CEF/BB), **conta operacional** (Asaas/banco comercial), **contas de reserva** (honorários do AJ — art. 24 §2º, 40%; tributos; custas).
+2. Lançamentos (entradas/saídas) com plano de contas falimentar e categorização IA‑assistida.
+3. Conciliação bancária via **Open Finance Brasil** (consentimento, FAPI, mTLS) ou OFX.
+4. Fluxo de caixa diário e projetado.
+5. **Pagamentos respeitando ordem legal**: sucessão automática extraconcursais (art. 84, I‑A → V) → concursais (art. 83, I → IX).
+6. Reservas: honorários AJ (com regra dos 40% do art. 24, §2º e Recomendação CNJ 141/2023), custas, tributos.
+7. **Folha de pagamento** (continuação provisória — manutenção das atividades).
+8. Tributos da massa (IRPJ, CSLL, PIS, COFINS, ISS, INSS) com regime apropriado e geração de DARF/GPS.
+
+**V1‑V2**
+9. Antecipação de recebíveis via Asaas para liquidez da massa.
+10. Conciliação automática de PIX recebido (chave da massa).
+11. Emissão de **NFS‑e municipal** para serviços prestados pela massa em continuação provisória.
+
+### G. Realização do Ativo
+
+**MVP**
+1. **Plano de venda** (art. 142) com cronograma, modalidade, valor mínimo.
+2. Modalidades: UPI (art. 60 e 142, V), leilão eletrônico, leilão presencial, propostas fechadas, venda direta.
+3. **Edital** com cláusulas obrigatórias da Lei 11.101/05 e Resolução CNJ 236/2016 (publicação em DJe e jornal local) — gerador automático.
+4. Cadastro de leiloeiros (matrícula, comissão, conta bancária); seleção por leilão.
+5. Acompanhamento de praças (1ª e 2ª) com captura automática de propostas.
+6. Lavratura de **auto/carta de arrematação** com hash e ICP‑Brasil.
+7. Pagamento e transferência (averbação na matrícula via ONR; transferência de veículo via DETRAN).
+
+**V1‑V2**
+8. Integração direta com plataformas de leilão (Sodré Santoro, Superbid, Mega Leilões, Frazão Leilões, Zukerman, Leilão VIP) — **sem padrão público comum: integração caso a caso ou via export CSV/XML**.
+9. Stress‑test de vencer credores qualificados (cram down do art. 58 §1º).
+10. Marketplace nativo de UPIs (vitrine com matchmaker AI).
+
+### H. Assembleia Geral de Credores (AGC)
+
+**MVP**
+1. Convocação e edital (art. 36) com publicação no DJe + site do AJ + e‑mail individual aos credores (Recomendação CNJ 72/2020 — site obrigatório do AJ).
+2. Lista de presença com QR‑code; check‑in eletrônico.
+3. **Habilitação de procuradores** com upload e validação de procuração.
+4. **Sistema de votação** presencial, **virtual** ou **híbrida** atendendo aos requisitos da **Recomendação CNJ 110/2021**:
+   - ampla participação de todos os credores;
+   - acessível por iOS/Android;
+   - impedimento de voto duplicado;
+   - permitir procurador registrar voto separado por representado;
+   - gravação obrigatória, preferencialmente conexão por ≥ 24h;
+   - canal de comunicação alternativo para problemas de acesso.
+5. **Cálculo automático de quórum por classe** (arts. 41 e 45):
+   - Classe I (trabalhistas): maioria simples por cabeça;
+   - Classes II, III, IV (garantia real, quirografários, ME‑EPP): cumulativa por cabeça **e** por valor.
+6. Geração de **ata** assinada por ICP‑Brasil dos presentes.
+7. Validação de cram down (art. 58 §1º) — três condições simultâneas.
+
+**V1‑V2**
+8. Votação antecipada por boletim eletrônico (art. 39 §4º, II).
+9. Tradução simultânea (insolvência transnacional).
+10. Streaming público (transparência) com sumarização AI ao vivo.
+
+### I. Plano de Recuperação Judicial
+
+**MVP**
+1. Upload e versionamento do plano (art. 53) com diff entre versões.
+2. **Análise pelo AJ** (art. 22, II, "h") em até 15 dias da apresentação — checklist automático: viabilidade, demonstrativo do art. 53, parecer.
+3. Acompanhamento de **cumprimento** — cronograma de pagamentos por classe, ANs, deságios, carências.
+4. **Supervisão por 2 anos** (art. 61) com geração de RAM (art. 22, II, "c") mensal.
+5. Workflow de **conversão em falência** (art. 73): descumprimento, deliberação assemblear, decisão judicial.
+6. Apresentação de plano alternativo pelos credores (art. 56 §4º).
+
+**V1‑V2**
+7. Plano de credores (art. 56 §4º‑A).
+8. Modificações de plano por força maior (art. 56‑B).
+9. Conciliação/mediação prévia (art. 20‑B).
+
+### J. Relatórios Periódicos
+
+**MVP** (modelos Anexos I‑V da Recomendação CNJ 72/2020)
+1. **RAM — Relatório Mensal de Atividades**:
+   - **RJ:** art. 22, II, "c" + Anexo II.
+   - **Falência:** art. 22, III, "p" (administração com receita/despesa).
+2. **Relatório da Fase Administrativa** ao fim do art. 7º (Anexo I).
+3. **Relatório de Andamentos Processuais** (Anexo III).
+4. **Relatório dos Incidentes Processuais** (Anexo IV).
+5. **Questionário de Falência** (Anexo V).
+6. **Relatório do art. 22, III, "e"** (causas e circunstâncias da falência) em até 40 dias.
+7. **Relatório Final do art. 155** (com indicação de ativo, passivo, pagamentos e responsabilidades).
+8. **Insolvência civil:** relatórios do art. 765 §1º do CPC/73.
+9. **Geração automatizada de minutas** com dados do sistema; templates configuráveis em Markdown/HTML; export PDF assinado ICP‑Brasil; versionamento.
+10. **Publicação automática no site do AJ** (obrigação da Rec. 72, art. 1º, §4º).
+
+**V1‑V2**
+11. Painel comparativo cross‑processo para auditoria de qualidade.
+12. Sumário executivo gerado por LLM com citação de páginas dos autos.
+
+### K. Prestação de Contas
+
+**MVP**
+1. Prestação de contas mensal (RJ — devedor; falência — AJ via art. 22, III, "p").
+2. **Prestação de contas final** do AJ (arts. 154 e 155) com demonstrativos contábeis.
+3. Anexos comprobatórios indexados (extratos, recibos, NFs).
+4. Workflow de aprovação judicial: protocolo → impugnação → decisão.
+5. Reserva dos 40% dos honorários do AJ (art. 24 §2º) liberada após art. 154/155 (Rec. 141/2023).
+
+### L. Comunicações Oficiais
+
+**MVP**
+1. Geração e envio de comunicações obrigatórias por evento processual:
+   - **RFB / e‑CAC** (decretação altera situação cadastral);
+   - **Junta Comercial** (JUCERJA, JUCESP etc. via REGIN);
+   - **CVM** se devedor for cia. aberta;
+   - **BACEN** (se for instituição financeira — art. 197 LRF c/c Lei 6.024);
+   - **INSS / PGFN** (DTE, CND);
+   - **ONR / Cartórios de RI** (averbação na matrícula);
+   - **CENPROT/IEPTB** (cancelamento de protestos pós‑decretação ou art. 52, II);
+   - **DETRAN, ANAC, Capitania**.
+2. Gestão de ofícios (numeração, controle de resposta, reiteração — art. 22, II, "m": prazo de 15 dias para responder).
+3. **Editais** (gerador a partir de templates) e publicação no **DJEN nacional** (Resolução CNJ 455/2022).
+4. Templates por tipo, com merge fields do processo.
+
+**V1‑V2**
+5. Integração direta com **REGIN** quando disponível.
+6. Recepção automática via **Domicílio Judicial Eletrônico** (CNJ) das citações destinadas aos AJs (CNPJ do escritório).
+
+### M. Documentos / GED
+
+**MVP**
+1. Repositório central com versionamento.
+2. **OCR** automático (AWS Textract, Google Document AI, ou Tesseract para volumes pequenos).
+3. **Classificação automática** por tipo (petição, decisão, edital, contrato, NF, etc.), fase processual e processo (LLM com função `classify`).
+4. **Assinatura digital ICP‑Brasil** (A1 importado ou A3 via WebPKI).
+5. **Integração com plataformas de assinatura**: D4Sign (API REST com tokenAPI/cryptKey), Clicksign (ISO 27001/27701), Autentique, ZapSign — escolha por cliente.
+6. Trilha de auditoria de cada documento (quem viu, quando, hash SHA‑256).
+
+**V1‑V2**
+7. Reconhecimento de partes/CPF/valores em peças (extração estruturada via Claude/GPT).
+8. Comparação de versões (diff visual de PDFs).
+
+### N. Análise Jurisprudencial e Normativa
+
+**MVP**
+1. Base de jurisprudência STF, STJ e TJs com atualização periódica via **Escavador/JusBrasil/Digesto**.
+2. Base de normativos: Leis (11.101, 14.112, CC, CPC), Resoluções e Recomendações do CNJ (72/2020, 110/2021, 393/2021, 141/2023, 455/2022, 466/2022 — Fonaref), Provimentos da CGJ/RJ aplicáveis.
+3. Vinculação automática de itens do catálogo a fundamentos normativos.
+4. Alertas de novas decisões/normas relevantes para tenant (assinatura por área).
+5. **Marcação de status: "verificar"** quando IA não tiver fonte oficial confirmada — regra explícita anti‑alucinação.
+
+**V1‑V2**
+6. RAG com pgvector sobre acórdãos pessoais do AJ.
+7. Indicador de probabilidade de êxito por matéria (jurimetria).
+
+### O. IA Jurídica
+
+**MVP**
+1. **Análise de documentos** com Claude Sonnet 4.5 (extrair valor, classe sugerida, partes, datas, fundamento).
+2. **Sugestão de classificação de créditos** (sempre revisada).
+3. **Geração de minutas** baseadas em templates oficiais (Anexos da Rec. 72/2020).
+4. **Resumo de processos** com citação de fls./ID dos eventos.
+5. **Alertas inteligentes** (descumprimento iminente, atos do art. 64, déficit de caixa).
+6. **Consulta jurisprudencial assistida** com RAG.
+7. **Anti‑alucinação obrigatória** — toda saída exibe (a) fonte com link/anchor verificável, (b) confidence, (c) carimbo "Sugestão da IA — requer validação humana antes de produzir efeito jurídico".
+8. Logs completos (prompt, contexto, resposta, modelo, custo) por 5 anos para auditoria.
+
+**V1‑V2**
+9. Agente autônomo (Claude com tool‑use) para execução de tarefas operacionais sob supervisão.
+10. *Voice* para ditado de despachos / atas.
+
+### P. Portal de Credores
+
+**MVP**
+1. Login externo com **gov.br** (OIDC) e e‑mail/senha + MFA.
+2. Acompanhamento da habilitação (status, fase, classe sugerida, valor reconhecido).
+3. Upload de documentos comprobatórios.
+4. Notificações por e‑mail/SMS/WhatsApp de eventos.
+5. Comunicação com a administração judicial (chat ticketizado).
+
+**V1‑V2**
+6. Pagamento direto de dividendos via PIX.
+7. Voto eletrônico antecipado (integração com Módulo H).
+8. Marketplace de cessão de crédito (B2B).
+
+### Q. Portal do Devedor
+
+**MVP**
+1. Login dedicado (RJ).
+2. Apresentação mensal de documentos contábeis (subir balancete, fluxo de caixa).
+3. Comunicação com AJ.
+4. Acompanhamento do cumprimento do plano (cronograma + alertas).
+
+**V1‑V2**
+5. Conexão Open Finance (consentimento) para extratos automáticos.
+6. Integração com sistemas contábeis (ContaAzul, Domínio, Calima, Conta Simples) via API ou import OFX/SPED.
+
+### R. BI e Dashboards
+
+**MVP**
+1. KPIs operacionais: processos ativos por fase, prazos vencendo nas próximas 7/30 dias, AGCs marcadas, tarefas atrasadas, % de RAMs entregues no prazo.
+2. KPIs financeiros: massa em caixa por processo, dividendos pagos por classe, honorários a receber, custo operacional.
+3. Indicadores de risco (heatmap CRITICO/ALTO/MEDIO/BAIXO).
+4. Relatórios gerenciais exportáveis (Excel, PDF).
+
+**V1‑V2**
+5. Benchmarks anônimos cross‑tenant.
+6. Painéis específicos para juízes/credores (público).
+
+### S. Administrativo do SaaS
+
+**MVP**
+1. Gestão de tenants (escritórios), planos, limites, status.
+2. **Billing** via Asaas (PIX/boleto/cartão recorrente, NF‑e), Stripe para internacionais.
+3. Suporte (Intercom, Crisp ou solução self‑hosted).
+4. **Audit log imutável** de toda ação (`who/what/when/where/old→new`) com integridade por hash chain — exigência LGPD e Resolução CNJ 522/2023.
+5. Dashboard de uso, custos por tenant (LLM, OCR, storage).
+
+---
+
+## 4. Integrações Obrigatórias e Disponíveis no Brasil
+
+> Para cada integração: status ("API pública oficial", "API via terceiros/agregador", "scraping necessário", "manual/portal apenas") e URL de referência.
+
+### 4.1 Tribunais e Justiça
+
+| Sistema | Status | URL/Referência |
+|---|---|---|
+| **DataJud — API Pública CNJ** | API pública oficial via APIKey (consulta de metadados e movimentações) | `https://datajud-wiki.cnj.jus.br/api-publica` (Resolução CNJ 331/2020, Portaria 160/2020) |
+| **MNI 2.2.x (Modelo Nacional de Interoperabilidade)** | SOAP/WSDL — peticionamento e consulta. **Cobertura desigual** entre tribunais; nem toda URL WSDL funciona | TRF6, TJMG, STF e outros — `https://docs.pje.jus.br/servicos-auxiliares/servico-mni-client/` |
+| **PDPJ‑Br / Jus.br** (Portal de Serviços) | API pública em construção (Resolução CNJ 455/2022) | `https://docs.pdpj.jus.br/` |
+| **Domicílio Judicial Eletrônico** | API REST oficial (instituições e PJ/PF) | `https://docs.pdpj.jus.br/servicos-negociais/domicilio-judicial-eletronico/` — obrigatório para União, Estados, Municípios e PJ |
+| **DJEN — Diário de Justiça Eletrônico Nacional** | API/portal — publicação e consulta de editais e intimações | Integrado ao PDPJ‑Br |
+| **PJe** | Acesso via MNI ou via `/sistemas` de cada tribunal (interfaces variam) | TRF, TRT e Justiça Estadual |
+| **eproc** (TRF4, TRF5, TJSP novo) | API restrita; geralmente via MNI ou agregadores | TRF4, TRF5, TJRS |
+| **eSAJ** (TJSP, TJMS, TJAM, TJCE, TJAL etc.) | Portal web; sem API pública padronizada — **scraping** ou agregadores | Cada TJ |
+| **Projudi** (TJPR, TJTO etc.) | Idem | Cada TJ |
+| **TJRJ** | Portal `tjrj.jus.br`; MNI 2.x parcial | Verificar com a Corregedoria/RJ |
+| **Agregadores (recomendado para 1ª onda)** | API pública | **Escavador**, **JusBrasil API**, **Digesto**, **Codilo**, **Judit**, **Projuris** — opção pragmática para cobertura nacional sem manter scrapers próprios |
+| **SisbaJud / RenaJud / InfoJud** | **NÃO acessível por AJ** — restrito a magistrados/servidores; o AJ recepciona resultados via PJe | `https://www.cnj.jus.br/sistemas/sisbajud/` |
+| **SEEU**, **BNMP 3.0**, **SNIPER**, **CNIB** (indisponibilidade de bens) | APIs do CNJ — relevantes em pontos específicos (ex.: CNIB para arrecadação) | `https://www.registrodeimoveis.org.br/cnib` |
+
+> **Recomendação prática para o MVP:** integrar **DataJud** + **um agregador comercial** (Escavador ou Judit) para cobertura ampla, e **MNI** para os tribunais críticos do RJ/SP/CE. Adicionar PJe direto/eproc conforme demanda.
+
+### 4.2 Receita Federal e Fiscais
+
+| Recurso | Status | Referência |
+|---|---|---|
+| Consulta CNPJ/CPF (cadastral) | API oficial gov.br Conecta + **BrasilAPI** (livre) | `https://www.gov.br/conecta/catalogo/apis/consulta-cnpj` ; `https://brasilapi.com.br/docs` |
+| CNDs Federais (PGFN/RFB) | Manual via e‑CAC; via terceiros (Sintegra API, Infosimples, Direct Data) | `https://www.gov.br/receitafederal` |
+| **e‑CAC procurações eletrônicas** | Manual (necessário para AJ acessar dados do falido) | `https://cav.receita.fazenda.gov.br` |
+| SPED (ECD/ECF/EFD) | Receita; XML produzido pela contabilidade do devedor | Importação manual |
+| **Domicílio Tributário Eletrônico (DTE)** | Apenas via e‑CAC | Aplicação manual |
+| PGFN | Consulta de dívidas via CND ou Regularize | `https://www.regularize.pgfn.gov.br` |
+| INSS / CRPS | Manual; APIs em transição |  |
+
+### 4.3 Cadastros e Registros
+
+| Órgão | Status | Referência |
+|---|---|---|
+| **Junta Comercial — REGIN** | API/integração estadual (JUCERJA, JUCESP, JUCEMG, etc.) | `https://www.gov.br/empresas-e-negocios/pt-br/redesim` |
+| **Cartório de RCPJ** | Manual / cartórios eletrônicos (CENSEC) |  |
+| **ONR — RI Digital** | **API pública oficial** (Manual de Integração) | `https://www.registrodeimoveis.org.br` ; `https://ridigital.org.br` |
+| **e‑Notariado / CNB** | Integração com RI Digital (escrituras → registro) | `https://www.notariado.org.br` |
+| **CENPROT/IEPTB** | Consulta nacional via API homologada (Direct Data); CENPROT‑SP via login gov.br + API limitada | `https://www.protestosp.com.br` ; `https://www.directd.com.br/protestos-ieptb` ; `https://infosimples.com/consultas/ieptb-protestos/` |
+| **DETRAN/RENAVAM** | Estadual; AJ via ofício; consulta via terceiros | Cada DETRAN |
+| **ANAC** (aeronaves — RAB) | Consulta pública limitada | `https://www.anac.gov.br/assuntos/setor-regulado/aeronaves` |
+| **Capitania dos Portos / Tribunal Marítimo** | Manual (registro de embarcações) |  |
+| **INPI** | Consulta via portal e Open Data INPI | `https://busca.inpi.gov.br` |
+| **CVM** | Sistema CVMWeb (manual) | `https://web.cvm.gov.br/app/cvmweb/` |
+| **BACEN — SCR / CCS** | Acesso indireto via instituição autorizada (SCD, BC); pelo titular via Registrato gov.br | `https://www.bcb.gov.br/cidadaniafinanceira/registrato` |
+| **ANATEL, ANEEL, ANP** | Portais públicos; manual |  |
+
+### 4.4 Bureaus de Crédito
+
+| Bureau | Status |
+|---|---|
+| Serasa Experian | API comercial (Serasa Experian Datalake) |
+| Boa Vista (SCPC) | API comercial |
+| Quod | API comercial |
+| SPC Brasil | API comercial |
+
+### 4.5 Bancos e Pagamentos
+
+| Sistema | Status |
+|---|---|
+| **Open Finance Brasil** (FAPI/OAuth 2.0/mTLS) | Em produção; participação obrigatória dos grandes bancos | `https://openfinancebrasil.org.br` |
+| **PIX (BACEN)** | Via instituição autorizada (Asaas, Efí Bank, Inter etc.) |
+| APIs bancárias por instituição (BB, Itaú, Bradesco, Santander, Caixa, Inter) | Próprias; doc pública parcial; necessário convênio |
+| **Asaas** | API REST completa (PIX/boleto/cartão/TED), webhooks, sandbox | `https://docs.asaas.com/docs/visao-geral` ; código bancário 461 |
+| Iugu, PagSeguro, Efí Bank, Stripe | APIs comerciais |
+
+### 4.6 Assinatura Digital e Identidade
+
+| Provedor | Status |
+|---|---|
+| **ICP‑Brasil (A1/A3)** | Padrão regulatório (MP 2.200‑2/2001, Lei 14.063/2020) |
+| **gov.br** (login único e assinatura) | OIDC + API de Assinatura (Lei 14.063, conta nível Prata/Ouro) |
+| **D4Sign** | API REST (tokenAPI + cryptKey) | `https://docapi.d4sign.com.br/` |
+| **Clicksign** | API REST + ISO 27001/27701 | `https://www.clicksign.com/` |
+| **Autentique**, **ZapSign**, **DocuSign** | APIs REST |
+
+### 4.7 Documentos e Cartórios
+
+- **e‑Notariado (CNB)** — escrituras digitais.
+- **ONR / RI Digital** — matrícula online, certidão, e‑Protocolo, Monitor Registral, Pesquisa de Bens, Indisponibilidade (CNIB).
+- **Cartórios eletrônicos** — varia por estado.
+- **CENSEC** — testamentos, procurações, atos notariais centralizados.
+
+### 4.8 Leilão Judicial
+
+Sem padrão público comum; integração caso a caso com:
+- **Sodré Santoro** (`sodresantoro.com.br`)
+- **Superbid Exchange** (`superbid.net`) — Canal Judicial unificado
+- **Mega Leilões**, **Leilão VIP**, **Frazão Leilões**, **Zukerman Leilões**, **Biasi Leilões**
+
+> **Resolução CNJ 236/2016** dispõe sobre o cadastro nacional de leiloeiros e regras gerais; o sistema deve gerar pacote padronizado (edital + lotes + fotos + laudo) que cada plataforma consuma manualmente.
+
+### 4.9 Comunicação
+
+- **WhatsApp Business API** — Twilio, Z‑API, Meta Cloud API.
+- **SMS** — Twilio, Zenvia.
+- **E‑mail transacional** — Resend (recomendado), Postmark, SendGrid.
+- **DJEN nacional** (publicação de editais) — via PDPJ‑Br.
+
+### 4.10 Contábil e Fiscal
+
+- **ContaAzul**, **Conta Simples**, **Calima**, **Domínio Sistemas** (importação contábil do devedor).
+- Emissão de **NFS‑e municipal** — APIs municipais (varia) ou intermediadoras (eNotas, NFE.io, TecnoSpeed).
+- DCTF, ECF, ECD — geração via contabilidade externa, importação XML.
+
+### 4.11 IA e Pesquisa Jurídica
+
+- **OpenAI** (GPT‑4o, GPT‑5).
+- **Anthropic Claude** (Sonnet/Opus 4.x — recomendado para textos longos jurídicos).
+- **Google Gemini** (multimodalidade).
+- **JusBrasil API**, **Escavador API** (jurisprudência e processos).
+- **Lexikon**, **LegisWeb** (normativos consolidados).
+
+### 4.12 Outras
+
+- **Google Workspace / Microsoft 365** — calendário e e‑mail (CalDAV, Graph API).
+- **Slack / Discord** — notificações de equipe (webhooks).
+- **CEP** — ViaCEP, BrasilAPI.
+- **Google Maps / Mapbox** — geolocalização de imóveis.
+- **gov.br CIN/CIP** — quando disponível, identidade nacional.
+
+---
+
+## 5. Modelo de Dados de Alto Nível
+
+Tabelas principais (todas com `tenant_id`, `created_at`, `updated_at`, `deleted_at`, RLS habilitado):
+
+```
+Tenant(id, name, document, plan, billing_status)
+User(id, tenant_id, email, role, oab_number, profile)
+Role(id, name) ; Permission(id, code) ; RolePermission(role_id, permission_id)
+
+Case(id, tenant_id, type[FALENCIA|RJ|RJ_MEEPP|REXT|INSOLV_CIV],
+     court, judge, case_number_cnj, debtor_party_id, status, phase,
+     filed_at, granted_at, conversion_at, closed_at)
+
+Party(id, tenant_id, kind[PF|PJ], document, name, address, contacts)
+CaseParty(case_id, party_id, role[DEVEDOR|CREDOR|MP|FAZENDA|JUIZO|AUXILIAR])
+
+Creditor(id, tenant_id, party_id, case_id, contact, bank_account)
+Credit(id, creditor_id, case_id, original_amount, recognized_amount,
+       suggested_class, final_class, status[PENDENTE|HABILITADO|IMPUGNADO|RETARDATARIO|EXCLUIDO],
+       basis_documents, classification_rationale)
+CreditClass(code[I|II|III|VI|VII|VIII|IX|EXTRA_I_A|...], description, order)
+Habilitation(id, credit_id, submitted_at, submitted_by, status)
+Divergence(id, credit_id, kind, description, decided_at, decision)
+Impugnation(id, credit_id, autuacao, plaintiff_id, status)
+
+Asset(id, case_id, type[MOVEL|IMOVEL|SEMOVENTE|INTANGIVEL|PARTICIPACAO|CRYPTO|ATIVO_DIGITAL],
+      description, location_geo, registration_data, market_value, liquidation_value,
+      arrecadacao_at, lacre_id, custody_holder)
+Sale(id, case_id, asset_ids[], modality[UPI|LEILAO_E|LEILAO_P|PROPOSTA|VENDA_DIRETA],
+     edital_doc_id, auctioneer_id, base_value, awarded_value, awarded_to_party_id,
+     scheduled_at, executed_at)
+
+BankAccount(id, case_id, kind[JUDICIAL|OPERACIONAL|RESERVA_AJ|RESERVA_TRIBUTOS],
+            bank_code, agency, number, balance)
+Transaction(id, account_id, type[ENTRADA|SAIDA], amount, category, counterparty,
+            payment_method[PIX|TED|BOLETO], document_id, occurred_at, recorded_by)
+
+Task(id, tenant_id, case_id, title, description, due_date, owner_id,
+     priority, risk[BAIXO|MEDIO|ALTO|CRITICO], status, source_event_id)
+Deadline(id, task_id, legal_basis, hard_deadline_at, alert_at)
+Event(id, case_id, kind, payload_json, occurred_at, source[MANUAL|PJE|DATAJUD|MNI|API_TJ])
+
+Document(id, tenant_id, case_id, kind, title, file_uri, file_hash_sha256, ocr_text,
+         signed_by[], icp_brasil_signature_data, version)
+
+Hearing(id, case_id, type[AGC|AUDIENCIA], modality[PRESENCIAL|VIRTUAL|HIBRIDA],
+        scheduled_at, location_or_url, recording_uri)
+AGCSession(id, hearing_id, classes_summoned[], started_at, ended_at, ata_doc_id)
+Vote(id, agc_id, creditor_id, class, choice[APROVA|REJEITA|ABSTEM], by_value, by_count)
+
+Communication(id, case_id, channel[OFICIO|EDITAL|EMAIL|SMS|WPP], target,
+              body_template_id, status, sent_at, evidence_doc_id)
+
+Report(id, case_id, kind[RAM|ART22_3_E|FINAL_155|FASE_ADM|INCIDENTES|ART765],
+       reference_period, version, status, file_doc_id, signed_at)
+
+AuditLog(id, tenant_id, actor_user_id, action, entity, entity_id,
+         old_state_json, new_state_json, ip, user_agent, hash_chain_prev, hash_chain_self)
+
+AISession(id, tenant_id, prompt, model, response, sources_cited, confidence,
+          cost_tokens, validated_by_user_id, created_at)
+```
+
+Observações:
+- **Histórico de classificações**: tabela própria `CreditClassificationHistory` com motivo (manual, sugestão IA, decisão judicial).
+- **Eventos de domínio** (`DomainEvent`) publicados via Inngest → consumidos por todos os módulos interessados.
+- **Soft delete + retenção LGPD** (após 5 anos do encerramento, anonimização automática).
+
+---
+
+## 6. Segurança e Compliance
+
+### 6.1 LGPD (Lei 13.709/2018)
+
+- Mapeamento de tratamento por finalidade (cadastro, cobrança, comunicação processual, IA).
+- **Bases legais**: cumprimento de obrigação legal/regulatória pelo controlador (Lei 11.101/05); execução de contrato (clientes do SaaS); legítimo interesse (segurança); consentimento (marketing).
+- Papel do escritório de AJ: **controlador**; SaaS: **operador**.
+- **DPO** designado e divulgado; canal de titular.
+- **Registro de operações de tratamento** (ROPA).
+- Termos de Uso e Política de Privacidade do SaaS específicos para sigilo profissional do advogado (art. 7º, II do Estatuto da OAB).
+
+### 6.2 Sigilo profissional e Marco Civil
+
+- Garantia contratual de sigilo (cláusula no MSA com tenants).
+- Logs e dados em datacenter brasileiro (Supabase região São Paulo) preferencialmente.
+- Não permitir acesso de equipe do SaaS a dados do tenant exceto sob ticket assinado com motivo.
+
+### 6.3 Boas práticas técnicas
+
+- Criptografia em repouso (Supabase usa AES‑256) e em trânsito (TLS 1.3).
+- Rotação de keys (KMS) trimestral.
+- **Audit log imutável com hash chain** atendendo Resolução CNJ 522/2023 sobre Modelo de Requisitos para Sistemas de Gestão de Documentos Judiciais.
+- **Backups** (PITR Supabase + snapshots R2 cross‑region) com testes de restore mensais.
+- **DR**: RPO 1h, RTO 4h.
+- Alinhamento a controles **ISO 27001** (Anexo A) e **SOC 2 Type II** (alvo no V2).
+- Segurança de aplicação: SAST (Semgrep), SCA (Snyk), DAST (OWASP ZAP), pentest anual.
+
+### 6.4 Resoluções CNJ aplicáveis (verificar publicação atualizada)
+
+- Resolução CNJ **331/2020** (DataJud) e Portaria 160/2020.
+- Resolução CNJ **335/2020** (PDPJ‑Br).
+- Resolução CNJ **393/2021** (Cadastro de AJs nos TJs).
+- Resolução CNJ **394/2021** (insolvência transnacional — cooperação direta).
+- Resolução CNJ **455/2022** (PSPJ, DJEN, Domicílio Judicial Eletrônico).
+- Resolução CNJ **466/2022** (Fonaref).
+- Resolução CNJ **522/2023** (Modelo de Requisitos para Sistemas de Gestão).
+- Recomendações **72/2020** (RAM, Anexos I‑V), **103/2021** (documentos para RJ), **109/2021** (comunicação de distribuição), **110/2021** (AGC virtual/híbrida) e **141/2023** (honorários do AJ).
+- Provimentos da CGJ/RJ: confirmar localmente; o **Provimento CGJ/RJ 32/2017** (e atualizações) regula procedimentos cartoriais — **verificar**.
+
+### 6.5 LGPD aplicada a IA
+
+- Banimento de uso de dados sensíveis para treino sem consentimento.
+- Anti‑alucinação obrigatória; logs por 5 anos.
+- Avaliação de impacto (DPIA) por funcionalidade de IA antes do GA.
+
+---
+
+## 7. Roadmap de Implementação
+
+### Fase 1 — MVP (3–4 meses)
+Núcleo para um AJ usar em produção em casos pequenos a médios.
+- Cadastros (Módulo A) + RBAC + Tenant.
+- Processos (B) com import por número CNJ via DataJud.
+- Prazos e Tarefas (C) com regras canônicas (15+45 do art. 7º; 60 do art. 53; 180 do art. 22 III "j"; 2 anos do art. 61).
+- Credores e classificação básica art. 83 / CC 955‑965 (D).
+- GED simples (M) com OCR via API.
+- RAM e relatórios essenciais (J) gerados a partir dos modelos da Rec. 72/2020.
+- Comunicações por e‑mail e ofícios em PDF assinado (L).
+- Audit log + LGPD + LGPD framework (S).
+- Billing Asaas (S).
+
+### Fase 2 — V1 (4–6 meses)
+- Tesouraria da Massa (F) com Open Finance + Asaas.
+- AGC virtual/híbrida (H) atendendo Rec. 110/2021.
+- Plano de RJ + supervisão (I).
+- Massa Falida — inventário e auto de arrecadação (E).
+- Integração MNI 2.x para os tribunais‑piloto (TJRJ, TJSP).
+- Portal do Credor (P) com gov.br.
+- BI básico (R).
+
+### Fase 3 — V2 (6–9 meses)
+- Realização do Ativo + integração com leiloeiros (G).
+- Portal do Devedor (Q).
+- Módulo de Jurisprudência e Normativos (N) com RAG.
+- IA Jurídica avançada (O) com agentes supervisionados.
+- Insolvência transnacional (Resolução 394/2021).
+- Integrações ONR, CENPROT, Junta Comercial.
+
+### Fase 4 — V3 (9–12 meses)
+- Marketplace de UPIs.
+- Open Finance avançado (iniciação de pagamentos).
+- Cessão de créditos B2B.
+- Mobile app (Expo + React Native) para credores.
+- Compliance ISO 27001 e SOC 2 Type II.
+- Multi‑idioma (EN, ES) para insolvência transnacional.
+
+---
+
+## 8. Riscos e Desafios
+
+| Categoria | Risco | Mitigação |
+|---|---|---|
+| **Regulatório** | Ausência de norma técnica oficial para SaaS de AJ; mudanças por novas Recomendações do CNJ ou reforma adicional da Lei 11.101 | Acompanhar Fonaref (Resolução 466/2022); arquitetura modular para absorver mudanças; comitê interno jurídico‑técnico |
+| **Integração** | APIs de tribunais instáveis ou inexistentes; MNI com cobertura desigual; eSAJ/Projudi sem API — **risco real e documentado** | Fallback para agregadores comerciais (Escavador, Judit); contratos com SLA; cache + retry exponencial; observabilidade (Checkly) |
+| **Adoção** | AJs conservadores; resistência a novo software; OAB/RJ sem padrão | Co‑design com 3‑5 AJs early adopters; importação de Excel/Word legados; treinamento e materiais |
+| **Performance** | RJs com 50 mil+ credores; OCR de 100 mil páginas; AGC ao vivo com 5 mil pessoas | Plano de carga; CDN; jobs longos no Trigger.dev; Postgres com partitioning por tenant |
+| **Compliance/LGPD** | Vazamento de dado processual (sigilo) | RLS + audit log + DPO; pen‑test anual; cláusula de SLA com cliente |
+| **IA / Alucinação** | LLM gerar classificação errada de crédito | Sempre rascunho; flag "Sugestão IA"; obrigatoriedade de revisão humana antes de qualquer submissão; logs imutáveis |
+| **Concorrência** | Astrea, Projuris, ADVBox dominam software jurídico geral; AJUD e específicos para AJs | Nicho fundo (somente AJ + insolvência civil); profundidade > largura; integrações exclusivas (DataJud + ONR + CENPROT + Asaas) |
+| **Conta da massa** | Bancos comerciais relutam em abrir conta para massa falida | Parcerias com Asaas (SCD/IP autorizada BACEN), Inter, Cora |
+| **Continuidade do negócio** | Indisponibilidade de Vercel/Supabase | Multi‑cloud (Vercel + Cloudflare + AWS) no V3; backups cross‑provider; runbook de DR |
+
+---
+
+## 9. Concorrência e Referências de Mercado
+
+### 9.1 Sistemas brasileiros de gestão de escritório jurídico (referência de UX)
+
+| Sistema | Característica relevante |
+|---|---|
+| **Astrea** (Aurum) | UX moderna, IA para tradução de andamentos em linguagem leiga, integração WhatsApp, sem API pública |
+| **Projuris ADV / Empresas / Contratos** | Ecossistema completo, BI, integrações via API (parceiro Power BI), forte em departamentos jurídicos |
+| **ADVBox** | API pública robusta, foco em automação e Kommo/CRM |
+| **Legal One (Thomson Reuters)** | Enterprise, jurisprudência integrada |
+| **CP‑Pro, SAJ ADV, Themis, Espaider, Datajuri, Juridiq** | Players relevantes; Datajuri tem destaque em jurimetria |
+
+**Lições de UX a extrair:** captura por OAB; timeline de andamentos; classificação automática; alertas multicanal; templates e mala direta de peças; integração com WhatsApp.
+
+### 9.2 Sistemas específicos para administração judicial brasileira
+
+- **AJUD** (`ajud.com.br`) — assessoria + tecnologia para AJs; plataforma própria de AGC virtual.
+- **Brasil Trustee**, **Credibilità**, **RLG‑AJ**, **Laspro**, **Capital Recovery** — escritórios‑plataforma com tecnologia interna; o mercado é fragmentado e há poucas soluções "horizontais" para outros AJs.
+
+> **Oportunidade de mercado**: não há, em 2026, um SaaS verticalizado, multi‑tenant e API‑first para o universo de AJs do Brasil. A maioria dos players internaliza a tecnologia. Esta é a tese central da oportunidade.
+
+### 9.3 Internacionais (referência funcional)
+
+| Player | Funcionalidades de referência |
+|---|---|
+| **Stretto** (`stretto.com`) — ex‑Bankruptcy Management Solutions | Trustee Suite; Best Case (case prep); claims management cloud‑native; e‑balloting; call center; cash management; **GenAI para corporate bankruptcy (lançado 2025)** |
+| **Epiq** (`dm.epiq11.com`) | Claims administration, noticing, solicitation, dataroom |
+| **Kroll** (ex‑**Prime Clerk**) | Restructuring, claims, corporate solicitation |
+| **Kurtzman Carson Consultants (KCC)** | Claims agent líder histórico |
+| **BMC Group**, **Donlin Recano**, **Omni Agent Solutions** | Mid‑market |
+| **Aryza** (Irlanda) | Insolvência + lending |
+| **Turnkey IPS** (UK) | Insolvência britânica |
+
+**Funções a importar:** e‑balloting; portal de credores; claims register público; data room para compradores em UPI; chamadas escriptadas para SAC do credor; geração massiva de notices; integração com print‑production.
+
+### 9.4 Plataformas de leilão judicial
+
+Sodré Santoro, Superbid Exchange, Mega Leilões, Frazão, Zukerman, Biasi, Leilão VIP — **sem API pública padronizada**. Estratégia: gerar pacote padrão (edital + lotes + fotos + laudo + cronograma) e enviar via portal/email; receber arrematação por integração ou upload manual.
+
+---
+
+## 10. Recomendação Final de Stack para Vibe Coding
+
+### 10.1 Comparativo
+
+| Ferramenta | Pontos fortes | Pontos fracos para SaaS jurídico |
+|---|---|---|
+| **Lovable** | Stack default Next.js + Supabase + shadcn; GitHub sync bidirecional; Visual Edits; Lovable Cloud (Supabase) embutido | Limites de credits; menos controle fino que Cursor |
+| **v0 by Vercel** | shadcn/ui nativo, gera componentes prod‑ready; Vercel deploy 1‑click | Menos full‑stack que Lovable |
+| **Bolt.new** | WebContainers in‑browser, prototipação rapidíssima; Bolt Cloud | Estabilidade variável; menos previsível |
+| **Replit Agent 3** | Full‑stack com 30+ integrações (Stripe etc.); roda 200 min autônomo | Custo imprevisível; vendor lock leve |
+| **Cursor** | Padrão dev profissional; multi‑model; Apply patches | Não é prototipador visual |
+| **Windsurf** | Cascade multi‑step; bom para refactor | Comunidade menor |
+| **Aider** | CLI; integra com Claude Code | Curva |
+| **Claude Code (Anthropic)** | Excelente para refactor multi‑arquivo; agente | Sem IDE visual |
+
+### 10.2 Recomendação final — fluxo de produção
+
+1. **Design e prototipação** no **Lovable** com Supabase real (cria os módulos A–D do MVP em 1–2 semanas com prompts bem escritos).
+2. **GitHub sync bidirecional** ativo desde o dia 1.
+3. Quando a complexidade de RLS, integrações (DataJud/MNI/Asaas) e jobs entrar em cena, mover desenvolvimento para **Cursor + Claude Code**, com Lovable usado para tarefas pontuais de UI.
+4. **Testing/QA** com Playwright dentro do Cursor; CI no GitHub Actions.
+5. **Deploy**: Vercel (front + Route Handlers), Supabase (DB/Auth/Storage), Cloudflare R2, Inngest, Resend, Asaas.
+6. **Observabilidade**: Sentry + PostHog + Better Stack desde a primeira release.
+
+### 10.3 Templates iniciais sugeridos
+
+- `create-t3-app` (Next.js + tRPC + Drizzle + NextAuth) — base sólida.
+- **Supabase Next.js Starter** (oficial) — para começar com Auth + RLS prontos.
+- **MakerKit Next.js + Supabase SaaS Kit** (pago) — multi‑tenant + billing prontos; acelera 2–3 meses se cliente comprar.
+- **Vercel AI SDK Templates** — AI chat, computer use, RAG — para acelerar Módulo O.
+
+---
+
+## Caveats e Avisos Finais
+
+- **Recomendações CNJ não têm força normativa cogente** (STF, MS 39.412/DF, decisão monocrática do Min. Luiz Fux, 1/2/2024 — citada em literatura especializada): elas são diretrizes mínimas; o sistema deve permitir parametrizar por comarca/juízo conforme entendimentos locais.
+- **MNI / PJe / eSAJ**: a integração depende de cada tribunal e pode quebrar; manter monitoramento ativo (Checkly) e canal direto com áreas de TI dos TJs/TRFs.
+- **Provimentos da CGJ/RJ aplicáveis ao Rio de Janeiro** devem ser conferidos diretamente no portal `tjrj.jus.br/corregedoria` antes do lançamento — texto desta pesquisa cita‑os como "verificar".
+- **APIs de SCR/CCS, e‑CAC, INSS** são restritas: não há acesso programático direto pelo AJ; o sistema deve organizar consultas manuais (via Registrato gov.br do titular ou via instituição financeira parceira).
+- **SisbaJud/RenaJud/InfoJud** são exclusivos do Poder Judiciário: o SaaS não consulta diretamente; recebe e organiza respostas do PJe.
+- **Plataformas de leilão**: a maioria dos grandes leiloeiros não possui API pública aberta; planejar integração caso a caso e pacote padronizado de edital/lotes.
+- **Recomendação CNJ 110/2021** estabelece requisitos para AGC virtual/híbrida, mas tem caráter recomendatório; a Lei 14.112/2020 introduziu base legal explícita para votação eletrônica (art. 39, §4º, II).
+- **Multas tributárias**: classificação no inciso VII do art. 83 (não mais III) — atenção à atualização da Lei 14.112/2020 nas regras do sistema.
+- **Insolvência civil** segue regida pelo CPC/1973 (arts. 748 a 786‑A) por força do art. 1.052 do CPC/2015 enquanto não houver lei específica; o sistema deve manter motor separado e jurisprudência específica.
+- **Custo dos LLMs**: monitorar tokens por tenant; pacote do plano deve cobrir uso médio; cobrança variável para uso extra.
+- **Concorrência**: AJs grandes tendem a desenvolver internamente — ofertar API e white‑label como diferencial.
+- **Insolvência transnacional**: respeitar a Resolução CNJ 394/2021 e os arts. 167‑A a 167‑Y — funcionalidade específica do V2/V3.
+
+> **Nota metodológica**: este relatório foi produzido a partir de fontes oficiais (planalto.gov.br, cnj.jus.br, gov.br, bcb.gov.br, registrodeimoveis.org.br, pdpj.jus.br, datajud-wiki.cnj.jus.br) e literatura especializada (Migalhas, ConJur, JOTA). Sempre que um nome de Resolução, Súmula ou Tema STJ não pôde ser confirmado em fonte oficial, foi marcado com "verificar". Os parágrafos sobre integrações com tribunais refletem o estado conhecido do MNI/PJe em 2025–2026, com a ressalva de cobertura desigual entre tribunais.
