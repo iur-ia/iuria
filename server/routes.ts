@@ -1,6 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 import { 
   insertClienteSchema, insertEquipeSchema, insertProcessoSchema,
   insertAtividadeSchema, insertDocumentoSchema, insertContaReceberSchema,
@@ -8,6 +11,75 @@ import {
   insertMonitoramentoSchema
 } from "@shared/schema";
 import { z } from "zod";
+
+// ==================== MULTER UPLOAD CONFIG ====================
+const uploadDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, uploadDir),
+    filename: (_req, file, cb) => {
+      const ts = Date.now();
+      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+      cb(null, `${ts}_${safe}`);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
+});
+
+// ==================== EXTRAÇÃO MARKDOWN HELPERS ====================
+
+interface ExtracaoResultado {
+  status: string;
+  markdown: string;
+  chars: number;
+  pages: number;
+  method: string;
+  erro?: string;
+}
+
+async function executarExtrator(caminho: string): Promise<ExtracaoResultado> {
+  const { spawn } = await import("child_process");
+  const path = await import("path");
+  const scriptPath = path.join(process.cwd(), "scraper", "extractor.py");
+
+  return new Promise((resolve) => {
+    const proc = spawn("python3", [scriptPath, caminho]);
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.on("close", () => {
+      try {
+        const jsonStart = stdout.indexOf("{");
+        const jsonEnd = stdout.lastIndexOf("}");
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          resolve(JSON.parse(stdout.slice(jsonStart, jsonEnd + 1)));
+        } else {
+          resolve({ status: "erro", markdown: "", chars: 0, pages: 0, method: "none", erro: stderr || "Sem saída do extrator" });
+        }
+      } catch {
+        resolve({ status: "erro", markdown: "", chars: 0, pages: 0, method: "none", erro: "Erro ao parsear resultado" });
+      }
+    });
+  });
+}
+
+function triggerExtracaoBackground(documentoId: string, caminho: string): void {
+  executarExtrator(caminho).then(async (resultado) => {
+    try {
+      await storage.updateDocumento(documentoId, {
+        conteudoMarkdown: resultado.markdown || null,
+        extracaoStatus: resultado.status,
+      });
+    } catch (err) {
+      console.error(`[extrator] Erro ao salvar markdown do doc ${documentoId}:`, err);
+    }
+  }).catch((err) => {
+    console.error(`[extrator] Erro ao extrair doc ${documentoId}:`, err);
+  });
+}
 
 const consultaProcessualSchema = z.object({
   tribunal: z.string().min(1, "Tribunal e obrigatorio"),
@@ -269,8 +341,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertDocumentoSchema.parse(req.body);
       const documento = await storage.createDocumento(data);
       res.status(201).json(documento);
+      // Dispara extração em background (não bloqueia o response)
+      if (documento.caminho) {
+        triggerExtracaoBackground(documento.id, documento.caminho);
+      }
     } catch (error) {
       res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  // ==================== UPLOAD DE ARQUIVO ====================
+  app.post("/api/documentos/upload", upload.single("arquivo"), async (req: Request, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      }
+      const caminho = req.file.path;
+      const nome = (req.body.nome as string) || req.file.originalname;
+      const tipo = (req.body.tipo as string) || "Outro";
+      const tamanho = (req.body.tamanho as string) || `${(req.file.size / 1024).toFixed(1)} KB`;
+
+      const documento = await storage.createDocumento({
+        nome,
+        tipo,
+        tamanho,
+        caminho,
+        extracaoStatus: "pendente",
+        versao: 1,
+      });
+
+      res.status(201).json(documento);
+
+      // Extração assíncrona em background
+      triggerExtracaoBackground(documento.id, caminho);
+    } catch (error) {
+      console.error("[upload]", error);
+      res.status(500).json({ error: "Erro ao processar upload" });
+    }
+  });
+
+  // ==================== OCR / EXTRAÇÃO MARKDOWN ====================
+  app.post("/api/documentos/:id/extrair-texto", async (req, res) => {
+    try {
+      const documento = await storage.getDocumento(req.params.id);
+      if (!documento) {
+        return res.status(404).json({ error: "Documento não encontrado" });
+      }
+      if (!documento.caminho) {
+        return res.status(400).json({ error: "Documento sem caminho de arquivo" });
+      }
+
+      const resultado = await executarExtrator(documento.caminho);
+
+      const updated = await storage.updateDocumento(documento.id, {
+        conteudoMarkdown: resultado.markdown || null,
+        extracaoStatus: resultado.status,
+      });
+
+      res.json({
+        id: documento.id,
+        status: resultado.status,
+        chars: resultado.chars,
+        pages: resultado.pages,
+        method: resultado.method,
+        erro: resultado.erro || null,
+        documento: updated,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao extrair texto do documento" });
     }
   });
 

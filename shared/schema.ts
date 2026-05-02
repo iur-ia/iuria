@@ -131,6 +131,8 @@ export const documentos = pgTable("documentos", {
   caminho: text("caminho"),
   enviadoPor: varchar("enviado_por").references(() => equipe.id),
   versao: integer("versao").notNull().default(1),
+  conteudoMarkdown: text("conteudo_markdown"),
+  extracaoStatus: text("extracao_status").notNull().default("pendente"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
