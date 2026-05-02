@@ -215,13 +215,34 @@ class PJeSSOProvider(CertificadoDigitalBase):
 
 if __name__ == "__main__":
     import json
-    provider = PJeSSOProvider(
-        redirect_uri="http://localhost:5000/api/pje/callback"
-    )
-    resultado = provider.iniciar_autorizacao()
-    print(json.dumps({
-        'url_autorizacao': resultado.url_autorizacao,
-        'code_verifier': resultado.code_verifier,
-        'state': resultado.state,
-        'provedor': provider.nome_provedor,
-    }))
+    import sys as _sys
+
+    cmd = _sys.argv[1] if len(_sys.argv) > 1 else "iniciar-auth"
+    redirect_uri = _sys.argv[2] if len(_sys.argv) > 2 else "http://localhost:5000/api/pje/callback"
+
+    provider = PJeSSOProvider(redirect_uri=redirect_uri)
+
+    if cmd == "iniciar-auth":
+        # argv[3] = cpf (optional, already sanitized by caller — passed as argument, not interpolated)
+        cpf = _sys.argv[3] if len(_sys.argv) > 3 else None
+        resultado = provider.iniciar_autorizacao(cpf=cpf)
+        print(json.dumps({
+            'url_autorizacao': resultado.url_autorizacao,
+            'code_verifier': resultado.code_verifier,
+            'state': resultado.state,
+            'provedor': provider.nome_provedor,
+        }))
+
+    elif cmd == "trocar-token":
+        # argv[3] = code, argv[4] = code_verifier (both passed as safe arguments, no interpolation)
+        if len(_sys.argv) < 5:
+            print(json.dumps({'erro': 'code e code_verifier são obrigatórios', 'sucesso': False}))
+            _sys.exit(1)
+        code = _sys.argv[3]
+        code_verifier = _sys.argv[4]
+        resultado = provider.trocar_code_por_token(code=code, code_verifier=code_verifier)
+        print(json.dumps(resultado.to_dict()))
+
+    else:
+        print(json.dumps({'erro': f'Comando desconhecido: {cmd}', 'sucesso': False}))
+        _sys.exit(1)

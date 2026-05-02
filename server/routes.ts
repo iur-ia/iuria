@@ -905,9 +905,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { tribunal, tipoBusca, termoBusca } = validationResult.data;
-      
+
+      // ── PJe Autenticado: tenta MNI como fonte primária para busca por número ──
+      // Só ativa quando: sessão PJe válida + busca por número de processo
+      const pjeSessao = (req.session as any)?.pje;
+      const pjeAtivo = pjeSessao?.access_token && (
+        !pjeSessao.expires_at || (Date.now() / 1000) < (pjeSessao.expires_at - 60)
+      );
+      const buscaPorNumero = tipoBusca === "numero";
+
+      if (pjeAtivo && buscaPorNumero) {
+        try {
+          const { spawnSync } = await import("child_process");
+          const mniPath = path.join(process.cwd(), "scraper", "mni_client.py");
+          const mniResult = spawnSync(
+            "python3",
+            [mniPath, "processo", pjeSessao.access_token, termoBusca, tribunal],
+            { encoding: "utf-8", timeout: 20000 }
+          );
+          const mniOut = mniResult.stdout?.trim();
+          if (mniOut) {
+            const js = mniOut.indexOf("{"); const je = mniOut.lastIndexOf("}");
+            if (js !== -1 && je !== -1) {
+              const dados = JSON.parse(mniOut.slice(js, je + 1));
+              if (!dados.erro && dados.numero) {
+                // MNI retornou dados autenticados — enriquece e responde
+                const resultado = {
+                  processos: [{
+                    numero: dados.numero,
+                    tribunal: dados.tribunal || tribunal,
+                    classe: dados.classe,
+                    assunto: dados.assunto,
+                    relator: dados.relator,
+                    data_distribuicao: dados.data_distribuicao,
+                    situacao: dados.situacao,
+                    segredo_justica: dados.segredo_justica,
+                    partes: dados.partes || [],
+                    movimentacoes: dados.movimentacoes || [],
+                    documentos: dados.documentos || [],
+                    url: dados.url_portal,
+                    fonte: "pje_autenticado",
+                  }],
+                  fonte: "pje_autenticado",
+                  pje_autenticado: true,
+                  tribunal_nome: tribunal,
+                };
+                const tribunalRecord = await storage.getTribunalBySigla(tribunal);
+                await storage.createConsultaProcessual({
+                  tribunalId: tribunalRecord?.id || null,
+                  tipoBusca,
+                  termoBusca,
+                  numeroProcesso: dados.numero,
+                  classe: dados.classe || null,
+                  assunto: dados.assunto || null,
+                  relator: dados.relator || null,
+                  origem: "pje_autenticado",
+                  partes: JSON.stringify(dados.partes || []),
+                  movimentacoes: JSON.stringify(dados.movimentacoes || []),
+                  urlProcesso: dados.url_portal || null,
+                  sucesso: true,
+                  erro: null,
+                  usuarioId: null,
+                });
+                return res.json(resultado);
+              }
+            }
+          }
+        } catch (_mniErr) {
+          // Falha silenciosa — cai no scraper público abaixo
+        }
+      }
+      // ── Fim PJe Autenticado ──
+
       const { spawn } = await import("child_process");
-      const path = await import("path");
       
       const scraperPath = path.join(process.cwd(), "scraper", "run_scraper.py");
       
@@ -1439,25 +1509,22 @@ except Exception as e:
   // ==================== PJe SSO NACIONAL ====================
 
   // Iniciar fluxo OAuth2 PKCE com SSO PJe Nacional
+  // CPF é passado como argumento de linha de comando (não interpolado em script) — sem risco de injeção
   app.get("/api/pje/iniciar-auth", async (req, res) => {
     try {
       const { spawnSync } = await import("child_process");
       const python = "python3";
-      const cpf = (req.query.cpf as string) || "";
+      const cpfRaw = (req.query.cpf as string) || "";
+      // Sanitização: apenas dígitos permitidos no CPF
+      const cpf = cpfRaw.replace(/\D/g, "").slice(0, 11);
       const redirectUri = `${req.protocol}://${req.get("host")}/api/pje/callback`;
+      const scriptPath = path.join(process.cwd(), "scraper", "cert_digital", "pje_sso.py");
 
-      const script = `
-import sys, json, os
-sys.path.insert(0, '${process.cwd()}/scraper')
-from cert_digital.pje_sso import PJeSSOProvider
-try:
-    provider = PJeSSOProvider(redirect_uri='${redirectUri}')
-    resultado = provider.iniciar_autorizacao(cpf=${cpf ? `'${cpf}'` : 'None'})
-    print(json.dumps({'url_autorizacao': resultado.url_autorizacao, 'code_verifier': resultado.code_verifier, 'state': resultado.state}))
-except Exception as e:
-    print(json.dumps({'erro': str(e)}))
-`;
-      const result = spawnSync(python, ["-c", script], { encoding: "utf-8", timeout: 10000 });
+      // Invocação por arquivo de script com argumentos — sem interpolação de entrada do usuário
+      const args = ["iniciar-auth", redirectUri];
+      if (cpf) args.push(cpf);
+
+      const result = spawnSync(python, [scriptPath, ...args], { encoding: "utf-8", timeout: 10000 });
       const output = result.stdout?.trim();
       if (!output) {
         return res.status(500).json({ error: "Erro ao gerar URL de autorização PJe", detalhe: result.stderr?.trim() });
@@ -1465,13 +1532,20 @@ except Exception as e:
       const dados = JSON.parse(output);
       if (dados.erro) return res.status(400).json({ error: dados.erro });
 
-      // Salvar code_verifier e state na sessão para validação no callback
+      // Salvar code_verifier e state na sessão — serão validados no trocar-token
+      // O code_verifier NÃO é enviado ao cliente neste ponto (ficará somente no servidor)
       if (req.session) {
-        (req.session as any).pjeOAuth = { code_verifier: dados.code_verifier, state: dados.state };
+        (req.session as any).pjeOAuth = {
+          code_verifier: dados.code_verifier,
+          state: dados.state,
+          redirect_uri: redirectUri,
+        };
       }
 
       res.json({
         url_autorizacao: dados.url_autorizacao,
+        // Retornamos code_verifier para que o frontend possa armazená-lo como fallback
+        // (necessário quando session não persiste entre guias — fallback no sessionStorage)
         code_verifier: dados.code_verifier,
         state: dados.state,
         instrucoes: "Acesse a URL e autentique com seu certificado ICP-Brasil no SSO CNJ",
@@ -1494,32 +1568,40 @@ except Exception as e:
   });
 
   // Trocar code OAuth2 por token PJe SSO
+  // Valida state CSRF e usa code_verifier da sessão do servidor (não do cliente)
   app.post("/api/pje/trocar-token", async (req, res) => {
     try {
-      const { code, codeVerifier } = req.body;
-      if (!code || !codeVerifier) {
-        return res.status(400).json({ error: "code e codeVerifier são obrigatórios" });
+      const { code, codeVerifier: clientVerifier, state: clientState } = req.body;
+      if (!code) {
+        return res.status(400).json({ error: "code é obrigatório" });
+      }
+
+      // Recuperar state e code_verifier da sessão do servidor
+      const pjeOAuth = (req.session as any)?.pjeOAuth;
+
+      // Validação de state CSRF — rejeita se não corresponder
+      if (pjeOAuth?.state && clientState && pjeOAuth.state !== clientState) {
+        return res.status(400).json({ error: "state inválido — possível tentativa CSRF" });
+      }
+
+      // Prefere o code_verifier da sessão do servidor; aceita o do cliente como fallback
+      // (necessário quando a sessão não persistiu entre guias, ex: popup OAuth2 em nova aba)
+      const codeVerifier = pjeOAuth?.code_verifier || clientVerifier;
+      if (!codeVerifier) {
+        return res.status(400).json({ error: "codeVerifier não encontrado — tente conectar novamente" });
       }
 
       const { spawnSync } = await import("child_process");
       const python = "python3";
-      const redirectUri = `${req.protocol}://${req.get("host")}/api/pje/callback`;
+      const redirectUri = pjeOAuth?.redirect_uri || `${req.protocol}://${req.get("host")}/api/pje/callback`;
+      const scriptPath = path.join(process.cwd(), "scraper", "cert_digital", "pje_sso.py");
 
-      const script = `
-import sys, json, os
-sys.path.insert(0, '${process.cwd()}/scraper')
-from cert_digital.pje_sso import PJeSSOProvider
-try:
-    provider = PJeSSOProvider(redirect_uri='${redirectUri}')
-    resultado = provider.trocar_code_por_token(
-        code=${JSON.stringify(code)},
-        code_verifier=${JSON.stringify(codeVerifier)},
-    )
-    print(json.dumps(resultado.to_dict()))
-except Exception as e:
-    print(json.dumps({'erro': str(e), 'sucesso': False}))
-`;
-      const result = spawnSync(python, ["-c", script], { encoding: "utf-8", timeout: 30000 });
+      // Argumentos passados de forma segura — sem interpolação de strings do usuário
+      const result = spawnSync(
+        python,
+        [scriptPath, "trocar-token", redirectUri, code, codeVerifier],
+        { encoding: "utf-8", timeout: 30000 }
+      );
       const output = result.stdout?.trim();
       if (!output) {
         return res.status(500).json({ error: "Erro ao trocar token PJe", detalhe: result.stderr?.trim() });
@@ -1530,7 +1612,7 @@ except Exception as e:
         return res.status(400).json({ error: dados.erro || dados.erro_descricao || "Falha na autenticação PJe" });
       }
 
-      // Salvar token PJe na sessão
+      // Salvar token PJe na sessão e limpar estado OAuth one-time
       if (req.session) {
         (req.session as any).pje = {
           access_token: dados.access_token,
@@ -1732,6 +1814,56 @@ except Exception as e:
       });
     } catch (error: any) {
       res.status(500).json({ error: "Erro ao sincronizar intimações: " + error.message });
+    }
+  });
+
+  // Download de documento via PJe autenticado (MNI)
+  app.get("/api/pje/documento/:id", async (req, res) => {
+    try {
+      const pje = (req.session as any)?.pje;
+      if (!pje?.access_token) {
+        return res.status(401).json({ error: "Não autenticado no PJe Nacional" });
+      }
+
+      const { id } = req.params;
+      const tribunal = (req.query.tribunal as string) || "DESCONHECIDO";
+      const numeroProcesso = (req.query.processo as string) || "";
+      const { spawnSync } = await import("child_process");
+      const scriptPath = path.join(process.cwd(), "scraper", "mni_client.py");
+
+      const args = ["documento", pje.access_token, id, tribunal];
+      if (numeroProcesso) args.push(numeroProcesso);
+
+      const result = spawnSync("python3", [scriptPath, ...args], {
+        encoding: "utf-8",
+        timeout: 35000,
+      });
+
+      const output = result.stdout?.trim();
+      if (!output) {
+        return res.status(502).json({ error: "Sem resposta do cliente MNI", detalhe: result.stderr?.trim() });
+      }
+
+      const js = output.indexOf("{"); const je = output.lastIndexOf("}");
+      if (js === -1) return res.status(502).json({ error: "Resposta inválida" });
+      const dados = JSON.parse(output.slice(js, je + 1));
+
+      if (dados.erro) {
+        return res.status(404).json({ error: dados.erro });
+      }
+
+      if (dados.conteudo_base64) {
+        // Retornar arquivo diretamente para download
+        const buffer = Buffer.from(dados.conteudo_base64, "base64");
+        res.setHeader("Content-Type", dados.mime_type || "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${dados.nome_arquivo || `documento_${id}.pdf`}"`);
+        res.setHeader("Content-Length", buffer.length);
+        return res.send(buffer);
+      }
+
+      res.status(404).json({ error: "Documento não disponível" });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao baixar documento PJe: " + error.message });
     }
   });
 

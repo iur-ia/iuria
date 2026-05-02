@@ -362,6 +362,81 @@ class MNIClientAutenticado:
         except Exception:
             return False
 
+    def baixar_documento(
+        self,
+        documento_id: str,
+        tribunal: str,
+        numero_processo: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Baixa o conteúdo de um documento de processo via PJe autenticado.
+
+        Tenta:
+          1. PJe REST do tribunal (endpoint de documentos)
+          2. CNJ Painel API (documentos consolidados)
+
+        Retorna dict com:
+          - 'conteudo_base64': conteúdo do arquivo em base64 (bytes → str)
+          - 'nome_arquivo': nome sugerido do arquivo
+          - 'mime_type': tipo MIME (application/pdf, etc.)
+          - 'tamanho': tamanho em bytes
+          - 'erro': mensagem de erro se não encontrado
+        """
+        import base64
+
+        # 1. Tentar PJe REST do tribunal
+        host = self.PJE_HOSTS.get(tribunal.upper())
+        if host:
+            urls_tentar = [
+                f"https://{host}/pje/api/v1/documentos/{documento_id}/download",
+                f"https://{host}/pjecnj/api/documentos/{documento_id}/conteudo",
+            ]
+            for url in urls_tentar:
+                try:
+                    resp = self.session.get(url, timeout=30, stream=True)
+                    if resp.ok and resp.content:
+                        conteudo = resp.content
+                        nome = (
+                            resp.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"\'')
+                            or f"documento_{documento_id}.pdf"
+                        )
+                        return {
+                            'documento_id': documento_id,
+                            'conteudo_base64': base64.b64encode(conteudo).decode('utf-8'),
+                            'nome_arquivo': nome,
+                            'mime_type': resp.headers.get('Content-Type', 'application/pdf').split(';')[0].strip(),
+                            'tamanho': len(conteudo),
+                            'fonte': 'pje_tribunal',
+                        }
+                except Exception as e:
+                    print(f"[mni] Falha ao baixar de {url}: {e}", file=sys.stderr)
+
+        # 2. Tentar CNJ Painel API
+        url_painel = f"{self.CNJ_PAINEL_BASE}/api/v1/documentos/{documento_id}/download"
+        try:
+            resp = self.session.get(url_painel, timeout=30, stream=True)
+            if resp.ok and resp.content:
+                conteudo = resp.content
+                nome = (
+                    resp.headers.get('Content-Disposition', '').split('filename=')[-1].strip('"\'')
+                    or f"documento_{documento_id}.pdf"
+                )
+                return {
+                    'documento_id': documento_id,
+                    'conteudo_base64': base64.b64encode(conteudo).decode('utf-8'),
+                    'nome_arquivo': nome,
+                    'mime_type': resp.headers.get('Content-Type', 'application/pdf').split(';')[0].strip(),
+                    'tamanho': len(conteudo),
+                    'fonte': 'cnj_painel',
+                }
+        except Exception as e:
+            print(f"[mni] Falha ao baixar do painel CNJ: {e}", file=sys.stderr)
+
+        return {
+            'documento_id': documento_id,
+            'erro': f'Documento {documento_id} não encontrado no tribunal {tribunal} ou no Painel CNJ',
+        }
+
 
 def main():
     """CLI: python mni_client.py <acao> <access_token> [args...]"""
@@ -395,6 +470,17 @@ def main():
         apenas_nao_lidas = (sys.argv[3].lower() == 'true') if len(sys.argv) > 3 else True
         intimacoes = client.listar_intimacoes(apenas_nao_lidas=apenas_nao_lidas)
         print(json.dumps([i.to_dict() for i in intimacoes]))
+
+    elif acao == 'documento':
+        # Uso: mni_client.py documento <token> <documento_id> <tribunal> [numero_processo]
+        if len(sys.argv) < 5:
+            print(json.dumps({'erro': 'Uso: mni_client.py documento <token> <id> <tribunal> [numero]'}))
+            sys.exit(1)
+        documento_id = sys.argv[3]
+        tribunal = sys.argv[4]
+        numero_processo = sys.argv[5] if len(sys.argv) > 5 else None
+        resultado = client.baixar_documento(documento_id, tribunal, numero_processo)
+        print(json.dumps(resultado))
 
     else:
         print(json.dumps({'erro': f'Ação desconhecida: {acao}'}))
