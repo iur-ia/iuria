@@ -1,3 +1,4 @@
+import type { AnyNode } from "domhandler";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult } from "./types";
 import { DATAJUD_AUTH } from "./types";
 import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
@@ -115,7 +116,7 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
       timeoutSecs: 30,
     });
 
-    $(".classElemento, .documento, tr.fundocinza, tr.fundocinzaclaro").each((_: number, el: any) => {
+    $(".classElemento, .documento, tr.fundocinza, tr.fundocinzaclaro").each((_: number, el: AnyNode) => {
       const elRef = $(el);
       const ementa = elRef.find(".ementa, .docEmentaFraseTxt, td.docEmentaTxt").text().trim();
       const relator = elRef.find(".docRelator, .relator").text().replace(/Relator[:\s]*/i, "").trim();

@@ -9,7 +9,7 @@ import { identificarTribunalCNJ, TRIBUNAIS, DATAJUD_AUTH } from "./types";
 import { makeLogger, fetchJson, withRetry } from "./utils";
 import { buscarProcessoEsaj } from "./esajScraper";
 import { buscarProcessoStj, buscarJurisprudenciaStj } from "./stjScraper";
-import { buscarJurisprudenciaStf } from "./stfScraper";
+import { buscarJurisprudenciaStf, buscarProcessoStf } from "./stfScraper";
 import { buscarProcessoTrf, buscarJurisprudenciaTrf } from "./trfScraper";
 import { buscarCnpj } from "./cnpjScraper";
 import { buscarDoutrina } from "./doutrinaScraper";
@@ -129,8 +129,10 @@ export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<
     processo = r.data;
     sourceLabel = r.sourceLabel;
   } else if (tribunal.sigla === "STF") {
-    processo = await buscarDataJudGenerico(numero, "STF", log);
-    sourceLabel = "STF — DataJud";
+    const r = await buscarProcessoStf(numero);
+    logs.push(...r.logs);
+    processo = r.data;
+    sourceLabel = r.sourceLabel;
   } else if (tribunal.sigla.startsWith("TRF")) {
     const r = await buscarProcessoTrf(numero, tribunal);
     logs.push(...r.logs);

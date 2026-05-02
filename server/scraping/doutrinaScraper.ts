@@ -1,3 +1,4 @@
+import type { AnyNode } from "domhandler";
 import type { DoutrinaItem, ScrapingResult } from "./types";
 import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
 import { crawlUrl, crawlUrls } from "./crawler";
@@ -18,7 +19,7 @@ async function buscarCnjBiblioteca(q: string, log: (l: "info" | "warn" | "error"
 
     const items: DoutrinaItem[] = [];
 
-    $(".artifact-title, .ds-artifact-item, li.ds-artifact-item").each((_: number, el: any) => {
+    $(".artifact-title, .ds-artifact-item, li.ds-artifact-item").each((_: number, el: AnyNode) => {
       const elRef = $(el);
       const titulo = elRef.find("a.artifact-title, h4, .artifact-title a").first().text().trim();
       const autor = elRef.find(".artifact-info span, .author").first().text().trim();
@@ -59,7 +60,7 @@ async function buscarLexML(q: string, log: (l: "info" | "warn" | "error", m: str
 
     const items: DoutrinaItem[] = [];
 
-    $("record, srw\\:record, zs\\:record").each((_: number, el: any) => {
+    $("record, srw\\:record, zs\\:record").each((_: number, el: AnyNode) => {
       const elRef = $(el);
       const titulo = elRef.find("dc\\:title, title").first().text().trim();
       const autor = elRef.find("dc\\:creator, creator").first().text().trim();
@@ -130,7 +131,7 @@ async function buscarStfDoutrina(q: string, log: (l: "info" | "warn" | "error", 
 
     const items: DoutrinaItem[] = [];
 
-    $(".resultado-pesquisa a, .pesquisa-resultado a, li.resultado a").each((_: number, el: any) => {
+    $(".resultado-pesquisa a, .pesquisa-resultado a, li.resultado a").each((_: number, el: AnyNode) => {
       const elRef = $(el);
       const titulo = elRef.text().trim();
       const link = elRef.attr("href") || "";

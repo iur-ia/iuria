@@ -1,51 +1,58 @@
 /**
- * Crawlee-based HTTP crawler engine.
+ * Crawlee-based HTTP crawler engine (CheerioCrawler).
  *
  * Uses CheerioCrawler (cheerio + HTTP) with:
- *  - MemoryStorage (no disk required)
+ *  - MemoryStorage (no disk required, suitable for serverless/Replit)
  *  - Per-domain rate limiting (maxRequestsPerMinute)
- *  - Session pool for anti-bot UA rotation
+ *  - Session pool for User-Agent rotation as anti-bot measure
  *  - Exponential-backoff retries (maxRequestRetries)
  *  - Configurable concurrency and timeout
+ *  - ProxyConfiguration for ScraperAPI integration
  *
- * Playwright/browser crawling is intentionally not used on this deployment
- * target (Replit); CheerioCrawler is equivalent for the HTML-rendered portals
- * targeted (e-SAJ, SCON, LexML, CNJ Biblioteca).  JS-heavy portals are reached
- * through ScraperAPI as the rendering proxy.
+ * For JS-heavy portals (STF, PJe), see playwrightCrawler.ts which wraps
+ * Crawlee's PlaywrightCrawler with graceful degradation.
  */
 
-import { CheerioCrawler, Configuration, log as crawleeLog } from "crawlee";
+import {
+  CheerioCrawler,
+  Configuration,
+  ProxyConfiguration,
+  log as crawleeLog,
+} from "crawlee";
 import { MemoryStorage } from "@crawlee/memory-storage";
+import type { CheerioCrawlingContext } from "@crawlee/cheerio";
 import { randomUserAgent } from "./utils";
 
 crawleeLog.setLevel(crawleeLog.LEVELS.WARNING);
 
+/** Cheerio API type from Crawlee's bundled cheerio. */
+export type CrawleeCheerioAPI = CheerioCrawlingContext["$"];
+
 export interface CrawlResult {
   url: string;
   html: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  $: any;
+  $: CrawleeCheerioAPI;
   statusCode: number;
 }
 
 interface CrawlOptions {
-  /** Max requests per minute per domain (default: 30) */
+  /** Max requests per minute (default: 30) */
   maxRequestsPerMinute?: number;
   /** Max concurrent requests (default: 2) */
   maxConcurrency?: number;
   /** Per-request timeout in seconds (default: 25) */
   timeoutSecs?: number;
-  /** Max retry attempts (default: 3, with exponential backoff) */
+  /** Max retry attempts with exponential backoff (default: 3) */
   maxRetries?: number;
-  /** Extra headers to send with request */
+  /** Extra headers to send */
   headers?: Record<string, string>;
-  /** Proxy URL (e.g. ScraperAPI URL) */
+  /** Proxy URL (e.g. ScraperAPI endpoint) */
   proxyUrl?: string;
 }
 
 /**
- * Fetch a single URL using Crawlee CheerioCrawler.
- * Returns parsed cheerio object, raw HTML, and status code.
+ * Fetch a single URL via Crawlee CheerioCrawler.
+ * Returns parsed cheerio handle, raw HTML, and HTTP status code.
  */
 export async function crawlUrl(url: string, opts: CrawlOptions = {}): Promise<CrawlResult> {
   const {
@@ -62,6 +69,10 @@ export async function crawlUrl(url: string, opts: CrawlOptions = {}): Promise<Cr
   let result: CrawlResult | null = null;
   let crawlError: Error | null = null;
 
+  const proxyConfiguration = proxyUrl
+    ? new ProxyConfiguration({ proxyUrls: [proxyUrl] })
+    : undefined;
+
   const crawler = new CheerioCrawler(
     {
       maxRequestsPerMinute,
@@ -69,24 +80,24 @@ export async function crawlUrl(url: string, opts: CrawlOptions = {}): Promise<Cr
       requestHandlerTimeoutSecs: timeoutSecs,
       maxRequestRetries: maxRetries,
       retryOnBlocked: true,
-      ...(proxyUrl ? { proxyConfiguration: { newUrlFunction: async () => proxyUrl } as any } : {}),
-      async requestHandler({ $: cheerioParsed, body, request, response }: any) {
-        const html = typeof body === "string" ? body : body.toString("utf-8");
+      ...(proxyConfiguration ? { proxyConfiguration } : {}),
+      async requestHandler(ctx: CheerioCrawlingContext) {
+        const { $: cheerioParsed, body, request, response } = ctx;
+        const html = typeof body === "string" ? body : (body as Buffer).toString("utf-8");
         result = {
           url: (request.loadedUrl || request.url) as string,
           html,
           $: cheerioParsed,
-          statusCode: (response?.statusCode ?? 200) as number,
+          statusCode: response?.statusCode ?? 200,
         };
       },
-      async failedRequestHandler({ request, error }: any) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        crawlError = err;
-        console.warn(`[crawler] Failed ${request.url}: ${err.message}`);
+      failedRequestHandler({ request, error }) {
+        crawlError = error instanceof Error ? error : new Error(String(error));
+        console.warn(`[crawler] Failed ${request.url}: ${crawlError.message}`);
       },
       additionalMimeTypes: ["application/json", "application/xml", "text/xml"],
       preNavigationHooks: [
-        async ({ request }) => {
+        async ({ request }: { request: CheerioCrawlingContext["request"] }) => {
           request.headers = {
             "User-Agent": randomUserAgent(),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -109,8 +120,8 @@ export async function crawlUrl(url: string, opts: CrawlOptions = {}): Promise<Cr
 }
 
 /**
- * Fetch multiple URLs concurrently using a single Crawlee CheerioCrawler run.
- * Returns an array of results in the same order as the input URLs (null for failures).
+ * Fetch multiple URLs concurrently via a single Crawlee CheerioCrawler run.
+ * Returns results in the same order as the input URLs; null for failures.
  */
 export async function crawlUrls(urls: string[], opts: CrawlOptions = {}): Promise<(CrawlResult | null)[]> {
   if (urls.length === 0) return [];
@@ -127,6 +138,10 @@ export async function crawlUrls(urls: string[], opts: CrawlOptions = {}): Promis
   const config = new Configuration({ storageClient: new MemoryStorage() });
   const results = new Map<string, CrawlResult>();
 
+  const proxyConfiguration = proxyUrl
+    ? new ProxyConfiguration({ proxyUrls: [proxyUrl] })
+    : undefined;
+
   const crawler = new CheerioCrawler(
     {
       maxRequestsPerMinute,
@@ -134,22 +149,23 @@ export async function crawlUrls(urls: string[], opts: CrawlOptions = {}): Promis
       requestHandlerTimeoutSecs: timeoutSecs,
       maxRequestRetries: maxRetries,
       retryOnBlocked: true,
-      ...(proxyUrl ? { proxyConfiguration: { newUrlFunction: async () => proxyUrl } as any } : {}),
-      async requestHandler({ $: cheerioParsed, body, request, response }: any) {
-        const html = typeof body === "string" ? body : body.toString("utf-8");
+      ...(proxyConfiguration ? { proxyConfiguration } : {}),
+      async requestHandler(ctx: CheerioCrawlingContext) {
+        const { $: cheerioParsed, body, request, response } = ctx;
+        const html = typeof body === "string" ? body : (body as Buffer).toString("utf-8");
         results.set(request.url as string, {
           url: (request.loadedUrl || request.url) as string,
           html,
           $: cheerioParsed,
-          statusCode: (response?.statusCode ?? 200) as number,
+          statusCode: response?.statusCode ?? 200,
         });
       },
-      async failedRequestHandler({ request, error }: any) {
+      failedRequestHandler({ request, error }) {
         const msg = error instanceof Error ? error.message : String(error);
         console.warn(`[crawler] Failed ${request.url}: ${msg}`);
       },
       preNavigationHooks: [
-        async ({ request }) => {
+        async ({ request }: { request: CheerioCrawlingContext["request"] }) => {
           request.headers = {
             "User-Agent": randomUserAgent(),
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

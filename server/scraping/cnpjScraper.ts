@@ -1,5 +1,7 @@
+import type { AnyNode } from "domhandler";
 import type { EmpresaData, ScrapingResult } from "./types";
 import { fetchJson, makeLogger, withRetry } from "./utils";
+import { crawlUrl } from "./crawler";
 
 interface BrasilApiCnpj {
   cnpj: string;
@@ -97,6 +99,67 @@ function empresaToMarkdown(e: EmpresaData): string {
   return lines.filter(l => l.trim()).join("\n");
 }
 
+/**
+ * Scraping direto do portal servicos.receita.fazenda.gov.br/Servicos/cnpjreva/
+ * Usado como terceiro fallback após BrasilAPI e ReceitaWS.
+ * O portal exige CAPTCHA na consulta completa, mas a rota de validação
+ * retorna dados básicos sem autenticação.
+ */
+async function buscarViaReceitaFederalPortal(
+  cnpj: string,
+  log: (l: "info" | "warn" | "error", m: string) => void
+): Promise<EmpresaData | null> {
+  log("info", `Tentando portal Receita Federal diretamente para CNPJ ${cnpj}`);
+
+  try {
+    const url = `https://servicos.receita.fazenda.gov.br/Servicos/cnpjreva/valida.asp?cnpj=${cnpj}`;
+    const { $ } = await crawlUrl(url, {
+      maxRequestsPerMinute: 5,
+      maxConcurrency: 1,
+      timeoutSecs: 30,
+      maxRetries: 1,
+    });
+
+    // Extração de campos do portal RF
+    const razaoSocial = $("td:contains('Nome Empresarial')").next().text().trim()
+      || $(".razao-social, #razaoSocial").text().trim()
+      || $("input[name='nomeEmpresarial']").val() as string || "";
+
+    const situacao = $("td:contains('Situação Cadastral')").next().text().trim()
+      || $(".situacao, #situacao").text().trim() || "";
+
+    const uf = $("td:contains('UF')").next().text().trim().slice(0, 2) || "";
+    const municipio = $("td:contains('Município')").next().text().trim() || "";
+
+    const atividades: string[] = [];
+    $("td:contains('Atividade Econômica')").each((_: number, el: AnyNode) => {
+      const val = $(el).next().text().trim();
+      if (val) atividades.push(val);
+    });
+
+    if (!razaoSocial && !situacao) {
+      log("warn", `Portal RF: campos esperados não encontrados para CNPJ ${cnpj}`);
+      return null;
+    }
+
+    log("info", `Portal RF: dados básicos extraídos para CNPJ ${cnpj} — ${razaoSocial || "sem nome"}`);
+
+    return {
+      cnpj,
+      razaoSocial: razaoSocial || cnpj,
+      situacao: situacao || undefined,
+      uf: uf || undefined,
+      municipio: municipio || undefined,
+      atividadePrincipal: atividades[0] || undefined,
+      atividadesSecundarias: atividades.slice(1),
+      socios: [],
+    };
+  } catch (err) {
+    log("warn", `Portal Receita Federal falhou: ${err}`);
+    return null;
+  }
+}
+
 export async function buscarCnpj(cnpjRaw: string): Promise<ScrapingResult<EmpresaData>> {
   const t0 = Date.now();
   const { logs, log } = makeLogger();
@@ -104,6 +167,7 @@ export async function buscarCnpj(cnpjRaw: string): Promise<ScrapingResult<Empres
 
   log("info", `Consultando CNPJ ${cnpj} via BrasilAPI`);
 
+  // ── Tentativa 1: BrasilAPI ────────────────────────────────────────────────
   try {
     const data = await withRetry(() =>
       fetchJson<BrasilApiCnpj>(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`, { timeoutMs: 15000 })
@@ -112,7 +176,7 @@ export async function buscarCnpj(cnpjRaw: string): Promise<ScrapingResult<Empres
     const empresa = brasilApiToEmpresa(data);
     const md = empresaToMarkdown(empresa);
 
-    log("info", `CNPJ ${cnpj} encontrado: ${empresa.razaoSocial}`);
+    log("info", `CNPJ ${cnpj} encontrado via BrasilAPI: ${empresa.razaoSocial}`);
 
     return {
       source: "brasilapi",
@@ -124,41 +188,69 @@ export async function buscarCnpj(cnpjRaw: string): Promise<ScrapingResult<Empres
     };
   } catch (err) {
     log("warn", `BrasilAPI falhou: ${err}. Tentando ReceitaWS...`);
-
-    try {
-      const fallback = await withRetry(() =>
-        fetchJson<{ status: string; message?: string; nome?: string; fantasia?: string; situacao?: string; cnpj?: string; atividade_principal?: { text: string }[]; qsa?: { nome: string; qual: string }[]; logradouro?: string; municipio?: string; uf?: string; abertura?: string }>(
-          `https://receitaws.com.br/v1/cnpj/${cnpj}`,
-          { timeoutMs: 15000 }
-        )
-      );
-
-      if (fallback.status === "ERROR") throw new Error(fallback.message || "Erro ReceitaWS");
-
-      const empresa: EmpresaData = {
-        cnpj,
-        razaoSocial: fallback.nome || cnpj,
-        nomeFantasia: fallback.fantasia || undefined,
-        situacao: fallback.situacao || undefined,
-        atividadePrincipal: fallback.atividade_principal?.[0]?.text || undefined,
-        endereco: [fallback.logradouro, fallback.municipio, fallback.uf].filter(Boolean).join(", ") || undefined,
-        dataAbertura: fallback.abertura || undefined,
-        socios: (fallback.qsa || []).map(s => ({ nome: s.nome, qualificacao: s.qual })),
-      };
-
-      log("info", `CNPJ ${cnpj} encontrado via ReceitaWS: ${empresa.razaoSocial}`);
-
-      return {
-        source: "receita_federal",
-        sourceLabel: "ReceitaWS (Receita Federal)",
-        data: empresa,
-        markdownContent: empresaToMarkdown(empresa),
-        durationMs: Date.now() - t0,
-        logs,
-      };
-    } catch (err2) {
-      log("error", `Fallback ReceitaWS falhou: ${err2}`);
-      throw new Error(`Não foi possível consultar o CNPJ ${cnpj}: ${err2}`);
-    }
   }
+
+  // ── Tentativa 2: ReceitaWS API ────────────────────────────────────────────
+  try {
+    const fallback = await withRetry(() =>
+      fetchJson<{
+        status: string;
+        message?: string;
+        nome?: string;
+        fantasia?: string;
+        situacao?: string;
+        cnpj?: string;
+        atividade_principal?: { text: string }[];
+        qsa?: { nome: string; qual: string }[];
+        logradouro?: string;
+        municipio?: string;
+        uf?: string;
+        abertura?: string;
+      }>(
+        `https://receitaws.com.br/v1/cnpj/${cnpj}`,
+        { timeoutMs: 15000 }
+      )
+    );
+
+    if (fallback.status === "ERROR") throw new Error(fallback.message || "Erro ReceitaWS");
+
+    const empresa: EmpresaData = {
+      cnpj,
+      razaoSocial: fallback.nome || cnpj,
+      nomeFantasia: fallback.fantasia || undefined,
+      situacao: fallback.situacao || undefined,
+      atividadePrincipal: fallback.atividade_principal?.[0]?.text || undefined,
+      endereco: [fallback.logradouro, fallback.municipio, fallback.uf].filter(Boolean).join(", ") || undefined,
+      dataAbertura: fallback.abertura || undefined,
+      socios: (fallback.qsa || []).map(s => ({ nome: s.nome, qualificacao: s.qual })),
+    };
+
+    log("info", `CNPJ ${cnpj} encontrado via ReceitaWS: ${empresa.razaoSocial}`);
+
+    return {
+      source: "receita_federal",
+      sourceLabel: "ReceitaWS (Receita Federal)",
+      data: empresa,
+      markdownContent: empresaToMarkdown(empresa),
+      durationMs: Date.now() - t0,
+      logs,
+    };
+  } catch (err2) {
+    log("warn", `ReceitaWS falhou: ${err2}. Tentando portal Receita Federal diretamente...`);
+  }
+
+  // ── Tentativa 3: Scraping direto do portal servicos.receita.fazenda.gov.br ─
+  const rfEmpresa = await buscarViaReceitaFederalPortal(cnpj, log);
+  if (rfEmpresa) {
+    return {
+      source: "receita_federal",
+      sourceLabel: "Portal Receita Federal (scraping direto)",
+      data: rfEmpresa,
+      markdownContent: empresaToMarkdown(rfEmpresa),
+      durationMs: Date.now() - t0,
+      logs,
+    };
+  }
+
+  throw new Error(`Não foi possível consultar o CNPJ ${cnpj} em nenhuma das fontes disponíveis`);
 }

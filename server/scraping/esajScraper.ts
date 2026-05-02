@@ -1,3 +1,4 @@
+import type { AnyNode } from "domhandler";
 import type { ProcessoScrapeData, ScrapingResult, TribunalInfo } from "./types";
 import { DATAJUD_AUTH } from "./types";
 import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
@@ -108,13 +109,13 @@ async function buscarViaEsajPortal(
     });
 
     const partes: string[] = [];
-    $(".unj-tag__actor, .nomeParteEAdvogado, .nomeParte, td.direita").each((_: number, el: any) => {
+    $(".unj-tag__actor, .nomeParteEAdvogado, .nomeParte, td.direita").each((_: number, el: AnyNode) => {
       const t = $(el).text().trim();
       if (t && t.length > 2) partes.push(t);
     });
 
     const movimentacoes: ProcessoScrapeData["movimentacoes"] = [];
-    $("tbody tr, .movimentacaoProcesso tr").each((_: number, el: any) => {
+    $("tbody tr, .movimentacaoProcesso tr").each((_: number, el: AnyNode) => {
       const cells = $(el).find("td");
       if (cells.length >= 2) {
         const data = $(cells[0]).text().trim();
@@ -127,7 +128,7 @@ async function buscarViaEsajPortal(
 
     // Documentos com link público
     const documentos: ProcessoScrapeData["documentos"] = [];
-    $("a[href*='abrirDocumento'], a[href*='download'], a.linkDocumento").each((_: number, el: any) => {
+    $("a[href*='abrirDocumento'], a[href*='download'], a.linkDocumento").each((_: number, el: AnyNode) => {
       const titulo = $(el).text().trim() || "Documento";
       const link = $(el).attr("href");
       if (link) {
