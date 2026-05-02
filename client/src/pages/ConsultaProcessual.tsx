@@ -299,6 +299,11 @@ export default function ConsultaProcessual() {
     refetchInterval: 120000,
   });
 
+  const { data: pjeStatus } = useQuery<{ autenticado: boolean; valido?: boolean; nome_titular?: string }>({
+    queryKey: ["/api/pje/status"],
+    refetchInterval: 120000,
+  });
+
   const debouncedTermo = useDebounce(termoBusca, 500);
   
   useEffect(() => {
@@ -494,6 +499,8 @@ export default function ConsultaProcessual() {
                       ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
                       : resultado.fonte === "tecjustica"
                       ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20"
+                      : resultado.fonte === "pje_autenticado"
+                      ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20"
                       : "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20"
                   }
                   data-testid="badge-fonte-dados"
@@ -502,10 +509,22 @@ export default function ConsultaProcessual() {
                     <Database className="h-3 w-3 mr-1" />
                   ) : resultado.fonte === "tecjustica" ? (
                     <Zap className="h-3 w-3 mr-1" />
+                  ) : resultado.fonte === "pje_autenticado" ? (
+                    <Fingerprint className="h-3 w-3 mr-1" />
                   ) : (
                     <Wifi className="h-3 w-3 mr-1" />
                   )}
                   {resultado.fonte_label || resultado.fonte}
+                </Badge>
+              )}
+              {pjeStatus?.autenticado && pjeStatus?.valido && (
+                <Badge
+                  variant="secondary"
+                  className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20"
+                  data-testid="badge-pje-autenticado"
+                >
+                  <Fingerprint className="h-3 w-3 mr-1" />
+                  PJe Autenticado
                 </Badge>
               )}
               <Badge variant={resultado.processos.length > 0 ? "default" : "secondary"} data-testid="badge-total-encontrados">

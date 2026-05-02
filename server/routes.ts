@@ -1,6 +1,17 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+
+// Augment Express Request to include session (added by express-session middleware)
+declare module "express-serve-static-core" {
+  interface Request {
+    session: Record<string, any> & {
+      certificado?: Record<string, any>;
+      pje?: Record<string, any>;
+      pjeOAuth?: Record<string, any>;
+    };
+  }
+}
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -1423,6 +1434,305 @@ except Exception as e:
     }
     
     res.redirect("/configuracoes?cert_error=callback_invalido");
+  });
+
+  // ==================== PJe SSO NACIONAL ====================
+
+  // Iniciar fluxo OAuth2 PKCE com SSO PJe Nacional
+  app.get("/api/pje/iniciar-auth", async (req, res) => {
+    try {
+      const { spawnSync } = await import("child_process");
+      const python = "python3";
+      const cpf = (req.query.cpf as string) || "";
+      const redirectUri = `${req.protocol}://${req.get("host")}/api/pje/callback`;
+
+      const script = `
+import sys, json, os
+sys.path.insert(0, '${process.cwd()}/scraper')
+from cert_digital.pje_sso import PJeSSOProvider
+try:
+    provider = PJeSSOProvider(redirect_uri='${redirectUri}')
+    resultado = provider.iniciar_autorizacao(cpf=${cpf ? `'${cpf}'` : 'None'})
+    print(json.dumps({'url_autorizacao': resultado.url_autorizacao, 'code_verifier': resultado.code_verifier, 'state': resultado.state}))
+except Exception as e:
+    print(json.dumps({'erro': str(e)}))
+`;
+      const result = spawnSync(python, ["-c", script], { encoding: "utf-8", timeout: 10000 });
+      const output = result.stdout?.trim();
+      if (!output) {
+        return res.status(500).json({ error: "Erro ao gerar URL de autorização PJe", detalhe: result.stderr?.trim() });
+      }
+      const dados = JSON.parse(output);
+      if (dados.erro) return res.status(400).json({ error: dados.erro });
+
+      // Salvar code_verifier e state na sessão para validação no callback
+      if (req.session) {
+        (req.session as any).pjeOAuth = { code_verifier: dados.code_verifier, state: dados.state };
+      }
+
+      res.json({
+        url_autorizacao: dados.url_autorizacao,
+        code_verifier: dados.code_verifier,
+        state: dados.state,
+        instrucoes: "Acesse a URL e autentique com seu certificado ICP-Brasil no SSO CNJ",
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao iniciar auth PJe: " + error.message });
+    }
+  });
+
+  // Callback OAuth2 — recebe code e redireciona para o frontend
+  app.get("/api/pje/callback", async (req, res) => {
+    const { code, state, error } = req.query;
+    if (error) {
+      return res.redirect(`/configuracoes?pje_error=${encodeURIComponent(String(error))}`);
+    }
+    if (code) {
+      return res.redirect(`/configuracoes?pje_code=${encodeURIComponent(String(code))}&pje_state=${encodeURIComponent(String(state || ""))}`);
+    }
+    res.redirect("/configuracoes?pje_error=callback_invalido");
+  });
+
+  // Trocar code OAuth2 por token PJe SSO
+  app.post("/api/pje/trocar-token", async (req, res) => {
+    try {
+      const { code, codeVerifier } = req.body;
+      if (!code || !codeVerifier) {
+        return res.status(400).json({ error: "code e codeVerifier são obrigatórios" });
+      }
+
+      const { spawnSync } = await import("child_process");
+      const python = "python3";
+      const redirectUri = `${req.protocol}://${req.get("host")}/api/pje/callback`;
+
+      const script = `
+import sys, json, os
+sys.path.insert(0, '${process.cwd()}/scraper')
+from cert_digital.pje_sso import PJeSSOProvider
+try:
+    provider = PJeSSOProvider(redirect_uri='${redirectUri}')
+    resultado = provider.trocar_code_por_token(
+        code=${JSON.stringify(code)},
+        code_verifier=${JSON.stringify(codeVerifier)},
+    )
+    print(json.dumps(resultado.to_dict()))
+except Exception as e:
+    print(json.dumps({'erro': str(e), 'sucesso': False}))
+`;
+      const result = spawnSync(python, ["-c", script], { encoding: "utf-8", timeout: 30000 });
+      const output = result.stdout?.trim();
+      if (!output) {
+        return res.status(500).json({ error: "Erro ao trocar token PJe", detalhe: result.stderr?.trim() });
+      }
+
+      const dados = JSON.parse(output);
+      if (!dados.sucesso) {
+        return res.status(400).json({ error: dados.erro || dados.erro_descricao || "Falha na autenticação PJe" });
+      }
+
+      // Salvar token PJe na sessão
+      if (req.session) {
+        (req.session as any).pje = {
+          access_token: dados.access_token,
+          refresh_token: dados.refresh_token,
+          expires_at: dados.expires_at,
+          nome_titular: dados.nome_titular,
+          cpf_titular: dados.cpf_titular,
+          email_titular: dados.email_titular,
+        };
+        delete (req.session as any).pjeOAuth;
+      }
+
+      res.json({
+        sucesso: true,
+        nome_titular: dados.nome_titular,
+        cpf_titular: dados.cpf_titular,
+        expires_at: dados.expires_at,
+        mensagem: "Autenticado no PJe Nacional com sucesso!",
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao autenticar no PJe: " + error.message });
+    }
+  });
+
+  // Status da autenticação PJe SSO
+  app.get("/api/pje/status", async (req, res) => {
+    try {
+      const pje = (req.session as any)?.pje;
+      if (!pje?.access_token) {
+        return res.json({ autenticado: false, mensagem: "Não conectado ao PJe Nacional" });
+      }
+      const agora = Date.now() / 1000;
+      const valido = pje.expires_at ? pje.expires_at > agora + 60 : true;
+      res.json({
+        autenticado: true,
+        valido,
+        nome_titular: pje.nome_titular,
+        cpf_titular: pje.cpf_titular,
+        expires_at: pje.expires_at,
+        mensagem: valido
+          ? `Conectado ao PJe Nacional${pje.nome_titular ? " — " + pje.nome_titular : ""}`
+          : "Token PJe expirado — reconecte",
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao verificar status PJe" });
+    }
+  });
+
+  // Desconectar PJe SSO
+  app.delete("/api/pje/desconectar", async (req, res) => {
+    try {
+      if (req.session) {
+        delete (req.session as any).pje;
+        delete (req.session as any).pjeOAuth;
+      }
+      res.json({ sucesso: true, mensagem: "Desconectado do PJe Nacional" });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao desconectar PJe" });
+    }
+  });
+
+  // Buscar processo via PJe autenticado (MNI)
+  app.get("/api/pje/processo/:numero", async (req, res) => {
+    try {
+      const pje = (req.session as any)?.pje;
+      if (!pje?.access_token) {
+        return res.status(401).json({ error: "Não autenticado no PJe Nacional" });
+      }
+
+      const { numero } = req.params;
+      const tribunal = (req.query.tribunal as string) || "DESCONHECIDO";
+
+      const { spawn } = await import("child_process");
+      const scriptPath = path.join(process.cwd(), "scraper", "mni_client.py");
+
+      const proc = spawn("python3", [scriptPath, "processo", pje.access_token, numero, tribunal]);
+      let stdout = ""; let stderr = "";
+      proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+      const resposta = await new Promise<any>((resolve) => {
+        const timer = setTimeout(() => { proc.kill(); resolve({ erro: "Timeout MNI" }); }, 25000);
+        proc.on("close", () => {
+          clearTimeout(timer);
+          try {
+            const js = stdout.indexOf("{"); const je = stdout.lastIndexOf("}");
+            if (js !== -1) resolve(JSON.parse(stdout.slice(js, je + 1)));
+            else resolve({ erro: stderr || "Sem resposta" });
+          } catch { resolve({ erro: "Erro ao parsear resposta" }); }
+        });
+      });
+
+      if (resposta.erro) {
+        return res.status(502).json({ error: resposta.erro });
+      }
+      res.json({ ...resposta, fonte: "pje_autenticado", fonte_label: "PJe Autenticado" });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao consultar processo via PJe: " + error.message });
+    }
+  });
+
+  // Listar intimações via PJe SSO (CNJ Painel do Advogado)
+  app.get("/api/pje/intimacoes", async (req, res) => {
+    try {
+      const pje = (req.session as any)?.pje;
+      if (!pje?.access_token) {
+        return res.status(401).json({ error: "Não autenticado no PJe Nacional" });
+      }
+
+      const apenasNaoLidas = req.query.nao_lidas !== "false";
+      const { spawn } = await import("child_process");
+      const scriptPath = path.join(process.cwd(), "scraper", "mni_client.py");
+      const proc = spawn("python3", [scriptPath, "intimacoes", pje.access_token, String(apenasNaoLidas)]);
+
+      let stdout = ""; let stderr = "";
+      proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+      const intimacoes = await new Promise<any>((resolve) => {
+        const timer = setTimeout(() => { proc.kill(); resolve([]); }, 20000);
+        proc.on("close", () => {
+          clearTimeout(timer);
+          try {
+            const as_ = stdout.indexOf("["); const ae = stdout.lastIndexOf("]");
+            if (as_ !== -1) resolve(JSON.parse(stdout.slice(as_, ae + 1)));
+            else resolve([]);
+          } catch { resolve([]); }
+        });
+      });
+
+      res.json({ intimacoes, total: intimacoes.length });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao buscar intimações PJe: " + error.message });
+    }
+  });
+
+  // Sincronizar intimações PJe com o módulo de Monitoramento
+  app.post("/api/pje/sincronizar-intimacoes", async (req, res) => {
+    try {
+      const pje = (req.session as any)?.pje;
+      if (!pje?.access_token) {
+        return res.status(401).json({ error: "Não autenticado no PJe Nacional" });
+      }
+
+      const { spawn } = await import("child_process");
+      const scriptPath = path.join(process.cwd(), "scraper", "mni_client.py");
+      const proc = spawn("python3", [scriptPath, "intimacoes", pje.access_token, "true"]);
+
+      let stdout = ""; let stderr = "";
+      proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+      proc.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+      const intimacoes: any[] = await new Promise((resolve) => {
+        const timer = setTimeout(() => { proc.kill(); resolve([]); }, 20000);
+        proc.on("close", () => {
+          clearTimeout(timer);
+          try {
+            const as_ = stdout.indexOf("["); const ae = stdout.lastIndexOf("]");
+            if (as_ !== -1) resolve(JSON.parse(stdout.slice(as_, ae + 1)));
+            else resolve([]);
+          } catch { resolve([]); }
+        });
+      });
+
+      let sincronizados = 0;
+      let jaExistentes = 0;
+
+      for (const int_ of intimacoes) {
+        if (!int_.numero_processo || !int_.tribunal) continue;
+        const existente = await storage.getMonitoramentoByNumero(int_.numero_processo);
+        if (existente) {
+          jaExistentes++;
+          // Incrementar contador de novos andamentos para gerar alerta
+          await storage.updateMonitoramento(existente.id, {
+            novosAndamentos: (existente.novosAndamentos || 0) + 1,
+          });
+        } else {
+          await storage.createMonitoramento({
+            numeroProcesso: int_.numero_processo,
+            tribunal: int_.tribunal,
+            urlProcesso: int_.url_processo || undefined,
+            frequenciaMinutos: 60,
+            ultimaChecagem: new Date(),
+            proximaChecagem: new Date(Date.now() + 60 * 60 * 1000),
+            contadorAndamentos: 0,
+            novosAndamentos: 1,
+            ativo: true,
+          });
+          sincronizados++;
+        }
+      }
+
+      res.json({
+        sucesso: true,
+        total_intimacoes: intimacoes.length,
+        sincronizados,
+        ja_existentes: jaExistentes,
+        mensagem: `${intimacoes.length} intimação(ões) processada(s): ${sincronizados} nova(s) adicionada(s) ao monitoramento`,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao sincronizar intimações: " + error.message });
+    }
   });
 
   // Verificar status da ScraperAPI

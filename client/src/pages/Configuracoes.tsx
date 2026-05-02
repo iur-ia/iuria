@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,19 @@ import { Separator } from "@/components/ui/separator";
 import {
   Shield, CheckCircle, XCircle, AlertCircle, ExternalLink, Loader2,
   Key, Globe, RefreshCw, LogOut, Fingerprint, Wifi, WifiOff, Info,
+  Scale, Bell, Zap,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+
+interface StatusPJe {
+  autenticado: boolean;
+  valido?: boolean;
+  nome_titular?: string;
+  cpf_titular?: string;
+  expires_at?: number;
+  mensagem?: string;
+}
 
 interface StatusCertificado {
   configurado: boolean;
@@ -57,13 +67,18 @@ function formatarExpiry(expiresAt: number) {
 export default function Configuracoes() {
   const { toast } = useToast();
 
+  const queryClient = useQueryClient();
+
   const [provedorSelecionado, setProvedorSelecionado] = useState<string>("");
   const [cpfCertificado, setCpfCertificado] = useState<string>("");
+  const [cpfPje, setCpfPje] = useState<string>("");
   const [oabNumero, setOabNumero] = useState<string>("");
   const [oabEstado, setOabEstado] = useState<string>("");
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [pendingCodeVerifier, setPendingCodeVerifier] = useState<string | null>(null);
   const [pendingProvedor, setPendingProvedor] = useState<string | null>(null);
+  const [pjePendingCode, setPjePendingCode] = useState<string | null>(null);
+  const [pjePendingVerifier, setPjePendingVerifier] = useState<string | null>(null);
 
   const { data: statusCert, refetch: refetchCert, isLoading: loadingCert } = useQuery<StatusCertificado>({
     queryKey: ["/api/certificado/status"],
@@ -72,6 +87,11 @@ export default function Configuracoes() {
 
   const { data: provedoresData, isLoading: loadingProvedores } = useQuery<{ provedores: Provedor[] }>({
     queryKey: ["/api/certificado/provedores"],
+  });
+
+  const { data: statusPje, refetch: refetchPje, isLoading: loadingPje } = useQuery<StatusPJe>({
+    queryKey: ["/api/pje/status"],
+    refetchInterval: 120000,
   });
 
   const { data: statusScraper, refetch: refetchScraper, isLoading: loadingScraper } = useQuery<StatusScraperAPI>({
@@ -163,10 +183,84 @@ export default function Configuracoes() {
     },
   });
 
+  // ---- PJe SSO mutations ----
+  const iniciarAuthPjeMutation = useMutation({
+    mutationFn: async (cpf?: string) => {
+      const url = cpf
+        ? `/api/pje/iniciar-auth?cpf=${encodeURIComponent(cpf)}`
+        : "/api/pje/iniciar-auth";
+      const res = await fetch(url);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.url_autorizacao) {
+        sessionStorage.setItem("pje_code_verifier", data.code_verifier);
+        window.open(data.url_autorizacao, "_blank", "width=680,height=780,noopener");
+        toast({
+          title: "Portal SSO PJe aberto",
+          description: "Autentique com seu certificado ICP-Brasil ou Gov.br no portal CNJ. Ao concluir, você será redirecionado aqui.",
+        });
+      } else {
+        toast({ title: "Erro", description: data.error || "Não foi possível gerar URL PJe", variant: "destructive" });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao iniciar auth PJe", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const trocarTokenPjeMutation = useMutation({
+    mutationFn: async (data: { code: string; codeVerifier: string }) => {
+      const res = await apiRequest("POST", "/api/pje/trocar-token", data);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.sucesso) {
+        toast({ title: "PJe Nacional conectado!", description: `Bem-vindo, ${data.nome_titular || "advogado"}. Acesso SSO ativo.` });
+        setPjePendingCode(null);
+        setPjePendingVerifier(null);
+        sessionStorage.removeItem("pje_code_verifier");
+        refetchPje();
+        queryClient.invalidateQueries({ queryKey: ["/api/pje/status"] });
+      } else {
+        toast({ title: "Falha ao autenticar PJe", description: data.error || "Código inválido", variant: "destructive" });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro ao validar código PJe", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const desconectarPjeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/pje/desconectar", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "PJe desconectado", description: "Sessão SSO PJe encerrada." });
+      refetchPje();
+    },
+  });
+
+  const sincronizarIntimacoesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/pje/sincronizar-intimacoes", {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Intimações sincronizadas!", description: data.mensagem || "Monitoramento atualizado." });
+    },
+    onError: () => {
+      toast({ title: "Erro ao sincronizar", description: "Verifique sua conexão PJe.", variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const certCode = params.get("cert_code");
     const certError = params.get("cert_error");
+    const pjeCode = params.get("pje_code");
+    const pjeError = params.get("pje_error");
 
     if (certCode) {
       const savedVerifier = sessionStorage.getItem("cert_code_verifier");
@@ -187,6 +281,24 @@ export default function Configuracoes() {
       });
       window.history.replaceState({}, "", "/configuracoes");
     }
+
+    if (pjeCode) {
+      const savedVerifier = sessionStorage.getItem("pje_code_verifier");
+      if (savedVerifier) {
+        setPjePendingCode(pjeCode);
+        setPjePendingVerifier(savedVerifier);
+      }
+      window.history.replaceState({}, "", "/configuracoes");
+    }
+
+    if (pjeError) {
+      toast({
+        title: "Erro na autenticação PJe",
+        description: decodeURIComponent(pjeError),
+        variant: "destructive",
+      });
+      window.history.replaceState({}, "", "/configuracoes");
+    }
   }, []);
 
   useEffect(() => {
@@ -198,6 +310,12 @@ export default function Configuracoes() {
       });
     }
   }, [pendingCode]);
+
+  useEffect(() => {
+    if (pjePendingCode && pjePendingVerifier) {
+      trocarTokenPjeMutation.mutate({ code: pjePendingCode, codeVerifier: pjePendingVerifier });
+    }
+  }, [pjePendingCode]);
 
   const provedorInfo = provedoresData?.provedores.find(p => p.id === provedorSelecionado);
 
@@ -407,6 +525,195 @@ export default function Configuracoes() {
               <li>Aprove no app — a autenticação é concluída automaticamente</li>
               <li>O sistema poderá acessar processos sigilosos e intimações em seu nome</li>
             </ol>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* === PJe SSO NACIONAL === */}
+      <Card data-testid="card-pje-nacional">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Scale className="h-5 w-5" />
+            PJe Nacional — SSO CNJ
+          </CardTitle>
+          <CardDescription>
+            Autentique-se no sistema SSO do CNJ para acessar processos e intimações em todos
+            os tribunais PJe do país. Usa seu certificado ICP-Brasil ou conta Gov.br.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Status atual */}
+          {loadingPje ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Verificando status PJe...</span>
+            </div>
+          ) : statusPje?.autenticado ? (
+            <div className={`flex items-start justify-between gap-4 p-4 rounded-md ${
+              statusPje.valido
+                ? "bg-purple-500/10 border border-purple-500/20"
+                : "bg-yellow-500/10 border border-yellow-500/20"
+            }`} data-testid="status-pje-conectado">
+              <div className="flex items-start gap-3">
+                {statusPje.valido ? (
+                  <CheckCircle className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                )}
+                <div className="space-y-1">
+                  <p className="font-medium text-sm">
+                    {statusPje.valido ? "Conectado ao PJe Nacional" : "Sessão PJe expirada"}
+                  </p>
+                  {statusPje.nome_titular && (
+                    <p className="text-sm text-muted-foreground">
+                      Titular: <span className="font-medium">{statusPje.nome_titular}</span>
+                    </p>
+                  )}
+                  {statusPje.cpf_titular && (
+                    <p className="text-sm text-muted-foreground">
+                      CPF: {formatarCPF(statusPje.cpf_titular)}
+                    </p>
+                  )}
+                  {statusPje.expires_at && (
+                    <p className="text-xs text-muted-foreground">
+                      Expira em: {formatarExpiry(statusPje.expires_at)}
+                    </p>
+                  )}
+                  <Badge variant="outline" className="text-xs">SSO CNJ — jusbr</Badge>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => desconectarPjeMutation.mutate()}
+                disabled={desconectarPjeMutation.isPending}
+                data-testid="button-desconectar-pje"
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                Desconectar
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-start gap-3 p-4 bg-muted/50 rounded-md border" data-testid="status-pje-desconectado">
+              <XCircle className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-sm">Não conectado ao PJe Nacional</p>
+                <p className="text-sm text-muted-foreground">
+                  Conecte para acessar processos sigilosos e baixar intimações de todos os tribunais PJe
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Ações quando conectado */}
+          {statusPje?.autenticado && statusPje?.valido && (
+            <div className="space-y-3">
+              <Separator />
+              <h3 className="text-sm font-medium">Ações disponíveis</h3>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => sincronizarIntimacoesMutation.mutate()}
+                  disabled={sincronizarIntimacoesMutation.isPending}
+                  data-testid="button-sincronizar-intimacoes"
+                >
+                  {sincronizarIntimacoesMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Bell className="h-4 w-4 mr-2" />
+                  )}
+                  Sincronizar Intimações
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchPje()}
+                  data-testid="button-atualizar-pje-status"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Atualizar status
+                </Button>
+              </div>
+              {sincronizarIntimacoesMutation.isSuccess && (
+                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-md text-sm text-green-700 dark:text-green-300" data-testid="resultado-sincronizacao">
+                  <CheckCircle className="h-4 w-4 inline mr-1" />
+                  {sincronizarIntimacoesMutation.data?.mensagem}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Formulário de conexão */}
+          {(!statusPje?.autenticado || !statusPje?.valido) && (
+            <div className="space-y-4">
+              <Separator />
+              <h3 className="text-sm font-medium">Conectar ao SSO PJe Nacional</h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="input-cpf-pje">
+                  CPF do advogado <span className="text-muted-foreground text-xs">(opcional — pré-preenche o login)</span>
+                </Label>
+                <Input
+                  id="input-cpf-pje"
+                  data-testid="input-cpf-pje"
+                  placeholder="000.000.000-00"
+                  value={cpfPje}
+                  onChange={(e) => setCpfPje(e.target.value)}
+                  maxLength={14}
+                />
+              </div>
+
+              <div className="flex items-start gap-2 p-3 bg-muted/30 rounded-md text-xs text-muted-foreground">
+                <Shield className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <p>
+                  O SSO CNJ usa OAuth2 com PKCE — suas credenciais são validadas diretamente pelo Keycloak do CNJ.
+                  Você pode autenticar com certificado ICP-Brasil, Gov.br, ou login direto PJe.
+                </p>
+              </div>
+
+              <Button
+                onClick={() => iniciarAuthPjeMutation.mutate(cpfPje || undefined)}
+                disabled={iniciarAuthPjeMutation.isPending || trocarTokenPjeMutation.isPending}
+                data-testid="button-conectar-pje"
+                className="w-full"
+              >
+                {iniciarAuthPjeMutation.isPending || trocarTokenPjeMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {trocarTokenPjeMutation.isPending ? "Finalizando autenticação..." : "Abrindo SSO CNJ..."}
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Conectar ao PJe Nacional
+                  </>
+                )}
+              </Button>
+
+              {iniciarAuthPjeMutation.isSuccess && !trocarTokenPjeMutation.isPending && !statusPje?.autenticado && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-md text-sm">
+                  <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
+                    Portal SSO CNJ aberto em nova aba
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    Autentique com seu certificado ICP-Brasil ou Gov.br. Ao concluir, você será
+                    redirecionado automaticamente para esta página.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <Separator />
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">O que o SSO PJe Nacional acessa</h3>
+            <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+              <li>Processos em segredo de justiça nos quais você é advogado constituído</li>
+              <li>Intimações eletrônicas em todos os tribunais PJe do país</li>
+              <li>Documentos sigilosos com acesso autorizado ao advogado</li>
+              <li>Dados em tempo real via MNI (Modelo Nacional de Interoperabilidade)</li>
+            </ul>
           </div>
         </CardContent>
       </Card>
