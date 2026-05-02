@@ -169,13 +169,29 @@ async def consultar_scraping(tribunal: str, termo: str, tipo: str = "numero") ->
         }
 
 
+async def consultar_tecjustica(tribunal: str, termo: str) -> dict:
+    """Query TecJustiça MCP server as secondary source after DataJud"""
+    try:
+        from tecjustica_mcp import buscar_tecjustica
+        resultado = buscar_tecjustica(tribunal, termo)
+        result_dict = resultado.to_dict()
+        if result_dict.get("processos") and len(result_dict["processos"]) > 0:
+            result_dict["fonte"] = "tecjustica"
+            result_dict["fonte_label"] = "TecJustiça MCP"
+            result_dict["fonte_descricao"] = "Dados em tempo real via protocolo MCP do TecJustiça"
+        return result_dict
+    except Exception as e:
+        return {"erro": f"Erro ao consultar TecJustiça: {str(e)}", "fonte": "tecjustica"}
+
+
 async def consultar(tribunal: str, termo: str, tipo: str = "numero") -> dict:
     """
     Execute a search on a tribunal.
     Strategy:
     1. If CNJ number → try DataJud first (fast, reliable, covers all tribunals)
-    2. Fall through to scraping if DataJud returns no results or on error
-    3. If nome/oab/cnpj → go straight to scraping
+    2. Try TecJustiça MCP if DataJud returns no results
+    3. Fall through to scraping if TecJustiça also returns no results
+    4. If nome/oab/cnpj → go straight to scraping
 
     Args:
         tribunal: Tribunal code (e.g., "STF", "TJSP")
@@ -197,7 +213,14 @@ async def consultar(tribunal: str, termo: str, tipo: str = "numero") -> dict:
             print(f"DataJud retornou {len(processos)} processo(s) para {tribunal}", file=sys.stderr)
             return datajud_result
 
-        print(f"DataJud sem resultados para {tribunal}, tentando scraping...", file=sys.stderr)
+        print(f"DataJud sem resultados para {tribunal}, tentando TecJustiça MCP...", file=sys.stderr)
+        tecjustica_result = await consultar_tecjustica(tribunal, termo)
+        tecjustica_processos = tecjustica_result.get("processos", [])
+        if tecjustica_processos and len(tecjustica_processos) > 0:
+            print(f"TecJustiça retornou {len(tecjustica_processos)} processo(s) para {tribunal}", file=sys.stderr)
+            return tecjustica_result
+
+        print(f"TecJustiça sem resultados para {tribunal}, tentando scraping...", file=sys.stderr)
 
     scraping_result = await consultar_scraping(tribunal, termo, tipo)
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info } from "lucide-react";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -488,15 +488,20 @@ export default function ConsultaProcessual() {
             <div className="flex items-center gap-2 flex-wrap">
               {resultado.fonte && (
                 <Badge
-                  variant={resultado.fonte === "datajud" ? "secondary" : "default"}
-                  className={resultado.fonte === "datajud"
-                    ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
-                    : "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20"
+                  variant="secondary"
+                  className={
+                    resultado.fonte === "datajud"
+                      ? "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20"
+                      : resultado.fonte === "tecjustica"
+                      ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20"
+                      : "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20"
                   }
                   data-testid="badge-fonte-dados"
                 >
                   {resultado.fonte === "datajud" ? (
                     <Database className="h-3 w-3 mr-1" />
+                  ) : resultado.fonte === "tecjustica" ? (
+                    <Zap className="h-3 w-3 mr-1" />
                   ) : (
                     <Wifi className="h-3 w-3 mr-1" />
                   )}
@@ -513,10 +518,14 @@ export default function ConsultaProcessual() {
             <div className={`flex items-start gap-2 p-3 rounded-md text-sm ${
               resultado.fonte === "datajud"
                 ? "bg-blue-500/5 border border-blue-500/20 text-blue-700 dark:text-blue-300"
+                : resultado.fonte === "tecjustica"
+                ? "bg-orange-500/5 border border-orange-500/20 text-orange-700 dark:text-orange-300"
                 : "bg-green-500/5 border border-green-500/20 text-green-700 dark:text-green-300"
             }`} data-testid="banner-fonte">
               {resultado.fonte === "datajud" ? (
                 <Database className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              ) : resultado.fonte === "tecjustica" ? (
+                <Zap className="h-4 w-4 mt-0.5 flex-shrink-0" />
               ) : (
                 <Globe className="h-4 w-4 mt-0.5 flex-shrink-0" />
               )}

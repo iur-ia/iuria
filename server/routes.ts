@@ -768,6 +768,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== TECJUSTICA MCP API ====================
+  app.get("/api/tecjustica/:numero", async (req, res) => {
+    try {
+      const { numero } = req.params;
+      const { spawn } = await import("child_process");
+      const path = await import("path");
+
+      const scriptPath = path.join(process.cwd(), "scraper", "tecjustica_mcp.py");
+
+      // Map CNJ format NNNNNNN-DD.AAAA.J.TT.OOOO to canonical tribunal sigla
+      // Key is "J.TT" combining justice segment and tribunal code
+      const CNJ_TRIBUNAL_MAP: Record<string, string> = {
+        "1.00": "STF",  "1.01": "CNJ",
+        "2.00": "STJ",  "2.01": "STJ",
+        "5.00": "TST",  "7.00": "TSE",  "6.00": "STM",
+        "3.01": "TRF1", "3.02": "TRF2", "3.03": "TRF3",
+        "3.04": "TRF4", "3.05": "TRF5", "3.06": "TRF6",
+        "8.01": "TJAC", "8.02": "TJAL", "8.03": "TJAP", "8.04": "TJAM",
+        "8.05": "TJBA", "8.06": "TJCE", "8.07": "TJDFT","8.08": "TJES",
+        "8.09": "TJGO", "8.10": "TJMA", "8.11": "TJMT", "8.12": "TJMS",
+        "8.13": "TJMG", "8.14": "TJPA", "8.15": "TJPB", "8.16": "TJPR",
+        "8.17": "TJPE", "8.18": "TJPI", "8.19": "TJRJ", "8.20": "TJRN",
+        "8.21": "TJRS", "8.22": "TJRO", "8.23": "TJRR", "8.24": "TJSC",
+        "8.25": "TJSE", "8.26": "TJSP", "8.27": "TJTO",
+      };
+      const tribunalMatch = numero.match(/^\d{7}-\d{2}\.\d{4}\.(\d)\.(\d{2})\.\d{4}$/);
+      const tribunal = tribunalMatch
+        ? (CNJ_TRIBUNAL_MAP[`${tribunalMatch[1]}.${tribunalMatch[2]}`] || "DESCONHECIDO")
+        : "DESCONHECIDO";
+
+      const pythonProcess = spawn("python", [scriptPath, tribunal, numero]);
+
+      let stdout = "";
+      let stderr = "";
+
+      pythonProcess.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
+      pythonProcess.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
+
+      pythonProcess.on("close", (code: number) => {
+        if (code !== 0) {
+          console.error("TecJustiça MCP error (exit code " + code + "):", stderr);
+          return res.status(500).json({
+            error: "Erro ao executar consulta TecJustiça MCP",
+            details: stderr,
+          });
+        }
+        try {
+          const jsonStart = stdout.indexOf('{');
+          const jsonEnd = stdout.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            const result = JSON.parse(stdout.slice(jsonStart, jsonEnd + 1));
+            result.fonte = "tecjustica";
+            result.fonte_label = "TecJustiça MCP";
+            result.fonte_descricao = "Dados em tempo real via protocolo MCP do TecJustiça";
+            return res.json(result);
+          }
+          res.status(500).json({ error: "Erro ao processar resposta do TecJustiça MCP" });
+        } catch (e) {
+          res.status(500).json({ error: "Erro ao processar resposta do TecJustiça MCP" });
+        }
+      });
+
+      pythonProcess.on("error", (error: Error) => {
+        res.status(500).json({ error: "Erro ao iniciar consulta TecJustiça MCP", details: error.message });
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao consultar TecJustiça MCP" });
+    }
+  });
+
   // ==================== DATAJUD API ====================
   app.get("/api/datajud/:tribunal/:numero", async (req, res) => {
     try {
