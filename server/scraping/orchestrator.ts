@@ -5,7 +5,7 @@ import type {
   DoutrinaItem,
   EmpresaData,
 } from "./types";
-import { identificarTribunalCNJ, TRIBUNAIS } from "./types";
+import { identificarTribunalCNJ, TRIBUNAIS, DATAJUD_AUTH } from "./types";
 import { makeLogger, fetchJson, withRetry } from "./utils";
 import { buscarProcessoEsaj } from "./esajScraper";
 import { buscarProcessoStj, buscarJurisprudenciaStj } from "./stjScraper";
@@ -13,8 +13,6 @@ import { buscarJurisprudenciaStf } from "./stfScraper";
 import { buscarProcessoTrf, buscarJurisprudenciaTrf } from "./trfScraper";
 import { buscarCnpj } from "./cnpjScraper";
 import { buscarDoutrina } from "./doutrinaScraper";
-
-const DATAJUD_AUTH = "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==";
 
 interface DataJudHit {
   _source?: {
@@ -146,10 +144,6 @@ export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<
   } else {
     processo = await buscarDataJudGenerico(numero, tribunal.sigla, log);
     sourceLabel = `${tribunal.sigla} — DataJud`;
-
-    if (!processo && tribunal.sigla in TRIBUNAIS) {
-      log("info", `Tentando scraping direto para ${tribunal.sigla}`);
-    }
   }
 
   const md = processo

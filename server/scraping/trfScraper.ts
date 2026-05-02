@@ -1,4 +1,5 @@
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult, TribunalInfo } from "./types";
+import { DATAJUD_AUTH } from "./types";
 import { fetchJson, makeLogger, withRetry } from "./utils";
 
 const TRF_INDICES: Record<string, string> = {
@@ -9,8 +10,6 @@ const TRF_INDICES: Record<string, string> = {
   TRF5: "api_publica_trf5",
   TRF6: "api_publica_trf6",
 };
-
-const DATAJUD_AUTH = "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==";
 
 interface DataJudHit {
   _source?: {

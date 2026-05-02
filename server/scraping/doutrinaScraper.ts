@@ -46,11 +46,6 @@ async function buscarCnjBiblioteca(q: string, log: (l: "info" | "warn" | "error"
       }
     });
 
-    if (items.length === 0) {
-      const url2 = `https://biblioteca.cnj.jus.br/pergamumweb/vinculos/000075/0000756f.htm#search=${encodeURIComponent(q)}`;
-      log("info", `Tentando Pergamum CNJ: ${url2}`);
-    }
-
     log("info", `CNJ Biblioteca retornou ${items.length} resultado(s)`);
     return items;
   } catch (err) {
@@ -103,9 +98,6 @@ async function buscarSenadoLegislacao(q: string, log: (l: "info" | "warn" | "err
   log("info", `Buscando Senado Federal: "${q}"`);
 
   try {
-    const url = `https://www.senado.leg.br/atividade/const/con1988/ADC1988_12.07.2016/pesquisa.asp?pesquisa=${encodeURIComponent(q)}`;
-    await randomDelay(400, 900);
-
     const apiUrl = `https://legis.senado.leg.br/norma/pesquisa?norma=${encodeURIComponent(q)}&formato=json&numeroResultados=10`;
     const data = await withRetry(() =>
       fetchJson<{ resultado?: { items?: { titulo?: string; ementa?: string; link?: string; ano?: string; autor?: string }[] } }>(

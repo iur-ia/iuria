@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import type { JurisprudenciaItem, ScrapingResult } from "./types";
+import { DATAJUD_AUTH } from "./types";
 import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
 
 interface StfJurisprudenciaResponse {
@@ -103,7 +104,7 @@ export async function buscarJurisprudenciaStf(q: string): Promise<ScrapingResult
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==",
+              "Authorization": DATAJUD_AUTH,
             },
             body,
             timeoutMs: 15000,

@@ -1176,6 +1176,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
           
+          // ── Fallback automático via motor de scraping TypeScript ──
+          // Quando o scraper Python retorna 0 processos em busca por número,
+          // tenta automaticamente o orquestrador DataJud/e-SAJ antes de responder.
+          if (
+            tipoBusca === "numero" &&
+            (!resultado.processos || resultado.processos.length === 0) &&
+            termoBusca.match(/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/)
+          ) {
+            try {
+              const { pesquisarProcesso } = await import("./scraping/orchestrator");
+              console.log(`[consulta-processual] fallback scraping para ${termoBusca}`);
+              const scraped = await pesquisarProcesso(termoBusca);
+              if (scraped.data) {
+                const p = scraped.data;
+                resultado.processos = [{
+                  numero: p.numero,
+                  tribunal: p.tribunal,
+                  classe: p.classe,
+                  assunto: p.assunto,
+                  relator: p.relator,
+                  situacao: p.situacao,
+                  partes: p.partes,
+                  movimentacoes: p.movimentacoes,
+                  documentos: p.documentos,
+                  url: p.urlPortal,
+                  fonte: scraped.sourceLabel,
+                  via_scraping_direto: true,
+                }];
+                resultado.total_encontrados = 1;
+                resultado.fonte = scraped.sourceLabel;
+                resultado.via_scraping_direto = true;
+                resultado.erro = undefined;
+                console.log(`[consulta-processual] fallback encontrou processo ${p.numero} via ${scraped.sourceLabel}`);
+              }
+            } catch (scrapErr) {
+              console.warn(`[consulta-processual] fallback scraping falhou: ${scrapErr}`);
+            }
+          }
+          // ── Fim do fallback automático ──
+
           res.json(resultado);
         } catch (parseError) {
           console.error("Parse error:", parseError, "stdout:", stdout);

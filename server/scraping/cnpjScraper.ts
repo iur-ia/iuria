@@ -1,6 +1,5 @@
 import type { EmpresaData, ScrapingResult } from "./types";
-import { fetchJson, fetchUrl, makeLogger, withRetry } from "./utils";
-import * as cheerio from "cheerio";
+import { fetchJson, makeLogger, withRetry } from "./utils";
 
 interface BrasilApiCnpj {
   cnpj: string;

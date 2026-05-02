@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult } from "./types";
-import { fetchUrl, fetchJson, htmlToMarkdown, makeLogger, withRetry, randomDelay } from "./utils";
+import { DATAJUD_AUTH } from "./types";
+import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
 
 interface DataJudProcesso {
   _source?: {
@@ -15,8 +16,7 @@ interface DataJudProcesso {
   };
 }
 
-async function buscarProcessoStjDataJud(numero: string, logs: ReturnType<typeof makeLogger>["logs"], log: ReturnType<typeof makeLogger>["log"]): Promise<ProcessoScrapeData | null> {
-  const numLimpo = numero.replace(/[.\-\/]/g, "").replace(/\D/g, "");
+async function buscarProcessoStjDataJud(numero: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<ProcessoScrapeData | null> {
   const url = `https://api.datajud.cnj.jus.br/api_publica_stj/_search`;
 
   log("info", `Consultando DataJud STJ para processo ${numero}`);
@@ -32,7 +32,7 @@ async function buscarProcessoStjDataJud(numero: string, logs: ReturnType<typeof 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==",
+          "Authorization": DATAJUD_AUTH,
         },
         body,
         timeoutMs: 15000,
@@ -69,7 +69,7 @@ export async function buscarProcessoStj(numero: string): Promise<ScrapingResult<
 
   log("info", `Iniciando busca processo STJ: ${numero}`);
 
-  const processo = await buscarProcessoStjDataJud(numero, logs, log);
+  const processo = await buscarProcessoStjDataJud(numero, log);
 
   let md = "";
   if (processo) {
@@ -154,7 +154,7 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==",
+            "Authorization": DATAJUD_AUTH,
           },
           body,
           timeoutMs: 15000,

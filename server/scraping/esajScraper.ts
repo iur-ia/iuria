@@ -1,8 +1,7 @@
 import * as cheerio from "cheerio";
 import type { ProcessoScrapeData, ScrapingResult, TribunalInfo } from "./types";
-import { fetchUrl, fetchJson, htmlToMarkdown, makeLogger, withRetry, randomDelay } from "./utils";
-
-const DATAJUD_AUTH = "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==";
+import { DATAJUD_AUTH } from "./types";
+import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
 
 const ESAJ_INDICE: Record<string, string> = {
   TJSP: "api_publica_tjsp",
