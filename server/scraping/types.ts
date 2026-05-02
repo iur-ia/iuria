@@ -105,14 +105,14 @@ export interface TribunalInfo {
 }
 
 /**
- * Chave pública do DataJud CNJ (API de acesso público documentada em
- * https://datajud-wiki.cnj.jus.br/api-publica/acesso).
- * Pode ser sobrescrita via variável de ambiente DATAJUD_API_KEY.
+ * Autenticação DataJud CNJ.
+ * Configure a variável de ambiente DATAJUD_API_KEY com sua chave pessoal
+ * obtida em https://datajud-wiki.cnj.jus.br/api-publica/acesso.
+ * Sem a variável, a API não será acessada (não há fallback embutido).
  */
-export const DATAJUD_AUTH: string =
-  process.env.DATAJUD_API_KEY
-    ? `ApiKey ${process.env.DATAJUD_API_KEY}`
-    : "ApiKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TaEN1dW1xTVh5eGFKZw==";
+export const DATAJUD_AUTH: string = process.env.DATAJUD_API_KEY
+  ? `ApiKey ${process.env.DATAJUD_API_KEY}`
+  : "";
 
 export const TRIBUNAIS: Record<string, TribunalInfo> = {
   STF: { sigla: "STF", nome: "Supremo Tribunal Federal", segmento: 1, codigoTR: 0, usaEsaj: false, urlPortal: "https://portal.stf.jus.br" },

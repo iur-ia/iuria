@@ -1206,6 +1206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }];
                 resultado.total_encontrados = 1;
                 resultado.fonte = scraped.sourceLabel;
+                resultado.fonte_label = scraped.sourceLabel;
                 resultado.via_scraping_direto = true;
                 resultado.erro = undefined;
                 console.log(`[consulta-processual] fallback encontrou processo ${p.numero} via ${scraped.sourceLabel}`);
