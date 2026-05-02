@@ -2053,22 +2053,26 @@ except Exception as e:
           dataUltimaSincronizacao: new Date(),
         });
 
-        // Sincronizar andamentos
+        // Sincronizar andamentos — normaliza variantes de formato (data/dataHora, descricao/texto)
         if (Array.isArray(movimentacoes) && movimentacoes.length > 0) {
           const andamentosExistentes = await storage.getAcervoAndamentos(existente.id);
-          const descricoes = new Set(andamentosExistentes.map((a) => `${a.data}|${a.descricao}`));
+          const chaves = new Set(andamentosExistentes.map((a) => `${a.data}|${a.descricao}`));
           for (const mov of movimentacoes) {
-            const chave = `${mov.data}|${mov.descricao}`;
-            if (!descricoes.has(chave)) {
+            const data = (mov.data || mov.dataHora?.split?.("T")?.[0] || "").trim();
+            const descricao = (mov.descricao || mov.texto || "").trim();
+            if (!data || !descricao) continue;
+            const chave = `${data}|${descricao}`;
+            if (!chaves.has(chave)) {
               await storage.createAcervoAndamento({
                 acervoId: existente.id,
-                data: mov.data,
-                descricao: mov.descricao,
-                detalhes: mov.detalhes || null,
+                data,
+                descricao,
+                detalhes: mov.complementoTabela || mov.detalhes || null,
                 tipo: "automatico",
                 origem: "consulta",
                 critico: false,
               });
+              chaves.add(chave);
             }
           }
         }
@@ -2089,18 +2093,26 @@ except Exception as e:
         statusInterno: "ativo",
       });
 
-      // Criar andamentos iniciais
+      // Criar andamentos iniciais — normaliza variantes de formato
       if (Array.isArray(movimentacoes) && movimentacoes.length > 0) {
+        const chaves = new Set<string>();
         for (const mov of movimentacoes) {
-          await storage.createAcervoAndamento({
-            acervoId: processo.id,
-            data: mov.data,
-            descricao: mov.descricao,
-            detalhes: mov.detalhes || null,
-            tipo: "automatico",
-            origem: "consulta",
-            critico: false,
-          });
+          const data = (mov.data || mov.dataHora?.split?.("T")?.[0] || "").trim();
+          const descricao = (mov.descricao || mov.texto || "").trim();
+          if (!data || !descricao) continue;
+          const chave = `${data}|${descricao}`;
+          if (!chaves.has(chave)) {
+            await storage.createAcervoAndamento({
+              acervoId: processo.id,
+              data,
+              descricao,
+              detalhes: mov.complementoTabela || mov.detalhes || null,
+              tipo: "automatico",
+              origem: "consulta",
+              critico: false,
+            });
+            chaves.add(chave);
+          }
         }
       }
 
