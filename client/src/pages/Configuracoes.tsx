@@ -77,8 +77,6 @@ export default function Configuracoes() {
   const [pendingCode, setPendingCode] = useState<string | null>(null);
   const [pendingCodeVerifier, setPendingCodeVerifier] = useState<string | null>(null);
   const [pendingProvedor, setPendingProvedor] = useState<string | null>(null);
-  const [pjePendingCode, setPjePendingCode] = useState<string | null>(null);
-  const [pjePendingVerifier, setPjePendingVerifier] = useState<string | null>(null);
 
   const { data: statusCert, refetch: refetchCert, isLoading: loadingCert } = useQuery<StatusCertificado>({
     queryKey: ["/api/certificado/status"],
@@ -184,6 +182,7 @@ export default function Configuracoes() {
   });
 
   // ---- PJe SSO mutations ----
+  // O token é trocado server-side no /api/pje/callback — frontend só inicia o fluxo
   const iniciarAuthPjeMutation = useMutation({
     mutationFn: async (cpf?: string) => {
       const url = cpf
@@ -194,40 +193,15 @@ export default function Configuracoes() {
     },
     onSuccess: (data) => {
       if (data.url_autorizacao) {
-        sessionStorage.setItem("pje_code_verifier", data.code_verifier);
-        window.open(data.url_autorizacao, "_blank", "width=680,height=780,noopener");
-        toast({
-          title: "Portal SSO PJe aberto",
-          description: "Autentique com seu certificado ICP-Brasil ou Gov.br no portal CNJ. Ao concluir, você será redirecionado aqui.",
-        });
+        // Redirecionar na mesma aba — sessão do servidor é mantida
+        // (popup noopener quebraria o cookie de sessão em alguns browsers)
+        window.location.href = data.url_autorizacao;
       } else {
         toast({ title: "Erro", description: data.error || "Não foi possível gerar URL PJe", variant: "destructive" });
       }
     },
     onError: (error: any) => {
       toast({ title: "Erro ao iniciar auth PJe", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const trocarTokenPjeMutation = useMutation({
-    mutationFn: async (data: { code: string; codeVerifier: string }) => {
-      const res = await apiRequest("POST", "/api/pje/trocar-token", data);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      if (data.sucesso) {
-        toast({ title: "PJe Nacional conectado!", description: `Bem-vindo, ${data.nome_titular || "advogado"}. Acesso SSO ativo.` });
-        setPjePendingCode(null);
-        setPjePendingVerifier(null);
-        sessionStorage.removeItem("pje_code_verifier");
-        refetchPje();
-        queryClient.invalidateQueries({ queryKey: ["/api/pje/status"] });
-      } else {
-        toast({ title: "Falha ao autenticar PJe", description: data.error || "Código inválido", variant: "destructive" });
-      }
-    },
-    onError: (error: any) => {
-      toast({ title: "Erro ao validar código PJe", description: error.message, variant: "destructive" });
     },
   });
 
@@ -259,7 +233,9 @@ export default function Configuracoes() {
     const params = new URLSearchParams(window.location.search);
     const certCode = params.get("cert_code");
     const certError = params.get("cert_error");
-    const pjeCode = params.get("pje_code");
+    // PJe: token já foi trocado server-side no callback — frontend recebe apenas flag de resultado
+    const pjeSucesso = params.get("pje_sucesso");
+    const pjeNome = params.get("pje_nome");
     const pjeError = params.get("pje_error");
 
     if (certCode) {
@@ -282,12 +258,15 @@ export default function Configuracoes() {
       window.history.replaceState({}, "", "/configuracoes");
     }
 
-    if (pjeCode) {
-      const savedVerifier = sessionStorage.getItem("pje_code_verifier");
-      if (savedVerifier) {
-        setPjePendingCode(pjeCode);
-        setPjePendingVerifier(savedVerifier);
-      }
+    if (pjeSucesso === "1") {
+      // Token já está na sessão do servidor — basta atualizar o status
+      const nome = pjeNome ? decodeURIComponent(pjeNome) : "advogado";
+      toast({
+        title: "PJe Nacional conectado!",
+        description: `Bem-vindo, ${nome}. Acesso SSO ativo em todos os tribunais PJe.`,
+      });
+      refetchPje();
+      queryClient.invalidateQueries({ queryKey: ["/api/pje/status"] });
       window.history.replaceState({}, "", "/configuracoes");
     }
 
@@ -310,12 +289,6 @@ export default function Configuracoes() {
       });
     }
   }, [pendingCode]);
-
-  useEffect(() => {
-    if (pjePendingCode && pjePendingVerifier) {
-      trocarTokenPjeMutation.mutate({ code: pjePendingCode, codeVerifier: pjePendingVerifier });
-    }
-  }, [pjePendingCode]);
 
   const provedorInfo = provedoresData?.provedores.find(p => p.id === provedorSelecionado);
 
@@ -674,14 +647,14 @@ export default function Configuracoes() {
 
               <Button
                 onClick={() => iniciarAuthPjeMutation.mutate(cpfPje || undefined)}
-                disabled={iniciarAuthPjeMutation.isPending || trocarTokenPjeMutation.isPending}
+                disabled={iniciarAuthPjeMutation.isPending}
                 data-testid="button-conectar-pje"
                 className="w-full"
               >
-                {iniciarAuthPjeMutation.isPending || trocarTokenPjeMutation.isPending ? (
+                {iniciarAuthPjeMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    {trocarTokenPjeMutation.isPending ? "Finalizando autenticação..." : "Abrindo SSO CNJ..."}
+                    Redirecionando para SSO CNJ...
                   </>
                 ) : (
                   <>
@@ -691,14 +664,14 @@ export default function Configuracoes() {
                 )}
               </Button>
 
-              {iniciarAuthPjeMutation.isSuccess && !trocarTokenPjeMutation.isPending && !statusPje?.autenticado && (
+              {iniciarAuthPjeMutation.isSuccess && !statusPje?.autenticado && (
                 <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-md text-sm">
                   <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">
-                    Portal SSO CNJ aberto em nova aba
+                    Redirecionando para o Portal SSO CNJ...
                   </p>
                   <p className="text-muted-foreground text-xs">
-                    Autentique com seu certificado ICP-Brasil ou Gov.br. Ao concluir, você será
-                    redirecionado automaticamente para esta página.
+                    Você será redirecionado para autenticar com certificado ICP-Brasil ou Gov.br.
+                    Após confirmar, o sistema retorna aqui automaticamente.
                   </p>
                 </div>
               )}

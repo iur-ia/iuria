@@ -1542,11 +1542,9 @@ except Exception as e:
         };
       }
 
+      // Não retornamos code_verifier ao cliente — permanece apenas na sessão do servidor
       res.json({
         url_autorizacao: dados.url_autorizacao,
-        // Retornamos code_verifier para que o frontend possa armazená-lo como fallback
-        // (necessário quando session não persiste entre guias — fallback no sessionStorage)
-        code_verifier: dados.code_verifier,
         state: dados.state,
         instrucoes: "Acesse a URL e autentique com seu certificado ICP-Brasil no SSO CNJ",
       });
@@ -1555,85 +1553,73 @@ except Exception as e:
     }
   });
 
-  // Callback OAuth2 — recebe code e redireciona para o frontend
+  // Callback OAuth2 PJe — troca code por token server-side (sem expor code ao frontend)
   app.get("/api/pje/callback", async (req, res) => {
-    const { code, state, error } = req.query;
+    const { code, state: callbackState, error } = req.query;
+
     if (error) {
       return res.redirect(`/configuracoes?pje_error=${encodeURIComponent(String(error))}`);
     }
-    if (code) {
-      return res.redirect(`/configuracoes?pje_code=${encodeURIComponent(String(code))}&pje_state=${encodeURIComponent(String(state || ""))}`);
+
+    if (!code) {
+      return res.redirect("/configuracoes?pje_error=callback_sem_code");
     }
-    res.redirect("/configuracoes?pje_error=callback_invalido");
-  });
 
-  // Trocar code OAuth2 por token PJe SSO
-  // Valida state CSRF e usa code_verifier da sessão do servidor (não do cliente)
-  app.post("/api/pje/trocar-token", async (req, res) => {
+    // Recuperar state e code_verifier da sessão do servidor
+    const pjeOAuth = (req.session as any)?.pjeOAuth;
+
+    // Validação de state CSRF — obrigatória
+    if (!pjeOAuth?.state) {
+      return res.redirect("/configuracoes?pje_error=sessao_expirada");
+    }
+    if (String(callbackState) !== pjeOAuth.state) {
+      return res.redirect("/configuracoes?pje_error=state_invalido");
+    }
+
+    const { code_verifier: codeVerifier, redirect_uri: redirectUri } = pjeOAuth;
+    if (!codeVerifier) {
+      return res.redirect("/configuracoes?pje_error=verifier_ausente");
+    }
+
     try {
-      const { code, codeVerifier: clientVerifier, state: clientState } = req.body;
-      if (!code) {
-        return res.status(400).json({ error: "code é obrigatório" });
-      }
-
-      // Recuperar state e code_verifier da sessão do servidor
-      const pjeOAuth = (req.session as any)?.pjeOAuth;
-
-      // Validação de state CSRF — rejeita se não corresponder
-      if (pjeOAuth?.state && clientState && pjeOAuth.state !== clientState) {
-        return res.status(400).json({ error: "state inválido — possível tentativa CSRF" });
-      }
-
-      // Prefere o code_verifier da sessão do servidor; aceita o do cliente como fallback
-      // (necessário quando a sessão não persistiu entre guias, ex: popup OAuth2 em nova aba)
-      const codeVerifier = pjeOAuth?.code_verifier || clientVerifier;
-      if (!codeVerifier) {
-        return res.status(400).json({ error: "codeVerifier não encontrado — tente conectar novamente" });
-      }
-
       const { spawnSync } = await import("child_process");
-      const python = "python3";
-      const redirectUri = pjeOAuth?.redirect_uri || `${req.protocol}://${req.get("host")}/api/pje/callback`;
       const scriptPath = path.join(process.cwd(), "scraper", "cert_digital", "pje_sso.py");
 
-      // Argumentos passados de forma segura — sem interpolação de strings do usuário
+      // Troca code por token server-side — argumentos passados como array (sem interpolação)
       const result = spawnSync(
-        python,
-        [scriptPath, "trocar-token", redirectUri, code, codeVerifier],
+        "python3",
+        [scriptPath, "trocar-token", redirectUri, String(code), codeVerifier],
         { encoding: "utf-8", timeout: 30000 }
       );
+
       const output = result.stdout?.trim();
       if (!output) {
-        return res.status(500).json({ error: "Erro ao trocar token PJe", detalhe: result.stderr?.trim() });
+        const err = encodeURIComponent(result.stderr?.trim() || "Sem resposta do SSO");
+        return res.redirect(`/configuracoes?pje_error=${err}`);
       }
 
       const dados = JSON.parse(output);
       if (!dados.sucesso) {
-        return res.status(400).json({ error: dados.erro || dados.erro_descricao || "Falha na autenticação PJe" });
+        const err = encodeURIComponent(dados.erro || dados.erro_descricao || "Falha na autenticação PJe");
+        return res.redirect(`/configuracoes?pje_error=${err}`);
       }
 
-      // Salvar token PJe na sessão e limpar estado OAuth one-time
-      if (req.session) {
-        (req.session as any).pje = {
-          access_token: dados.access_token,
-          refresh_token: dados.refresh_token,
-          expires_at: dados.expires_at,
-          nome_titular: dados.nome_titular,
-          cpf_titular: dados.cpf_titular,
-          email_titular: dados.email_titular,
-        };
-        delete (req.session as any).pjeOAuth;
-      }
-
-      res.json({
-        sucesso: true,
+      // Persistir token na sessão e limpar estado OAuth one-time
+      (req.session as any).pje = {
+        access_token: dados.access_token,
+        refresh_token: dados.refresh_token,
+        expires_at: dados.expires_at,
         nome_titular: dados.nome_titular,
         cpf_titular: dados.cpf_titular,
-        expires_at: dados.expires_at,
-        mensagem: "Autenticado no PJe Nacional com sucesso!",
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: "Erro ao autenticar no PJe: " + error.message });
+        email_titular: dados.email_titular,
+      };
+      delete (req.session as any).pjeOAuth;
+
+      // Redirecionar para o frontend apenas com flag de sucesso — sem expor tokens
+      const nome = encodeURIComponent(dados.nome_titular || "");
+      return res.redirect(`/configuracoes?pje_sucesso=1&pje_nome=${nome}`);
+    } catch (err: any) {
+      return res.redirect(`/configuracoes?pje_error=${encodeURIComponent(err.message || "Erro interno")}`);
     }
   });
 
