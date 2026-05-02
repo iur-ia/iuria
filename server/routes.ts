@@ -356,6 +356,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!req.file) {
         return res.status(400).json({ error: "Nenhum arquivo enviado" });
       }
+
+      // Validação de extensão — formatos suportados pela pipeline de extração
+      const extAllow = [".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"];
+      const extFile = path.extname(req.file.originalname).toLowerCase();
+      if (!extAllow.includes(extFile)) {
+        fs.unlinkSync(req.file.path); // remove arquivo rejeitado
+        const supported = extAllow.join(", ");
+        return res.status(415).json({
+          error: `Formato '${extFile}' não suportado. Formatos aceitos: ${supported}. Arquivos .doc legados devem ser convertidos para .docx antes do upload.`
+        });
+      }
+
       const caminho = req.file.path;
       const nome = (req.body.nome as string) || req.file.originalname;
       const tipo = (req.body.tipo as string) || "Outro";

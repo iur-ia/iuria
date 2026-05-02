@@ -205,9 +205,20 @@ def extrair_markdown(caminho: str) -> dict:
                 }
 
         # ── DOCX ─────────────────────────────────────────────────────────
-        elif ext in (".docx", ".doc"):
+        # Apenas .docx é suportado — .doc (binário legado) requer LibreOffice
+        elif ext == ".docx":
             texto = extrair_docx(caminho)
             method = "python-docx"
+
+        elif ext == ".doc":
+            return {
+                "status": "parcial",
+                "markdown": "",
+                "chars": 0,
+                "pages": 0,
+                "method": "none",
+                "erro": "Formato .doc legado não é suportado. Converta para .docx e reenvie."
+            }
 
         # ── Texto plano ──────────────────────────────────────────────────
         elif ext in (".txt", ".md"):
