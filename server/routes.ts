@@ -66,7 +66,17 @@ async function executarExtrator(caminho: string): Promise<ExtracaoResultado> {
   });
 }
 
+function isCaminhoSeguro(caminho: string): boolean {
+  const resolved = path.resolve(caminho);
+  const allowed = path.resolve(uploadDir);
+  return resolved.startsWith(allowed + path.sep);
+}
+
 function triggerExtracaoBackground(documentoId: string, caminho: string): void {
+  if (!isCaminhoSeguro(caminho)) {
+    console.error(`[extrator] Caminho não permitido rejeitado: ${caminho}`);
+    return;
+  }
   executarExtrator(caminho).then(async (resultado) => {
     try {
       await storage.updateDocumento(documentoId, {
@@ -345,13 +355,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/documentos", async (req, res) => {
     try {
-      const data = insertDocumentoSchema.parse(req.body);
+      // Campos server-managed são removidos do payload do cliente para evitar LFI e data injection
+      const { caminho, conteudoMarkdown, extracaoStatus, ...userPayload } = req.body;
+      const data = insertDocumentoSchema.omit({
+        caminho: true,
+        conteudoMarkdown: true,
+        extracaoStatus: true,
+      }).parse(userPayload);
       const documento = await storage.createDocumento(data);
       res.status(201).json(documento);
-      // Dispara extração em background (não bloqueia o response)
-      if (documento.caminho) {
-        triggerExtracaoBackground(documento.id, documento.caminho);
-      }
+      // caminho NOT set via this route — only via /upload (multer-managed)
     } catch (error) {
       res.status(400).json({ error: "Dados inválidos" });
     }
@@ -408,6 +421,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (!documento.caminho) {
         return res.status(400).json({ error: "Documento sem caminho de arquivo" });
+      }
+
+      // Validação de segurança: caminho deve estar dentro do diretório uploads gerenciado
+      const resolvedPath = path.resolve(documento.caminho);
+      const resolvedUploadDir = path.resolve(uploadDir);
+      if (!resolvedPath.startsWith(resolvedUploadDir + path.sep)) {
+        return res.status(403).json({ error: "Caminho de arquivo não permitido" });
       }
 
       const resultado = await executarExtrator(documento.caminho);
