@@ -24,6 +24,11 @@ import BuscaParte from "@/pages/BuscaParte";
 import Monitoramento from "@/pages/Monitoramento";
 import DiarioOficial from "@/pages/DiarioOficial";
 import Configuracoes from "@/pages/Configuracoes";
+import PeticoesIA from "@/pages/PeticoesIA";
+import ConselhoMinistros from "@/pages/ConselhoMinistros";
+import ConfiguracaoDNA from "@/pages/ConfiguracaoDNA";
+import Timesheet from "@/pages/Timesheet";
+import RelatoriosGerenciais from "@/pages/RelatoriosGerenciais";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -54,6 +59,11 @@ function Router() {
       <Route path="/monitoramento" component={Monitoramento} />
       <Route path="/diarios" component={DiarioOficial} />
       <Route path="/configuracoes" component={Configuracoes} />
+      <Route path="/configuracoes/dna" component={ConfiguracaoDNA} />
+      <Route path="/atividades/timesheet" component={Timesheet} />
+      <Route path="/gestao/relatorios-gerenciais" component={RelatoriosGerenciais} />
+      <Route path="/ia/peticoes" component={PeticoesIA} />
+      <Route path="/ia/conselho" component={ConselhoMinistros} />
       <Route component={NotFound} />
     </Switch>
   );

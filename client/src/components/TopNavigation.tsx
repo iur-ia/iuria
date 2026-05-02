@@ -23,6 +23,7 @@ const menuItems = [
       { title: "Clientes", href: "/gestao/clientes" },
       { title: "Equipe", href: "/gestao/equipe" },
       { title: "Relatórios", href: "/gestao/relatorios" },
+      { title: "Relatórios Gerenciais", href: "/gestao/relatorios-gerenciais" },
     ],
   },
   {
@@ -32,6 +33,7 @@ const menuItems = [
       { title: "Lista de atividades", href: "/atividades" },
       { title: "Painel de Tarefas", href: "/atividades/painel" },
       { title: "Kanban de Tarefas", href: "/atividades/kanban" },
+      { title: "Timesheet", href: "/atividades/timesheet" },
       { title: "Relatórios", href: "/atividades/relatorios" },
     ],
   },
@@ -65,6 +67,15 @@ const menuItems = [
       { title: "Todos os Documentos", href: "/documentos" },
       { title: "Petições", href: "/documentos/peticoes" },
       { title: "Contratos", href: "/documentos/contratos" },
+    ],
+  },
+  {
+    title: "LEXOS IA",
+    href: "/ia/peticoes",
+    submenu: [
+      { title: "Petições com IA", href: "/ia/peticoes" },
+      { title: "Conselho de Ministros", href: "/ia/conselho" },
+      { title: "Configurar DNA", href: "/configuracoes/dna" },
     ],
   },
 ];
