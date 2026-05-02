@@ -541,7 +541,7 @@ export class DatabaseStorage implements IStorage {
   async getAcervoAndamentos(acervoId: string): Promise<AcervoAndamento[]> {
     return db.select().from(acervoAndamentos)
       .where(eq(acervoAndamentos.acervoId, acervoId))
-      .orderBy(desc(acervoAndamentos.createdAt));
+      .orderBy(desc(acervoAndamentos.data), desc(acervoAndamentos.createdAt));
   }
 
   async createAcervoAndamento(insertAndamento: InsertAcervoAndamento): Promise<AcervoAndamento> {

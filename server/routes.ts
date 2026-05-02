@@ -2156,8 +2156,21 @@ except Exception as e:
 
   app.patch("/api/acervo/:id", async (req, res) => {
     try {
+      const anterior = await storage.getAcervoProcesso(req.params.id);
+      if (!anterior) return res.status(404).json({ error: "Processo não encontrado" });
       const processo = await storage.updateAcervoProcesso(req.params.id, req.body);
       if (!processo) return res.status(404).json({ error: "Processo não encontrado" });
+      // Registra tramitação quando a fase muda (audit trail para processos administrativos)
+      if (req.body.fase && req.body.fase !== anterior.fase) {
+        const hoje = new Date().toISOString().split("T")[0];
+        await storage.createAcervoTramitacao({
+          acervoId: req.params.id,
+          fase: req.body.fase,
+          dataInicio: hoje,
+          responsavelId: processo.responsavelId ?? null,
+          observacoes: `Movido de "${anterior.fase ?? "—"}" para "${req.body.fase}"`,
+        });
+      }
       res.json(processo);
     } catch (error) {
       res.status(500).json({ error: "Erro ao atualizar processo do acervo" });
