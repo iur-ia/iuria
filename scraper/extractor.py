@@ -205,20 +205,40 @@ def extrair_markdown(caminho: str) -> dict:
                 }
 
         # ── DOCX ─────────────────────────────────────────────────────────
-        # Apenas .docx é suportado — .doc (binário legado) requer LibreOffice
         elif ext == ".docx":
             texto = extrair_docx(caminho)
             method = "python-docx"
 
+        # ── DOC legado ───────────────────────────────────────────────────
+        # antiword extrai texto plano de arquivos .doc binários
         elif ext == ".doc":
-            return {
-                "status": "parcial",
-                "markdown": "",
-                "chars": 0,
-                "pages": 0,
-                "method": "none",
-                "erro": "Formato .doc legado não é suportado. Converta para .docx e reenvie."
-            }
+            try:
+                import subprocess
+                result = subprocess.run(
+                    ["antiword", caminho],
+                    capture_output=True, text=True, timeout=30
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    texto = result.stdout
+                    method = "antiword"
+                else:
+                    return {
+                        "status": "parcial",
+                        "markdown": "",
+                        "chars": 0,
+                        "pages": 0,
+                        "method": "antiword",
+                        "erro": f"antiword não conseguiu extrair o .doc: {result.stderr.strip() or 'sem saída'}"
+                    }
+            except Exception as e:
+                return {
+                    "status": "erro",
+                    "markdown": "",
+                    "chars": 0,
+                    "pages": 0,
+                    "method": "antiword",
+                    "erro": f"Erro ao processar .doc: {e}"
+                }
 
         # ── Texto plano ──────────────────────────────────────────────────
         elif ext in (".txt", ".md"):

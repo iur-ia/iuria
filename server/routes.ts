@@ -75,9 +75,16 @@ function triggerExtracaoBackground(documentoId: string, caminho: string): void {
       });
     } catch (err) {
       console.error(`[extrator] Erro ao salvar markdown do doc ${documentoId}:`, err);
+      // Tenta marcar como erro para não ficar indefinidamente "pendente"
+      try {
+        await storage.updateDocumento(documentoId, { extracaoStatus: "erro" });
+      } catch {}
     }
-  }).catch((err) => {
+  }).catch(async (err) => {
     console.error(`[extrator] Erro ao extrair doc ${documentoId}:`, err);
+    try {
+      await storage.updateDocumento(documentoId, { extracaoStatus: "erro" });
+    } catch {}
   });
 }
 
@@ -358,13 +365,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Validação de extensão — formatos suportados pela pipeline de extração
-      const extAllow = [".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"];
+      const extAllow = [".pdf", ".doc", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"];
       const extFile = path.extname(req.file.originalname).toLowerCase();
       if (!extAllow.includes(extFile)) {
         fs.unlinkSync(req.file.path); // remove arquivo rejeitado
         const supported = extAllow.join(", ");
         return res.status(415).json({
-          error: `Formato '${extFile}' não suportado. Formatos aceitos: ${supported}. Arquivos .doc legados devem ser convertidos para .docx antes do upload.`
+          error: `Formato '${extFile}' não suportado. Formatos aceitos: ${supported}.`
         });
       }
 

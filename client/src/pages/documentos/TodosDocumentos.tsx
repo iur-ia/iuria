@@ -191,7 +191,7 @@ export default function TodosDocumentos() {
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+            accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.tiff,.bmp,.webp"
             className="hidden"
             onChange={handleFileChange}
             data-testid="input-file-upload"
