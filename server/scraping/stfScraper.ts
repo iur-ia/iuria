@@ -73,7 +73,7 @@ export async function buscarJurisprudenciaStf(q: string): Promise<ScrapingResult
 
       const $ = cheerio.load(html);
 
-      $(".resultado-pesquisa, .jurisprudencia-item, table tr").each((_, el) => {
+      $(".resultado-pesquisa, .jurisprudencia-item, table tr").each((_: number, el: any) => {
         const elRef = $(el);
         const ementa = elRef.find(".ementa, td").text().trim();
         const link = elRef.find("a").first().attr("href");

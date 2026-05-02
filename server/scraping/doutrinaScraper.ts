@@ -1,34 +1,24 @@
-import * as cheerio from "cheerio";
 import type { DoutrinaItem, ScrapingResult } from "./types";
-import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
-
-interface CnjBibliotecaItem {
-  id?: string | number;
-  titulo?: string;
-  autor?: string;
-  autores?: string[];
-  resumo?: string;
-  abstract?: string;
-  url?: string;
-  link?: string;
-  ano?: string | number;
-  tipo?: string;
-  assunto?: string;
-}
+import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { crawlUrl, crawlUrls } from "./crawler";
+import { toMarkdown } from "./firecrawl";
 
 async function buscarCnjBiblioteca(q: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<DoutrinaItem[]> {
-  log("info", `Buscando CNJ Biblioteca: "${q}"`);
+  log("info", `Crawlee: buscando CNJ Biblioteca: "${q}"`);
 
   try {
     const url = `https://bibliotecadigital.cnj.jus.br/xmlui/discover?query=${encodeURIComponent(q)}&rpp=10&format=json`;
     await randomDelay(500, 1200);
 
-    const html = await withRetry(() => fetchUrl(url, { timeoutMs: 20000 }));
-    const $ = cheerio.load(html);
+    const { $ } = await crawlUrl(url, {
+      maxRequestsPerMinute: 20,
+      maxRetries: 2,
+      timeoutSecs: 25,
+    });
 
     const items: DoutrinaItem[] = [];
 
-    $(".artifact-title, .ds-artifact-item, li.ds-artifact-item").each((_, el) => {
+    $(".artifact-title, .ds-artifact-item, li.ds-artifact-item").each((_: number, el: any) => {
       const elRef = $(el);
       const titulo = elRef.find("a.artifact-title, h4, .artifact-title a").first().text().trim();
       const autor = elRef.find(".artifact-info span, .author").first().text().trim();
@@ -54,19 +44,22 @@ async function buscarCnjBiblioteca(q: string, log: (l: "info" | "warn" | "error"
   }
 }
 
-async function buscarLeisJusBrasil(q: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<DoutrinaItem[]> {
-  log("info", `Buscando Planalto/LexML: "${q}"`);
+async function buscarLexML(q: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<DoutrinaItem[]> {
+  log("info", `Crawlee: buscando LexML: "${q}"`);
 
   try {
     const url = `https://www.lexml.gov.br/busca/SRU?operation=searchRetrieve&query=${encodeURIComponent(q)}&maximumRecords=10&recordSchema=dc`;
     await randomDelay(400, 900);
 
-    const xml = await withRetry(() => fetchUrl(url, { timeoutMs: 15000 }));
-    const $ = cheerio.load(xml, { xmlMode: true });
+    const { $ } = await crawlUrl(url, {
+      maxRequestsPerMinute: 20,
+      maxRetries: 2,
+      timeoutSecs: 20,
+    });
 
     const items: DoutrinaItem[] = [];
 
-    $("record, srw\\:record, zs\\:record").each((_, el) => {
+    $("record, srw\\:record, zs\\:record").each((_: number, el: any) => {
       const elRef = $(el);
       const titulo = elRef.find("dc\\:title, title").first().text().trim();
       const autor = elRef.find("dc\\:creator, creator").first().text().trim();
@@ -95,7 +88,7 @@ async function buscarLeisJusBrasil(q: string, log: (l: "info" | "warn" | "error"
 }
 
 async function buscarSenadoLegislacao(q: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<DoutrinaItem[]> {
-  log("info", `Buscando Senado Federal: "${q}"`);
+  log("info", `Buscando Senado Federal API: "${q}"`);
 
   try {
     const apiUrl = `https://legis.senado.leg.br/norma/pesquisa?norma=${encodeURIComponent(q)}&formato=json&numeroResultados=10`;
@@ -123,18 +116,21 @@ async function buscarSenadoLegislacao(q: string, log: (l: "info" | "warn" | "err
 }
 
 async function buscarStfDoutrina(q: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<DoutrinaItem[]> {
-  log("info", `Buscando biblioteca STF: "${q}"`);
+  log("info", `Crawlee: buscando biblioteca STF: "${q}"`);
 
   try {
     const url = `https://portal.stf.jus.br/pesquisa/pesquisarConteudo.asp?palavraChave=${encodeURIComponent(q)}`;
     await randomDelay(600, 1400);
 
-    const html = await withRetry(() => fetchUrl(url, { timeoutMs: 20000 }));
-    const $ = cheerio.load(html);
+    const { $ } = await crawlUrl(url, {
+      maxRequestsPerMinute: 15,
+      maxRetries: 2,
+      timeoutSecs: 25,
+    });
 
     const items: DoutrinaItem[] = [];
 
-    $(".resultado-pesquisa a, .pesquisa-resultado a, li.resultado a").each((_, el) => {
+    $(".resultado-pesquisa a, .pesquisa-resultado a, li.resultado a").each((_: number, el: any) => {
       const elRef = $(el);
       const titulo = elRef.text().trim();
       const link = elRef.attr("href") || "";
@@ -148,6 +144,20 @@ async function buscarStfDoutrina(q: string, log: (l: "info" | "warn" | "error", 
     });
 
     log("info", `STF doutrina retornou ${items.length} resultado(s)`);
+
+    // Enriquecer primeiro resultado com conteúdo via toMarkdown
+    if (items.length > 0 && items[0].link) {
+      try {
+        const doc = await toMarkdown(items[0].link, { timeoutMs: 12000 });
+        if (doc.markdown && doc.markdown.length > 100) {
+          items[0].resumo = doc.markdown.slice(0, 600);
+          log("info", `STF doutrina: íntegra extraída para "${items[0].titulo}"`);
+        }
+      } catch (enrichErr) {
+        log("warn", `Falha ao enriquecer doutrina STF: ${enrichErr}`);
+      }
+    }
+
     return items;
   } catch (err) {
     log("warn", `STF doutrina falhou: ${err}`);
@@ -159,11 +169,11 @@ export async function buscarDoutrina(q: string): Promise<ScrapingResult<Doutrina
   const t0 = Date.now();
   const { logs, log } = makeLogger();
 
-  log("info", `Buscando doutrina/legislação: "${q}"`);
+  log("info", `Motor Crawlee: buscando doutrina/legislação: "${q}"`);
 
   const [cnj, lexml, senado, stf] = await Promise.allSettled([
     buscarCnjBiblioteca(q, log),
-    buscarLeisJusBrasil(q, log),
+    buscarLexML(q, log),
     buscarSenadoLegislacao(q, log),
     buscarStfDoutrina(q, log),
   ]);

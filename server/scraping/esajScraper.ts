@@ -1,7 +1,7 @@
-import * as cheerio from "cheerio";
 import type { ProcessoScrapeData, ScrapingResult, TribunalInfo } from "./types";
 import { DATAJUD_AUTH } from "./types";
-import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { crawlUrl } from "./crawler";
 
 const ESAJ_INDICE: Record<string, string> = {
   TJSP: "api_publica_tjsp",
@@ -38,10 +38,7 @@ async function buscarViaDataJud(
 
   log("info", `Consultando DataJud ${sigla} para ${numero}`);
 
-  const body = JSON.stringify({
-    query: { match: { numeroProcesso: numero } },
-    size: 1,
-  });
+  const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
 
   try {
     const data = await withRetry(() =>
@@ -49,10 +46,7 @@ async function buscarViaDataJud(
         `https://api.datajud.cnj.jus.br/${indice}/_search`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": DATAJUD_AUTH,
-          },
+          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
           body,
           timeoutMs: 15000,
         }
@@ -82,36 +76,45 @@ async function buscarViaDataJud(
   }
 }
 
+/**
+ * Scraping direto do portal e-SAJ via Crawlee CheerioCrawler.
+ * Quando SCRAPER_API_KEY está disponível, roteia via ScraperAPI para contornar anti-bot.
+ */
 async function buscarViaEsajPortal(
   numero: string,
   tribunal: TribunalInfo,
   log: (l: "info" | "warn" | "error", m: string) => void
 ): Promise<ProcessoScrapeData | null> {
-  if (!tribunal.urlConsulta || !process.env.SCRAPER_API_KEY) return null;
+  if (!tribunal.urlConsulta) return null;
 
-  log("info", `Scraping e-SAJ ${tribunal.sigla} via ScraperAPI: ${tribunal.urlConsulta}`);
+  log("info", `Crawlee: scraping e-SAJ ${tribunal.sigla}: ${tribunal.urlConsulta}`);
 
   try {
     const formUrl = `${tribunal.urlConsulta}?processo.codigo=&processo.foro=&processo.numero=${encodeURIComponent(numero)}&uuidCaptcha=`;
     await randomDelay(1000, 2500);
 
-    const html = await withRetry(() =>
-      fetchUrl(formUrl, {
-        useScraperApi: true,
-        timeoutMs: 30000,
-      })
-    );
+    // ScraperAPI como proxy quando disponível — bypassa anti-bot do e-SAJ
+    const scraperKey = process.env.SCRAPER_API_KEY;
+    const proxyUrl = scraperKey
+      ? `http://scraperapi:${scraperKey}@proxy-server.scraperapi.com:8001`
+      : undefined;
 
-    const $ = cheerio.load(html);
+    const { $ } = await crawlUrl(formUrl, {
+      maxRequestsPerMinute: 10,
+      maxConcurrency: 1,
+      timeoutSecs: 35,
+      maxRetries: 2,
+      proxyUrl,
+    });
 
     const partes: string[] = [];
-    $(".unj-tag__actor, .nomeParteEAdvogado, .nomeParte, td.direita").each((_, el) => {
+    $(".unj-tag__actor, .nomeParteEAdvogado, .nomeParte, td.direita").each((_: number, el: any) => {
       const t = $(el).text().trim();
       if (t && t.length > 2) partes.push(t);
     });
 
     const movimentacoes: ProcessoScrapeData["movimentacoes"] = [];
-    $("tbody tr, .movimentacaoProcesso tr").each((_, el) => {
+    $("tbody tr, .movimentacaoProcesso tr").each((_: number, el: any) => {
       const cells = $(el).find("td");
       if (cells.length >= 2) {
         const data = $(cells[0]).text().trim();
@@ -122,16 +125,30 @@ async function buscarViaEsajPortal(
       }
     });
 
+    // Documentos com link público
+    const documentos: ProcessoScrapeData["documentos"] = [];
+    $("a[href*='abrirDocumento'], a[href*='download'], a.linkDocumento").each((_: number, el: any) => {
+      const titulo = $(el).text().trim() || "Documento";
+      const link = $(el).attr("href");
+      if (link) {
+        documentos.push({
+          titulo,
+          link: link.startsWith("http") ? link : `${tribunal.urlPortal}${link}`,
+          tipo: "PDF",
+        });
+      }
+    });
+
     const classe = $("span#classeProcesso, .classeProcesso, span[id*='classe']").first().text().trim();
     const assunto = $("span#assuntoProcesso, .assuntoProcesso, span[id*='assunto']").first().text().trim();
     const vara = $("span#varaProcesso, .varaProcesso, span[id*='vara'], span[id*='orgao']").first().text().trim();
 
     if (!movimentacoes.length && !partes.length) {
-      log("warn", `e-SAJ ${tribunal.sigla}: HTML não continha dados de processo reconhecíveis`);
+      log("warn", `e-SAJ ${tribunal.sigla}: Crawlee não encontrou dados reconhecíveis`);
       return null;
     }
 
-    log("info", `e-SAJ ${tribunal.sigla}: ${movimentacoes.length} movimentações, ${partes.length} partes`);
+    log("info", `e-SAJ ${tribunal.sigla}: ${movimentacoes.length} movimentações, ${partes.length} partes, ${documentos.length} documentos`);
 
     return {
       numero,
@@ -141,11 +158,11 @@ async function buscarViaEsajPortal(
       vara: vara || undefined,
       partes: Array.from(new Set(partes)).slice(0, 10),
       movimentacoes,
-      documentos: [],
+      documentos,
       urlPortal: tribunal.urlConsulta,
     };
   } catch (err) {
-    log("warn", `Scraping e-SAJ ${tribunal.sigla} falhou: ${err}`);
+    log("warn", `Crawlee e-SAJ ${tribunal.sigla} falhou: ${err}`);
     return null;
   }
 }
@@ -166,9 +183,9 @@ export async function buscarProcessoEsaj(
   processo = await buscarViaDataJud(numero, sigla, log);
 
   if (!processo) {
-    log("info", `DataJud não encontrou — tentando portal e-SAJ`);
+    log("info", `DataJud ${sigla}: sem resultado — tentando portal e-SAJ via Crawlee`);
     processo = await buscarViaEsajPortal(numero, tribunal, log);
-    if (processo) sourceLabel = `${sigla} — Portal e-SAJ (ScraperAPI)`;
+    if (processo) sourceLabel = `${sigla} — Portal e-SAJ (Crawlee)`;
   }
 
   let md = "";
@@ -188,6 +205,11 @@ export async function buscarProcessoEsaj(
             `**${m.data}** — ${m.descricao}${m.detalhes ? ` (${m.detalhes})` : ""}`
           ).join("\n")
         : "Sem movimentações disponíveis",
+      "",
+      processo.documentos.length > 0 ? "## Documentos" : "",
+      processo.documentos.length > 0
+        ? processo.documentos.slice(0, 10).map(d => `- [${d.titulo}](${d.link || "#"})`).join("\n")
+        : "",
     ].filter(l => l !== null && l !== undefined).join("\n");
   }
 

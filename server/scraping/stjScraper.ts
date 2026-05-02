@@ -1,7 +1,8 @@
-import * as cheerio from "cheerio";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult } from "./types";
 import { DATAJUD_AUTH } from "./types";
-import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { crawlUrl } from "./crawler";
+import { toMarkdown } from "./firecrawl";
 
 interface DataJudProcesso {
   _source?: {
@@ -30,10 +31,7 @@ async function buscarProcessoStjDataJud(numero: string, log: (l: "info" | "warn"
     const data = await withRetry(() =>
       fetchJson<{ hits?: { hits?: DataJudProcesso[] } }>(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": DATAJUD_AUTH,
-        },
+        headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
         body,
         timeoutMs: 15000,
       })
@@ -102,28 +100,30 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
   const t0 = Date.now();
   const { logs, log } = makeLogger();
 
-  log("info", `Buscando jurisprudência STJ: "${q}"`);
+  log("info", `Buscando jurisprudência STJ via Crawlee CheerioCrawler: "${q}"`);
 
   const items: JurisprudenciaItem[] = [];
 
   try {
-    const url = `https://scon.stj.jus.br/SCON/jurisprudencia/toc.jsp?b=ACOR&livre=${encodeURIComponent(q)}&i=1&l=10`;
+    const sconUrl = `https://scon.stj.jus.br/SCON/jurisprudencia/toc.jsp?b=ACOR&livre=${encodeURIComponent(q)}&i=1&l=10`;
     await randomDelay(500, 1200);
 
-    const html = await withRetry(() => fetchUrl(url, {
-      useScraperApi: !!process.env.SCRAPER_API_KEY,
-      timeoutMs: 25000,
-    }));
+    log("info", `Crawlee: buscando SCON STJ ${sconUrl}`);
+    const { $ } = await crawlUrl(sconUrl, {
+      maxRequestsPerMinute: 20,
+      maxRetries: 3,
+      timeoutSecs: 30,
+    });
 
-    const $ = cheerio.load(html);
-
-    $(".classElemento, .documento, tr.fundocinza, tr.fundocinzaclaro").each((_, el) => {
+    $(".classElemento, .documento, tr.fundocinza, tr.fundocinzaclaro").each((_: number, el: any) => {
       const elRef = $(el);
       const ementa = elRef.find(".ementa, .docEmentaFraseTxt, td.docEmentaTxt").text().trim();
       const relator = elRef.find(".docRelator, .relator").text().replace(/Relator[:\s]*/i, "").trim();
       const data = elRef.find(".docData, .dataPublicacao").text().trim();
       const numero = elRef.find(".docNumeroRegistro, .numeroRegistro").text().trim();
-      const link = elRef.find("a[href]").first().attr("href") || "";
+      const linkEl = elRef.find("a[href]").first();
+      const link = linkEl.attr("href") || "";
+      const fullLink = link ? (link.startsWith("http") ? link : `https://scon.stj.jus.br${link}`) : undefined;
 
       if (ementa && ementa.length > 10) {
         items.push({
@@ -132,14 +132,28 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
           ementa,
           relator: relator || undefined,
           data: data || undefined,
-          link: link ? (link.startsWith("http") ? link : `https://scon.stj.jus.br${link}`) : undefined,
+          link: fullLink,
         });
       }
     });
 
     log("info", `STJ SCON retornou ${items.length} resultado(s)`);
+
+    // Enriquecer o primeiro resultado com íntegra via toMarkdown
+    if (items.length > 0 && items[0].link) {
+      try {
+        log("info", `Buscando íntegra do primeiro acórdão STJ via toMarkdown`);
+        const integra = await toMarkdown(items[0].link, { timeoutMs: 15000 });
+        if (integra.markdown && integra.markdown.length > 100) {
+          items[0].markdownContent = integra.markdown.slice(0, 8000);
+          log("info", `Íntegra STJ extraída: ${integra.markdown.length} chars`);
+        }
+      } catch (integraErr) {
+        log("warn", `Falha ao extrair íntegra STJ: ${integraErr}`);
+      }
+    }
   } catch (err) {
-    log("warn", `Scraping SCON falhou: ${err}. Tentando API DataJud STJ...`);
+    log("warn", `Crawlee SCON STJ falhou: ${err}. Tentando DataJud...`);
 
     try {
       const apiUrl = "https://api.datajud.cnj.jus.br/api_publica_stj/_search";
@@ -152,10 +166,7 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
       const data = await withRetry(() =>
         fetchJson<{ hits?: { hits?: DataJudProcesso[] } }>(apiUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": DATAJUD_AUTH,
-          },
+          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
           body,
           timeoutMs: 15000,
         })
@@ -168,8 +179,7 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
           tribunal: "STJ",
           numero: src.numeroProcesso || undefined,
           ementa: src.assuntos?.[0]?.descricao || src.classe?.descricao || "Processo STJ",
-          data: undefined,
-          link: src.numeroProcesso ? `https://processo.stj.jus.br/processo/pesquisa/?termo=${encodeURIComponent(src.numeroProcesso || "")}` : undefined,
+          link: src.numeroProcesso ? `https://processo.stj.jus.br/processo/pesquisa/?termo=${encodeURIComponent(src.numeroProcesso)}` : undefined,
         });
       }
 
@@ -189,9 +199,10 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
           item.data ? `**Data:** ${item.data}` : "",
           "",
           item.ementa,
+          item.markdownContent ? `\n### Íntegra\n${item.markdownContent.slice(0, 2000)}` : "",
           item.link ? `[Ver íntegra](${item.link})` : "",
           "",
-        ].filter(l => l !== null).join("\n")),
+        ].filter(Boolean).join("\n")),
       ].join("\n")
     : `Nenhum resultado encontrado no STJ para "${q}".`;
 

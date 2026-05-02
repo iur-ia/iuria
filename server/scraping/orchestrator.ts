@@ -175,6 +175,112 @@ export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<
   };
 }
 
+const TJ_DATAJUD_INDICE: Record<string, string> = {
+  TJSP: "api_publica_tjsp",
+  TJBA: "api_publica_tjba",
+  TJSC: "api_publica_tjsc",
+  TJCE: "api_publica_tjce",
+  TJPE: "api_publica_tjpe",
+  TJMA: "api_publica_tjma",
+  TJMS: "api_publica_tjms",
+  TJAL: "api_publica_tjal",
+  TJRN: "api_publica_tjrn",
+  TJRS: "api_publica_tjrs",
+  TJMG: "api_publica_tjmg",
+  TJRJ: "api_publica_tjrj",
+  TJGO: "api_publica_tjgo",
+  TJPR: "api_publica_tjpr",
+};
+
+async function buscarJurisprudenciaTjEstadual(
+  q: string,
+  sigla: string,
+  t0: number,
+  logsIn: import("./types").ScrapingLog[],
+  logFn: (l: "info" | "warn" | "error", m: string) => void
+): Promise<ScrapingResult<JurisprudenciaItem[]>> {
+  const { logs, log } = makeLogger();
+  const allLogs = [...logsIn];
+
+  const indice = TJ_DATAJUD_INDICE[sigla] || "api_publica_tjsp";
+  log("info", `Buscando jurisprudência ${sigla} via DataJud (${indice}): "${q}"`);
+
+  const items: JurisprudenciaItem[] = [];
+
+  try {
+    const body = JSON.stringify({
+      query: {
+        multi_match: {
+          query: q,
+          fields: ["ementa", "assuntos.descricao", "classe.descricao"],
+        },
+      },
+      size: 10,
+      sort: [{ dataJulgamento: { order: "desc" } }],
+    });
+
+    const data = await withRetry(() =>
+      fetchJson<{ hits?: { hits?: DataJudHit[] } }>(
+        `https://api.datajud.cnj.jus.br/${indice}/_search`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
+          body,
+          timeoutMs: 15000,
+        }
+      )
+    );
+
+    for (const hit of data?.hits?.hits || []) {
+      const src = hit._source;
+      if (!src) continue;
+      const ementa = src.assuntos?.map(a => a.descricao).join("; ")
+        || src.classe?.descricao
+        || "Processo " + sigla;
+      items.push({
+        tribunal: sigla,
+        numero: src.numeroProcesso || undefined,
+        ementa,
+        relator: src.relator || undefined,
+        data: src.dataAjuizamento?.slice(0, 10) || undefined,
+        link: src.numeroProcesso
+          ? `https://www.${sigla.toLowerCase()}.jus.br/processo?numero=${encodeURIComponent(src.numeroProcesso)}`
+          : undefined,
+      });
+    }
+
+    log("info", `${sigla} DataJud retornou ${items.length} resultado(s)`);
+  } catch (err) {
+    log("error", `${sigla} DataJud falhou: ${err}`);
+    logFn("warn", `${sigla}: falha na busca de jurisprudência`);
+  }
+
+  const md = items.length > 0
+    ? [
+        `# Jurisprudência ${sigla} — "${q}"`,
+        "",
+        ...items.map((item, i) => [
+          `## ${i + 1}. ${item.numero || sigla}`,
+          item.relator ? `**Relator:** ${item.relator}` : "",
+          item.data ? `**Data:** ${item.data}` : "",
+          "",
+          item.ementa,
+          item.link ? `[Ver processo](${item.link})` : "",
+          "",
+        ].filter(Boolean).join("\n")),
+      ].join("\n")
+    : `Nenhum resultado no ${sigla} para "${q}".`;
+
+  return {
+    source: "datajud",
+    sourceLabel: `${sigla} — DataJud`,
+    data: items,
+    markdownContent: md,
+    durationMs: Date.now() - t0,
+    logs: [...allLogs, ...logs],
+  };
+}
+
 export async function pesquisarJurisprudencia(
   q: string,
   tribunal: string
@@ -194,17 +300,22 @@ export async function pesquisarJurisprudencia(
   if (trib.startsWith("TRF")) {
     return buscarJurisprudenciaTrf(q, trib);
   }
+  if (trib === "TJSP" || trib.startsWith("TJ")) {
+    return buscarJurisprudenciaTjEstadual(q, trib, t0, logs, log);
+  }
   if (!trib || trib === "TODOS") {
-    const [stf, stj, trf] = await Promise.allSettled([
+    const [stf, stj, trf, tjsp] = await Promise.allSettled([
       buscarJurisprudenciaStf(q),
       buscarJurisprudenciaStj(q),
       buscarJurisprudenciaTrf(q, ""),
+      buscarJurisprudenciaTjEstadual(q, "TJSP", Date.now(), [], () => {}),
     ]);
 
     const allItems: JurisprudenciaItem[] = [
       ...(stf.status === "fulfilled" ? stf.value.data : []),
       ...(stj.status === "fulfilled" ? stj.value.data : []),
       ...(trf.status === "fulfilled" ? trf.value.data : []),
+      ...(tjsp.status === "fulfilled" ? tjsp.value.data : []),
     ];
 
     const md = allItems.length > 0
@@ -225,7 +336,7 @@ export async function pesquisarJurisprudencia(
 
     return {
       source: "datajud",
-      sourceLabel: "STF / STJ / TRFs — Múltiplas Fontes",
+      sourceLabel: "STF / STJ / TRFs / TJSP — Múltiplas Fontes",
       data: allItems,
       markdownContent: md,
       durationMs: Date.now() - t0,
@@ -233,6 +344,7 @@ export async function pesquisarJurisprudencia(
         ...(stf.status === "fulfilled" ? stf.value.logs : []),
         ...(stj.status === "fulfilled" ? stj.value.logs : []),
         ...(trf.status === "fulfilled" ? trf.value.logs : []),
+        ...(tjsp.status === "fulfilled" ? tjsp.value.logs : []),
       ],
     };
   }
