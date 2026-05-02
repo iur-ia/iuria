@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import ReactMarkdown from "react-markdown";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Search, Filter, FileText, Download, Eye, CheckCircle, Clock, AlertTriangle, RefreshCw, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -70,8 +71,10 @@ function ConteudoMD({ markdown }: { markdown: string | null }) {
     );
   }
   return (
-    <div className="prose prose-sm max-w-none font-mono text-xs bg-muted/30 rounded-md p-4 overflow-auto max-h-[60vh] whitespace-pre-wrap leading-relaxed">
-      {markdown}
+    <div className="bg-muted/30 rounded-md p-4 overflow-auto max-h-[60vh]">
+      <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-code:text-foreground prose-code:bg-muted prose-code:px-1 prose-code:rounded">
+        <ReactMarkdown>{markdown}</ReactMarkdown>
+      </div>
     </div>
   );
 }
@@ -377,7 +380,7 @@ export default function TodosDocumentos() {
                       <p className="text-sm text-yellow-800">
                         {selectedDoc.extracaoStatus === "pendente"
                           ? "Extração ainda não executada. Clique em Reextrair."
-                          : "Extração parcial ou com erro — verifique o arquivo original."}
+                          : "Extração parcial — verifique o original."}
                       </p>
                       <Button
                         size="sm"
