@@ -929,7 +929,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (js !== -1 && je !== -1) {
               const dados = JSON.parse(mniOut.slice(js, je + 1));
               if (!dados.erro && dados.numero) {
-                // MNI retornou dados autenticados — enriquece e responde
+                // MNI retornou dados autenticados — normaliza e responde
+
+                // Normalizar partes: objetos {nome,tipo,cpf_cnpj} → string[]
+                // para compatibilidade com o contrato existente do frontend (partes: string[])
+                const partesRaw: any[] = dados.partes || [];
+                const partesNorm: string[] = partesRaw.map((p: any) => {
+                  if (typeof p === "string") return p;
+                  if (p?.nome) {
+                    const tipo = p.tipo ? `[${p.tipo}] ` : "";
+                    const doc = p.cpf_cnpj ? ` (${p.cpf_cnpj})` : "";
+                    return `${tipo}${p.nome}${doc}`;
+                  }
+                  return String(p);
+                });
+
                 const resultado = {
                   processos: [{
                     numero: dados.numero,
@@ -940,12 +954,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     data_distribuicao: dados.data_distribuicao,
                     situacao: dados.situacao,
                     segredo_justica: dados.segredo_justica,
-                    partes: dados.partes || [],
+                    partes: partesNorm,
                     movimentacoes: dados.movimentacoes || [],
                     documentos: dados.documentos || [],
                     url: dados.url_portal,
                     fonte: "pje_autenticado",
                   }],
+                  total_encontrados: 1,
                   fonte: "pje_autenticado",
                   pje_autenticado: true,
                   tribunal_nome: tribunal,
