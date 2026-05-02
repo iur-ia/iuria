@@ -300,7 +300,8 @@ export async function pesquisarJurisprudencia(
     return buscarJurisprudenciaStj(q);
   }
   if (trib.startsWith("TRF")) {
-    return buscarJurisprudenciaTrf(q, trib);
+    const tribunalTrf = TRIBUNAIS[trib] ?? { sigla: trib, nome: trib, segmento: "federal" as const, urlPortal: "" };
+    return buscarJurisprudenciaTrf(q, tribunalTrf);
   }
   if (trib === "TJSP" || trib.startsWith("TJ")) {
     return buscarJurisprudenciaTjEstadual(q, trib, t0, logs, log);
@@ -309,7 +310,7 @@ export async function pesquisarJurisprudencia(
     const [stf, stj, trf, tjsp] = await Promise.allSettled([
       buscarJurisprudenciaStf(q),
       buscarJurisprudenciaStj(q),
-      buscarJurisprudenciaTrf(q, ""),
+      buscarJurisprudenciaTrf(q, TRIBUNAIS["TRF1"] ?? { sigla: "TRF1", nome: "TRF1", segmento: "federal" as const, urlPortal: "" }),
       buscarJurisprudenciaTjEstadual(q, "TJSP", Date.now(), [], () => {}),
     ]);
 

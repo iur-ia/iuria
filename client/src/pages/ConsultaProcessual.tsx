@@ -658,6 +658,18 @@ export default function ConsultaProcessual() {
                   {resultado.fonte_label || resultado.fonte}
                 </Badge>
               )}
+              {/* Badge automático "via Scraping Direto" quando o backend usou portal scraping */}
+              {resultado.fonte_label && (resultado.fonte_label.toLowerCase().includes("scraping") || resultado.fonte_label.toLowerCase().includes("portal") || resultado.fonte_label.toLowerCase().includes("pje")) && (
+                <Badge
+                  variant="secondary"
+                  className="bg-primary/10 text-primary border-primary/20"
+                  data-testid="badge-via-scraping-direto"
+                  title={`Dados obtidos via scraping direto do portal: ${resultado.fonte_label}`}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  via Scraping Direto
+                </Badge>
+              )}
               {pjeStatus?.autenticado && pjeStatus?.valido && (
                 <Badge
                   variant="secondary"

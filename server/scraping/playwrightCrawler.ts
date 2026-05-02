@@ -1,22 +1,19 @@
 /**
- * Playwright-based browser crawler for JS-heavy tribunal portals.
+ * PlaywrightCrawler wrapper for JS-heavy tribunal portals (STF, PJe etc.).
  *
- * Uses Crawlee's PlaywrightCrawler with MemoryStorage.
- * Targets STF (portal.stf.jus.br), PJe (pje.jus.br), and other portals
- * that require JavaScript rendering for full page content extraction.
+ * Uses Crawlee's PlaywrightCrawler backed by Playwright/Chromium.
+ * Degrades gracefully to CheerioCrawler when Playwright is unavailable
+ * (missing binary or runtime error).
  *
- * Falls back gracefully to CheerioCrawler when the Playwright browser
- * binary is not available in the current deployment environment.
+ * Playwright is now an explicit dependency (package.json) so browser-based
+ * scraping is available in production. Binary download on first use:
+ *   node_modules/.bin/playwright install chromium --with-deps
  */
 
-import { Configuration, log as crawleeLog } from "crawlee";
-import { MemoryStorage } from "@crawlee/memory-storage";
 import { htmlToMarkdown } from "./utils";
-import { crawlUrl, type CrawlResult } from "./crawler";
+import { CrawlerManager } from "./crawlerManager";
 
-crawleeLog.setLevel(crawleeLog.LEVELS.WARNING);
-
-export interface BrowserCrawlResult {
+export interface BrowserFetchResult {
   url: string;
   html: string;
   markdown: string;
@@ -24,38 +21,47 @@ export interface BrowserCrawlResult {
   usedBrowser: boolean;
 }
 
-interface BrowserCrawlOptions {
-  /** Page wait timeout in ms (default: 20000) */
+export interface BrowserFetchOptions {
+  /** Playwright page timeout in ms. Default: 20 000. */
   timeoutMs?: number;
-  /** CSS selector to wait for before extracting content */
+  /** CSS selector to wait for before capturing HTML. */
   waitForSelector?: string;
-  /** Max retry attempts (default: 2) */
+  /** Max retries (degraded to Cheerio after first Playwright failure). */
   maxRetries?: number;
 }
 
 /**
- * Attempt to crawl a URL using Crawlee's PlaywrightCrawler.
- * If Playwright browser binaries are unavailable, falls back to CheerioCrawler.
+ * Fetch a URL using Playwright (Chromium) for full JS-rendering.
+ * Falls back to CheerioCrawler if Playwright cannot launch.
  */
 export async function crawlUrlWithBrowser(
   url: string,
-  opts: BrowserCrawlOptions = {}
-): Promise<BrowserCrawlResult> {
+  opts: BrowserFetchOptions = {}
+): Promise<BrowserFetchResult> {
   const { timeoutMs = 20000, waitForSelector, maxRetries = 2 } = opts;
 
-  // Attempt Playwright-based crawl first (for JS-rendered content)
   try {
-    const { PlaywrightCrawler } = await import("crawlee");
-    const config = new Configuration({ storageClient: new MemoryStorage() });
+    // Dynamic import so the module loads even when @crawlee/playwright is missing
+    const { PlaywrightCrawler, Configuration } = await import("@crawlee/playwright");
+    const { MemoryStorage } = await import("@crawlee/memory-storage");
 
     let html = "";
     let title = "";
+
+    const config = new Configuration({ storageClient: new MemoryStorage() });
 
     const crawler = new PlaywrightCrawler(
       {
         maxConcurrency: 1,
         requestHandlerTimeoutSecs: Math.ceil(timeoutMs / 1000) + 10,
         maxRequestRetries: maxRetries,
+        headless: true,
+        launchContext: {
+          launchOptions: {
+            headless: true,
+            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
+          },
+        },
         async requestHandler({ page, request }) {
           if (waitForSelector) {
             await page.waitForSelector(waitForSelector, { timeout: timeoutMs }).catch(() => {});
@@ -64,17 +70,11 @@ export async function crawlUrlWithBrowser(
           }
           html = await page.content();
           title = await page.title();
-          void request; // mark as used
+          void request;
         },
         failedRequestHandler({ request, error }) {
           const msg = error instanceof Error ? error.message : String(error);
           console.warn(`[playwrightCrawler] Failed ${request.url}: ${msg}`);
-        },
-        launchContext: {
-          launchOptions: {
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-          },
         },
       },
       config
@@ -82,7 +82,7 @@ export async function crawlUrlWithBrowser(
 
     await crawler.run([url]);
 
-    if (!html) throw new Error("Playwright: conteúdo vazio");
+    if (!html) throw new Error("Playwright: empty content");
 
     return {
       url,
@@ -92,11 +92,11 @@ export async function crawlUrlWithBrowser(
       usedBrowser: true,
     };
   } catch (playwrightErr) {
-    // Playwright unavailable or failed — degrade to CheerioCrawler
+    // Playwright unavailable or timed out — degrade to CheerioCrawler
     const errMsg = playwrightErr instanceof Error ? playwrightErr.message : String(playwrightErr);
     console.warn(`[playwrightCrawler] Playwright indisponível (${errMsg}), usando CheerioCrawler`);
 
-    const result: CrawlResult = await crawlUrl(url, {
+    const result = await CrawlerManager.fetch(url, {
       maxConcurrency: 1,
       maxRetries,
       timeoutSecs: Math.ceil(timeoutMs / 1000) + 5,
@@ -125,14 +125,14 @@ export async function extrairIntegraDecisao(url: string): Promise<string> {
 
     if (markdown && markdown.length > 200) return markdown.slice(0, 10000);
 
-    // Fallback: use CheerioCrawler with cheerio extraction
-    const result = await crawlUrl(url, { timeoutSecs: 20 });
+    // Fallback: Cheerio-only extraction
+    const result = await CrawlerManager.fetch(url, { timeoutSecs: 20 });
     const $ = result.$;
     const integra = $(
       ".ementa, .decisao, #acordao, .inteiro-teor, .acordaoTexto, article, main"
     ).text().trim();
 
-    void html; // mark as used
+    void html;
     return integra.slice(0, 10000) || markdown.slice(0, 10000);
   } catch (err) {
     console.warn(`[playwrightCrawler] Falha ao extrair íntegra de ${url}: ${err}`);

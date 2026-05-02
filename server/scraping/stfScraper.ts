@@ -3,7 +3,7 @@ import type { AnyNode } from "domhandler";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult } from "./types";
 import { DATAJUD_AUTH } from "./types";
 import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
-import { crawlUrl } from "./crawler";
+import { CrawlerManager } from "./crawlerManager";
 import { extrairIntegraDecisao } from "./playwrightCrawler";
 
 interface StfJurisprudenciaResponse {

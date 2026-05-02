@@ -2,7 +2,7 @@ import type { AnyNode } from "domhandler";
 import type { ProcessoScrapeData, ScrapingResult, TribunalInfo } from "./types";
 import { DATAJUD_AUTH } from "./types";
 import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
-import { crawlUrl } from "./crawler";
+import { CrawlerManager } from "./crawlerManager";
 
 const ESAJ_INDICE: Record<string, string> = {
   TJSP: "api_publica_tjsp",
@@ -100,8 +100,8 @@ async function buscarViaEsajPortal(
       ? `http://scraperapi:${scraperKey}@proxy-server.scraperapi.com:8001`
       : undefined;
 
-    const { $ } = await crawlUrl(formUrl, {
-      maxRequestsPerMinute: 10,
+    const { $ } = await CrawlerManager.fetch(formUrl, {
+      maxRequestsPerMinute: 60,
       maxConcurrency: 1,
       timeoutSecs: 35,
       maxRetries: 2,

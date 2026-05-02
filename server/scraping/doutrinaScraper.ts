@@ -1,7 +1,7 @@
 import type { AnyNode } from "domhandler";
 import type { DoutrinaItem, ScrapingResult } from "./types";
 import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
-import { crawlUrl, crawlUrls } from "./crawler";
+import { CrawlerManager } from "./crawlerManager";
 import { toMarkdown } from "./firecrawl";
 
 async function buscarCnjBiblioteca(q: string, log: (l: "info" | "warn" | "error", m: string) => void): Promise<DoutrinaItem[]> {
@@ -11,8 +11,8 @@ async function buscarCnjBiblioteca(q: string, log: (l: "info" | "warn" | "error"
     const url = `https://bibliotecadigital.cnj.jus.br/xmlui/discover?query=${encodeURIComponent(q)}&rpp=10&format=json`;
     await randomDelay(500, 1200);
 
-    const { $ } = await crawlUrl(url, {
-      maxRequestsPerMinute: 20,
+    const { $ } = await CrawlerManager.fetch(url, {
+      maxRequestsPerMinute: 60,
       maxRetries: 2,
       timeoutSecs: 25,
     });
@@ -52,8 +52,8 @@ async function buscarLexML(q: string, log: (l: "info" | "warn" | "error", m: str
     const url = `https://www.lexml.gov.br/busca/SRU?operation=searchRetrieve&query=${encodeURIComponent(q)}&maximumRecords=10&recordSchema=dc`;
     await randomDelay(400, 900);
 
-    const { $ } = await crawlUrl(url, {
-      maxRequestsPerMinute: 20,
+    const { $ } = await CrawlerManager.fetch(url, {
+      maxRequestsPerMinute: 60,
       maxRetries: 2,
       timeoutSecs: 20,
     });
@@ -123,8 +123,8 @@ async function buscarStfDoutrina(q: string, log: (l: "info" | "warn" | "error", 
     const url = `https://portal.stf.jus.br/pesquisa/pesquisarConteudo.asp?palavraChave=${encodeURIComponent(q)}`;
     await randomDelay(600, 1400);
 
-    const { $ } = await crawlUrl(url, {
-      maxRequestsPerMinute: 15,
+    const { $ } = await CrawlerManager.fetch(url, {
+      maxRequestsPerMinute: 60,
       maxRetries: 2,
       timeoutSecs: 25,
     });
