@@ -39,6 +39,7 @@ Enables users to track legal processes with configurable check intervals, automa
 - **Document Management**: Upload, extraction, and Markdown rendering of legal documents.
 - **Financial Management**: Dedicated section for financial tracking.
 - **CRM/Team Management**: Sections for managing clients and internal teams.
+- **Acervo (Digital Dossier)**: Internal dossier module for judicial and administrative processes. Includes Kanban for administrative processes (criação→instrução→decisão→arquivamento), timeline of andamentos, document attachments, and "Salvar no Acervo" button in ConsultaProcessual. Tables: `acervo_processos`, `acervo_andamentos`, `acervo_documentos`, `acervo_tramitacoes`.
 
 ## External Dependencies
 

@@ -19,7 +19,9 @@ import {
   insertClienteSchema, insertEquipeSchema, insertProcessoSchema,
   insertAtividadeSchema, insertDocumentoSchema, insertContaReceberSchema,
   insertContaPagarSchema, insertHonorarioSchema, insertTemplateSchema,
-  insertMonitoramentoSchema
+  insertMonitoramentoSchema,
+  insertAcervoProcessoSchema, insertAcervoAndamentoSchema,
+  insertAcervoDocumentoSchema, insertAcervoTramitacaoSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -1896,6 +1898,248 @@ except Exception as e:
       });
     } catch (error: any) {
       res.json({ configurada: true, online: false, mensagem: error.message });
+    }
+  });
+
+  // ==================== ACERVO DE PROCESSOS ====================
+
+  app.get("/api/acervo", async (req, res) => {
+    try {
+      const tipo = req.query.tipo as string | undefined;
+      const processos = await storage.getAcervoProcessos(tipo);
+      res.json(processos);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar acervo" });
+    }
+  });
+
+  app.get("/api/acervo/buscar", async (req, res) => {
+    try {
+      const numero = req.query.numero as string;
+      if (!numero) return res.status(400).json({ error: "Número obrigatório" });
+      const processo = await storage.getAcervoProcessoByNumero(numero);
+      if (!processo) return res.status(404).json({ error: "Processo não encontrado no acervo" });
+      res.json(processo);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar processo no acervo" });
+    }
+  });
+
+  app.get("/api/acervo/:id", async (req, res) => {
+    try {
+      const processo = await storage.getAcervoProcesso(req.params.id);
+      if (!processo) return res.status(404).json({ error: "Processo não encontrado" });
+      res.json(processo);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar processo do acervo" });
+    }
+  });
+
+  app.post("/api/acervo", async (req, res) => {
+    try {
+      const data = insertAcervoProcessoSchema.parse(req.body);
+      const processo = await storage.createAcervoProcesso(data);
+      res.status(201).json(processo);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  // Salvar processo da Consulta Processual direto no acervo (cria ou atualiza)
+  app.post("/api/acervo/salvar-processo", async (req, res) => {
+    try {
+      const { numero, tribunal, classe, assunto, relator, partes, movimentacoes, urlPortal } = req.body;
+      if (!numero) return res.status(400).json({ error: "Número do processo obrigatório" });
+
+      const partesStr = Array.isArray(partes) ? JSON.stringify(partes) : partes;
+      const existente = await storage.getAcervoProcessoByNumero(numero);
+
+      let processo;
+      if (existente) {
+        processo = await storage.updateAcervoProcesso(existente.id, {
+          tribunal: tribunal || existente.tribunal,
+          classe: classe || existente.classe,
+          assunto: assunto || existente.assunto,
+          relator: relator || existente.relator,
+          partes: partesStr || existente.partes,
+          urlPortal: urlPortal || existente.urlPortal,
+          dataUltimaSincronizacao: new Date(),
+        });
+
+        // Sincronizar andamentos
+        if (Array.isArray(movimentacoes) && movimentacoes.length > 0) {
+          const andamentosExistentes = await storage.getAcervoAndamentos(existente.id);
+          const descricoes = new Set(andamentosExistentes.map((a) => `${a.data}|${a.descricao}`));
+          for (const mov of movimentacoes) {
+            const chave = `${mov.data}|${mov.descricao}`;
+            if (!descricoes.has(chave)) {
+              await storage.createAcervoAndamento({
+                acervoId: existente.id,
+                data: mov.data,
+                descricao: mov.descricao,
+                detalhes: mov.detalhes || null,
+                tipo: "automatico",
+                origem: "consulta",
+                critico: false,
+              });
+            }
+          }
+        }
+
+        return res.json({ processo, criado: false, mensagem: "Processo atualizado no acervo" });
+      }
+
+      processo = await storage.createAcervoProcesso({
+        tipo: "judicial",
+        numero,
+        tribunal: tribunal || null,
+        classe: classe || null,
+        assunto: assunto || null,
+        relator: relator || null,
+        partes: partesStr || null,
+        urlPortal: urlPortal || null,
+        dataUltimaSincronizacao: new Date(),
+        statusInterno: "ativo",
+      });
+
+      // Criar andamentos iniciais
+      if (Array.isArray(movimentacoes) && movimentacoes.length > 0) {
+        for (const mov of movimentacoes) {
+          await storage.createAcervoAndamento({
+            acervoId: processo.id,
+            data: mov.data,
+            descricao: mov.descricao,
+            detalhes: mov.detalhes || null,
+            tipo: "automatico",
+            origem: "consulta",
+            critico: false,
+          });
+        }
+      }
+
+      res.status(201).json({ processo, criado: true, mensagem: "Processo salvo no acervo" });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao salvar processo no acervo: " + error.message });
+    }
+  });
+
+  app.patch("/api/acervo/:id", async (req, res) => {
+    try {
+      const processo = await storage.updateAcervoProcesso(req.params.id, req.body);
+      if (!processo) return res.status(404).json({ error: "Processo não encontrado" });
+      res.json(processo);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao atualizar processo do acervo" });
+    }
+  });
+
+  app.delete("/api/acervo/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteAcervoProcesso(req.params.id);
+      if (!success) return res.status(404).json({ error: "Processo não encontrado" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao excluir processo do acervo" });
+    }
+  });
+
+  // Andamentos
+  app.get("/api/acervo/:id/andamentos", async (req, res) => {
+    try {
+      const andamentos = await storage.getAcervoAndamentos(req.params.id);
+      res.json(andamentos);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar andamentos" });
+    }
+  });
+
+  app.post("/api/acervo/:id/andamentos", async (req, res) => {
+    try {
+      const data = insertAcervoAndamentoSchema.parse({ ...req.body, acervoId: req.params.id });
+      const andamento = await storage.createAcervoAndamento(data);
+      res.status(201).json(andamento);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  app.delete("/api/acervo/:id/andamentos/:andamentoId", async (req, res) => {
+    try {
+      const success = await storage.deleteAcervoAndamento(req.params.andamentoId);
+      if (!success) return res.status(404).json({ error: "Andamento não encontrado" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao excluir andamento" });
+    }
+  });
+
+  // Documentos do acervo
+  app.get("/api/acervo/:id/documentos", async (req, res) => {
+    try {
+      const documentos = await storage.getAcervoDocumentos(req.params.id);
+      res.json(documentos);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar documentos do acervo" });
+    }
+  });
+
+  app.post("/api/acervo/:id/documentos", async (req, res) => {
+    try {
+      const data = insertAcervoDocumentoSchema.parse({ ...req.body, acervoId: req.params.id });
+      const documento = await storage.createAcervoDocumento(data);
+      res.status(201).json(documento);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  app.delete("/api/acervo/:id/documentos/:docId", async (req, res) => {
+    try {
+      const success = await storage.deleteAcervoDocumento(req.params.docId);
+      if (!success) return res.status(404).json({ error: "Documento não encontrado" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao excluir documento do acervo" });
+    }
+  });
+
+  // Tramitações do acervo
+  app.get("/api/acervo/:id/tramitacoes", async (req, res) => {
+    try {
+      const tramitacoes = await storage.getAcervoTramitacoes(req.params.id);
+      res.json(tramitacoes);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar tramitações" });
+    }
+  });
+
+  app.post("/api/acervo/:id/tramitacoes", async (req, res) => {
+    try {
+      const data = insertAcervoTramitacaoSchema.parse({ ...req.body, acervoId: req.params.id });
+      const tramitacao = await storage.createAcervoTramitacao(data);
+      res.status(201).json(tramitacao);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  app.patch("/api/acervo/:id/tramitacoes/:tramId", async (req, res) => {
+    try {
+      const tramitacao = await storage.updateAcervoTramitacao(req.params.tramId, req.body);
+      if (!tramitacao) return res.status(404).json({ error: "Tramitação não encontrada" });
+      res.json(tramitacao);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao atualizar tramitação" });
+    }
+  });
+
+  app.delete("/api/acervo/:id/tramitacoes/:tramId", async (req, res) => {
+    try {
+      const success = await storage.deleteAcervoTramitacao(req.params.tramId);
+      if (!success) return res.status(404).json({ error: "Tramitação não encontrada" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao excluir tramitação" });
     }
   });
 

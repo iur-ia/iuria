@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap } from "lucide-react";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap, Archive, BookOpen } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -75,8 +75,40 @@ function useDebounce<T>(value: T, delay: number): T {
 
 function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResultado; certConfigurado?: boolean }) {
   const [adicionadoMonitoramento, setAdicionadoMonitoramento] = useState(false);
+  const [salvoAcervo, setSalvoAcervo] = useState(false);
   const { toast } = useToast();
-  
+
+  const acervoMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        numero: processo.numero_unico || processo.numero,
+        tribunal: processo.tribunal,
+        classe: processo.classe,
+        assunto: processo.assunto,
+        relator: processo.relator,
+        partes: processo.partes || [],
+        movimentacoes: processo.movimentacoes || [],
+        urlPortal: processo.url,
+      };
+      const res = await apiRequest("POST", "/api/acervo/salvar-processo", payload);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSalvoAcervo(true);
+      toast({
+        title: data.criado ? "Processo salvo no acervo!" : "Acervo atualizado!",
+        description: data.mensagem,
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao salvar no acervo",
+        description: "Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const monitoramentoMutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = {
@@ -138,6 +170,22 @@ function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResu
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button 
+              variant={salvoAcervo ? "secondary" : "outline"}
+              size="sm" 
+              onClick={() => acervoMutation.mutate()}
+              disabled={acervoMutation.isPending}
+              data-testid="button-salvar-acervo"
+            >
+              {acervoMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : salvoAcervo ? (
+                <Check className="h-4 w-4 mr-1" />
+              ) : (
+                <BookOpen className="h-4 w-4 mr-1" />
+              )}
+              {salvoAcervo ? "No Acervo" : "Salvar no Acervo"}
+            </Button>
             <Button 
               variant={adicionadoMonitoramento ? "secondary" : "default"}
               size="sm" 

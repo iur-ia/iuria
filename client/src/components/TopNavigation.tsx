@@ -52,6 +52,14 @@ const menuItems = [
     ],
   },
   {
+    title: "ACERVO",
+    href: "/acervo/judicial",
+    submenu: [
+      { title: "Processos Judiciais", href: "/acervo/judicial" },
+      { title: "Processos Administrativos", href: "/acervo/administrativo" },
+    ],
+  },
+  {
     title: "FINANCEIRO",
     href: "/financeiro",
     submenu: [

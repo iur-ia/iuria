@@ -22,6 +22,8 @@ import Contratos from "@/pages/documentos/Contratos";
 import ConsultaProcessual from "@/pages/ConsultaProcessual";
 import BuscaParte from "@/pages/BuscaParte";
 import Monitoramento from "@/pages/Monitoramento";
+import AcervoJudicial from "@/pages/acervo/AcervoJudicial";
+import ProcessoAdministrativo from "@/pages/acervo/ProcessoAdministrativo";
 import DiarioOficial from "@/pages/DiarioOficial";
 import Configuracoes from "@/pages/Configuracoes";
 import PeticoesIA from "@/pages/PeticoesIA";
@@ -54,6 +56,8 @@ function Router() {
       <Route path="/documentos/peticoes" component={Peticoes} />
       <Route path="/documentos/contratos" component={Contratos} />
       <Route path="/documentos" component={TodosDocumentos} />
+      <Route path="/acervo/judicial" component={AcervoJudicial} />
+      <Route path="/acervo/administrativo" component={ProcessoAdministrativo} />
       <Route path="/consulta-processual" component={ConsultaProcessual} />
       <Route path="/busca-parte" component={BuscaParte} />
       <Route path="/monitoramento" component={Monitoramento} />

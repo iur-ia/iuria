@@ -13,9 +13,14 @@ import {
   type ConsultaProcessual, type InsertConsultaProcessual,
   type Monitoramento, type InsertMonitoramento,
   type VerificacaoMonitoramento, type InsertVerificacaoMonitoramento,
+  type AcervoProcesso, type InsertAcervoProcesso,
+  type AcervoAndamento, type InsertAcervoAndamento,
+  type AcervoDocumento, type InsertAcervoDocumento,
+  type AcervoTramitacao, type InsertAcervoTramitacao,
   users, clientes, equipe, processos, atividades, documentos, 
   contasReceber, contasPagar, honorarios, templates,
-  tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento
+  tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento,
+  acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and } from "drizzle-orm";
@@ -112,6 +117,30 @@ export interface IStorage {
   // Verificações de Monitoramento
   createVerificacao(verificacao: InsertVerificacaoMonitoramento): Promise<VerificacaoMonitoramento>;
   getVerificacoesByMonitoramento(monitoramentoId: string): Promise<VerificacaoMonitoramento[]>;
+
+  // Acervo de Processos
+  getAcervoProcessos(tipo?: string): Promise<AcervoProcesso[]>;
+  getAcervoProcesso(id: string): Promise<AcervoProcesso | undefined>;
+  getAcervoProcessoByNumero(numero: string): Promise<AcervoProcesso | undefined>;
+  createAcervoProcesso(processo: InsertAcervoProcesso): Promise<AcervoProcesso>;
+  updateAcervoProcesso(id: string, processo: Partial<InsertAcervoProcesso>): Promise<AcervoProcesso | undefined>;
+  deleteAcervoProcesso(id: string): Promise<boolean>;
+
+  // Acervo Andamentos
+  getAcervoAndamentos(acervoId: string): Promise<AcervoAndamento[]>;
+  createAcervoAndamento(andamento: InsertAcervoAndamento): Promise<AcervoAndamento>;
+  deleteAcervoAndamento(id: string): Promise<boolean>;
+
+  // Acervo Documentos
+  getAcervoDocumentos(acervoId: string): Promise<AcervoDocumento[]>;
+  createAcervoDocumento(documento: InsertAcervoDocumento): Promise<AcervoDocumento>;
+  deleteAcervoDocumento(id: string): Promise<boolean>;
+
+  // Acervo Tramitações
+  getAcervoTramitacoes(acervoId: string): Promise<AcervoTramitacao[]>;
+  createAcervoTramitacao(tramitacao: InsertAcervoTramitacao): Promise<AcervoTramitacao>;
+  updateAcervoTramitacao(id: string, tramitacao: Partial<InsertAcervoTramitacao>): Promise<AcervoTramitacao | undefined>;
+  deleteAcervoTramitacao(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -447,6 +476,104 @@ export class DatabaseStorage implements IStorage {
       .where(eq(verificacoesMonitoramento.monitoramentoId, monitoramentoId))
       .orderBy(desc(verificacoesMonitoramento.createdAt))
       .limit(10);
+  }
+
+  // ==================== ACERVO ====================
+
+  async getAcervoProcessos(tipo?: string): Promise<AcervoProcesso[]> {
+    if (tipo) {
+      return db.select().from(acervoProcessos)
+        .where(eq(acervoProcessos.tipo, tipo))
+        .orderBy(desc(acervoProcessos.createdAt));
+    }
+    return db.select().from(acervoProcessos).orderBy(desc(acervoProcessos.createdAt));
+  }
+
+  async getAcervoProcesso(id: string): Promise<AcervoProcesso | undefined> {
+    const [processo] = await db.select().from(acervoProcessos).where(eq(acervoProcessos.id, id));
+    return processo;
+  }
+
+  async getAcervoProcessoByNumero(numero: string): Promise<AcervoProcesso | undefined> {
+    const [processo] = await db.select().from(acervoProcessos).where(eq(acervoProcessos.numero, numero));
+    return processo;
+  }
+
+  async createAcervoProcesso(insertProcesso: InsertAcervoProcesso): Promise<AcervoProcesso> {
+    const [processo] = await db.insert(acervoProcessos).values(insertProcesso).returning();
+    return processo;
+  }
+
+  async updateAcervoProcesso(id: string, updateData: Partial<InsertAcervoProcesso>): Promise<AcervoProcesso | undefined> {
+    const [processo] = await db.update(acervoProcessos)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(acervoProcessos.id, id))
+      .returning();
+    return processo;
+  }
+
+  async deleteAcervoProcesso(id: string): Promise<boolean> {
+    const result = await db.delete(acervoProcessos).where(eq(acervoProcessos.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Acervo Andamentos
+  async getAcervoAndamentos(acervoId: string): Promise<AcervoAndamento[]> {
+    return db.select().from(acervoAndamentos)
+      .where(eq(acervoAndamentos.acervoId, acervoId))
+      .orderBy(desc(acervoAndamentos.createdAt));
+  }
+
+  async createAcervoAndamento(insertAndamento: InsertAcervoAndamento): Promise<AcervoAndamento> {
+    const [andamento] = await db.insert(acervoAndamentos).values(insertAndamento).returning();
+    return andamento;
+  }
+
+  async deleteAcervoAndamento(id: string): Promise<boolean> {
+    const result = await db.delete(acervoAndamentos).where(eq(acervoAndamentos.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Acervo Documentos
+  async getAcervoDocumentos(acervoId: string): Promise<AcervoDocumento[]> {
+    return db.select().from(acervoDocumentos)
+      .where(eq(acervoDocumentos.acervoId, acervoId))
+      .orderBy(desc(acervoDocumentos.createdAt));
+  }
+
+  async createAcervoDocumento(insertDocumento: InsertAcervoDocumento): Promise<AcervoDocumento> {
+    const [documento] = await db.insert(acervoDocumentos).values(insertDocumento).returning();
+    return documento;
+  }
+
+  async deleteAcervoDocumento(id: string): Promise<boolean> {
+    const result = await db.delete(acervoDocumentos).where(eq(acervoDocumentos.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Acervo Tramitações
+  async getAcervoTramitacoes(acervoId: string): Promise<AcervoTramitacao[]> {
+    return db.select().from(acervoTramitacoes)
+      .where(eq(acervoTramitacoes.acervoId, acervoId))
+      .orderBy(acervoTramitacoes.createdAt);
+  }
+
+  async createAcervoTramitacao(insertTramitacao: InsertAcervoTramitacao): Promise<AcervoTramitacao> {
+    const [tramitacao] = await db.insert(acervoTramitacoes).values(insertTramitacao).returning();
+    return tramitacao;
+  }
+
+  async updateAcervoTramitacao(id: string, updateData: Partial<InsertAcervoTramitacao>): Promise<AcervoTramitacao | undefined> {
+    const [tramitacao] = await db.update(acervoTramitacoes)
+      .set(updateData)
+      .where(eq(acervoTramitacoes.id, id))
+      .returning();
+    return tramitacao;
+  }
+
+  async deleteAcervoTramitacao(id: string): Promise<boolean> {
+    const result = await db.delete(acervoTramitacoes).where(eq(acervoTramitacoes.id, id)).returning();
+    return result.length > 0;
   }
 }
 

@@ -334,3 +334,100 @@ export const insertVerificacaoMonitoramentoSchema = createInsertSchema(verificac
 
 export type InsertVerificacaoMonitoramento = z.infer<typeof insertVerificacaoMonitoramentoSchema>;
 export type VerificacaoMonitoramento = typeof verificacoesMonitoramento.$inferSelect;
+
+// ==================== ACERVO DE PROCESSOS ====================
+
+// Ficha principal do processo no acervo interno
+export const acervoProcessos = pgTable("acervo_processos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tipo: text("tipo").notNull().default("judicial"), // judicial | administrativo
+  numero: text("numero").notNull().unique(),
+  titulo: text("titulo"),
+  tribunal: text("tribunal"),
+  classe: text("classe"),
+  assunto: text("assunto"),
+  relator: text("relator"),
+  partes: text("partes"), // JSON array as text
+  fase: text("fase"),
+  statusInterno: text("status_interno").notNull().default("ativo"), // ativo | arquivado | suspenso
+  responsavelId: varchar("responsavel_id").references(() => equipe.id),
+  clienteId: varchar("cliente_id").references(() => clientes.id),
+  observacoes: text("observacoes"),
+  urlPortal: text("url_portal"),
+  dataUltimaSincronizacao: timestamp("data_ultima_sincronizacao"),
+  // Campos exclusivos para processos administrativos
+  tipoAdministrativo: text("tipo_administrativo"), // habilitacao | recurso | contrato | sindicancia | outro
+  interessado: text("interessado"),
+  prazo: date("prazo"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertAcervoProcessoSchema = createInsertSchema(acervoProcessos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertAcervoProcesso = z.infer<typeof insertAcervoProcessoSchema>;
+export type AcervoProcesso = typeof acervoProcessos.$inferSelect;
+
+// Andamentos (movimentos cronológicos) vinculados ao acervo
+export const acervoAndamentos = pgTable("acervo_andamentos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  acervoId: varchar("acervo_id").notNull().references(() => acervoProcessos.id, { onDelete: "cascade" }),
+  data: text("data").notNull(),
+  descricao: text("descricao").notNull(),
+  detalhes: text("detalhes"),
+  tipo: text("tipo").notNull().default("automatico"), // automatico | manual
+  origem: text("origem"), // datajud | pje | manual
+  critico: boolean("critico").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAcervoAndamentoSchema = createInsertSchema(acervoAndamentos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAcervoAndamento = z.infer<typeof insertAcervoAndamentoSchema>;
+export type AcervoAndamento = typeof acervoAndamentos.$inferSelect;
+
+// Documentos vinculados ao processo no acervo
+export const acervoDocumentos = pgTable("acervo_documentos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  acervoId: varchar("acervo_id").notNull().references(() => acervoProcessos.id, { onDelete: "cascade" }),
+  documentoId: varchar("documento_id").references(() => documentos.id),
+  nome: text("nome").notNull(),
+  descricao: text("descricao"),
+  url: text("url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAcervoDocumentoSchema = createInsertSchema(acervoDocumentos).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAcervoDocumento = z.infer<typeof insertAcervoDocumentoSchema>;
+export type AcervoDocumento = typeof acervoDocumentos.$inferSelect;
+
+// Tramitações do fluxo interno (principalmente processos administrativos)
+export const acervoTramitacoes = pgTable("acervo_tramitacoes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  acervoId: varchar("acervo_id").notNull().references(() => acervoProcessos.id, { onDelete: "cascade" }),
+  fase: text("fase").notNull(), // criacao | instrucao | decisao | arquivamento
+  responsavelId: varchar("responsavel_id").references(() => equipe.id),
+  dataInicio: date("data_inicio").notNull(),
+  dataFim: date("data_fim"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAcervoTramitacaoSchema = createInsertSchema(acervoTramitacoes).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAcervoTramitacao = z.infer<typeof insertAcervoTramitacaoSchema>;
+export type AcervoTramitacao = typeof acervoTramitacoes.$inferSelect;
