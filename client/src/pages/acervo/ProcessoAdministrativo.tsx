@@ -148,7 +148,7 @@ export default function ProcessoAdministrativo() {
         tipo: "administrativo",
         statusInterno: "ativo",
         prazo: form.prazo || null,
-        responsavelId: form.responsavelId || null,
+        responsavelId: (form.responsavelId && form.responsavelId !== "__none__") ? form.responsavelId : null,
       });
       return res.json();
     },
@@ -316,7 +316,7 @@ export default function ProcessoAdministrativo() {
                     <SelectValue placeholder="Selecionar responsável..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="__none__">Nenhum</SelectItem>
                     {equipe.map((m: any) => (
                       <SelectItem key={m.id} value={m.id}>{m.nome} — {m.cargo}</SelectItem>
                     ))}

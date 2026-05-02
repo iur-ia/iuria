@@ -996,27 +996,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   return String(p);
                 });
 
-                const resultado = {
-                  processos: [{
-                    numero: dados.numero,
-                    tribunal: dados.tribunal || tribunal,
-                    classe: dados.classe,
-                    assunto: dados.assunto,
-                    relator: dados.relator,
-                    data_distribuicao: dados.data_distribuicao,
-                    situacao: dados.situacao,
-                    segredo_justica: dados.segredo_justica,
-                    partes: partesNorm,
-                    movimentacoes: dados.movimentacoes || [],
-                    documentos: dados.documentos || [],
-                    url: dados.url_portal,
-                    fonte: "pje_autenticado",
-                  }],
-                  total_encontrados: 1,
-                  fonte: "pje_autenticado",
-                  pje_autenticado: true,
-                  tribunal_nome: tribunal,
-                };
                 const tribunalRecord = await storage.getTribunalBySigla(tribunal);
                 await storage.createConsultaProcessual({
                   tribunalId: tribunalRecord?.id || null,
@@ -1035,7 +1014,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   usuarioId: null,
                 });
                 // Auto-sync com acervo (se processo já estiver cadastrado)
-                const pjeProcessoObj = resultado.processos[0];
                 const pjeAcervoId = await sincronizarProcessoComAcervo({
                   numero: dados.numero,
                   tribunal: dados.tribunal || tribunal,
@@ -1046,7 +1024,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   movimentacoes: dados.movimentacoes || [],
                   url: dados.url_portal,
                 });
-                if (pjeAcervoId) (pjeProcessoObj as any).acervoId = pjeAcervoId;
+                const resultado = {
+                  processos: [{
+                    numero: dados.numero,
+                    tribunal: dados.tribunal || tribunal,
+                    classe: dados.classe,
+                    assunto: dados.assunto,
+                    relator: dados.relator,
+                    data_distribuicao: dados.data_distribuicao,
+                    situacao: dados.situacao,
+                    segredo_justica: dados.segredo_justica,
+                    partes: partesNorm,
+                    movimentacoes: dados.movimentacoes || [],
+                    documentos: dados.documentos || [],
+                    url: dados.url_portal,
+                    fonte: "pje_autenticado",
+                    acervoId: pjeAcervoId ?? undefined,
+                  }],
+                  total_encontrados: 1,
+                  fonte: "pje_autenticado",
+                  pje_autenticado: true,
+                  tribunal_nome: tribunal,
+                };
                 return res.json(resultado);
               }
             }

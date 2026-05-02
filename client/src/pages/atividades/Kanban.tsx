@@ -221,8 +221,16 @@ export default function KanbanTarefas() {
     queryKey: ["/api/atividades"],
   });
 
+  type AtividadeCreatePayload = {
+    titulo: string;
+    descricao?: string;
+    tipo: string;
+    prioridade: string;
+    status: string;
+    data: string;
+  };
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
+    mutationFn: async (data: AtividadeCreatePayload) => {
       const res = await apiRequest("POST", "/api/atividades", data);
       return res.json();
     },
@@ -363,7 +371,7 @@ export default function KanbanTarefas() {
       return;
     }
 
-    const payload = {
+    const payload: AtividadeCreatePayload = {
       titulo: formData.titulo,
       descricao: formData.descricao || undefined,
       tipo: TIPO_MAP[formData.tipo] || "Tarefa",
@@ -375,7 +383,7 @@ export default function KanbanTarefas() {
     if (editingTask) {
       updateMutation.mutate({ id: editingTask.id, data: payload });
     } else {
-      createMutation.mutate(payload as unknown as typeof formData);
+      createMutation.mutate(payload);
     }
   };
 
