@@ -12,9 +12,15 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
-// ==================== MULTER UPLOAD CONFIG ====================
+// ==================== CAMINHOS CONFIÁVEIS (allowlist de segurança) ====================
+// Apenas arquivos nesses diretórios são permitidos para extração.
+// Inclui: uploads do usuário + downloads do scraper de tribunais.
 const uploadDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+const scraperDownloadsDir = path.join(process.cwd(), "scraper", "downloads");
+const TRUSTED_DIRS = [uploadDir, scraperDownloadsDir];
+for (const dir of TRUSTED_DIRS) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -68,8 +74,7 @@ async function executarExtrator(caminho: string): Promise<ExtracaoResultado> {
 
 function isCaminhoSeguro(caminho: string): boolean {
   const resolved = path.resolve(caminho);
-  const allowed = path.resolve(uploadDir);
-  return resolved.startsWith(allowed + path.sep);
+  return TRUSTED_DIRS.some((dir) => resolved.startsWith(path.resolve(dir) + path.sep));
 }
 
 function triggerExtracaoBackground(documentoId: string, caminho: string): void {
@@ -355,16 +360,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/documentos", async (req, res) => {
     try {
-      // Campos server-managed são removidos do payload do cliente para evitar LFI e data injection
-      const { caminho, conteudoMarkdown, extracaoStatus, ...userPayload } = req.body;
+      // conteudoMarkdown e extracaoStatus são sempre gerenciados pelo servidor.
+      // caminho é aceito apenas quando aponta para diretório confiável (uploads/ ou scraper/downloads/)
+      // para evitar LFI — caminhos arbitrários do cliente são silenciosamente ignorados.
+      const { conteudoMarkdown, extracaoStatus, caminho: rawCaminho, ...userPayload } = req.body;
+      const caminhoConfiavel = rawCaminho && isCaminhoSeguro(rawCaminho) ? rawCaminho : undefined;
+
       const data = insertDocumentoSchema.omit({
-        caminho: true,
         conteudoMarkdown: true,
         extracaoStatus: true,
-      }).parse(userPayload);
+      }).parse({ ...userPayload, caminho: caminhoConfiavel });
+
       const documento = await storage.createDocumento(data);
       res.status(201).json(documento);
-      // caminho NOT set via this route — only via /upload (multer-managed)
+
+      // Dispara extração em background quando o arquivo já existe em caminho confiável
+      // (fluxo: ingestão de portal/scraper que já baixou o arquivo antes de criar o doc)
+      if (caminhoConfiavel) {
+        triggerExtracaoBackground(documento.id, caminhoConfiavel);
+      }
     } catch (error) {
       res.status(400).json({ error: "Dados inválidos" });
     }
