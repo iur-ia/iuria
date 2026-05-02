@@ -315,6 +315,31 @@ export const insertMonitoramentoSchema = createInsertSchema(monitoramentos).omit
 export type InsertMonitoramento = z.infer<typeof insertMonitoramentoSchema>;
 export type Monitoramento = typeof monitoramentos.$inferSelect;
 
+// Processos a Acompanhar — Lista de Vigilância
+export const processosAcompanhados = pgTable("processos_acompanhados", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id),
+  numeroProcesso: text("numero_processo").notNull(),
+  classe: text("classe"),
+  assunto: text("assunto"),
+  tribunal: text("tribunal").notNull(),
+  ultimoAndamento: text("ultimo_andamento"),
+  dataUltimoAndamento: text("data_ultimo_andamento"),
+  fonte: text("fonte"),
+  anotacao: text("anotacao"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertProcessoAcompanhadoSchema = createInsertSchema(processosAcompanhados).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertProcessoAcompanhado = z.infer<typeof insertProcessoAcompanhadoSchema>;
+export type ProcessoAcompanhado = typeof processosAcompanhados.$inferSelect;
+
 // Histórico de verificações do monitoramento
 export const verificacoesMonitoramento = pgTable("verificacoes_monitoramento", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

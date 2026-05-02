@@ -22,6 +22,8 @@ import {
   insertMonitoramentoSchema,
   insertAcervoProcessoSchema, insertAcervoAndamentoSchema,
   insertAcervoDocumentoSchema, insertAcervoTramitacaoSchema,
+  insertProcessoAcompanhadoSchema
+
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -1964,6 +1966,132 @@ except Exception as e:
       res.status(404).json({ error: "Documento não disponível" });
     } catch (error: any) {
       res.status(500).json({ error: "Erro ao baixar documento PJe: " + error.message });
+    }
+  });
+
+  // ==================== PROCESSOS ACOMPANHADOS ====================
+  app.get("/api/acompanhamentos", async (req, res) => {
+    try {
+      const items = await storage.getProcessosAcompanhados();
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar processos acompanhados" });
+    }
+  });
+
+  app.post("/api/acompanhamentos", async (req, res) => {
+    try {
+      const body = req.body as Record<string, any>;
+
+      // Auto-lookup path: if only numeroProcesso and optionally tribunal/anotacao are provided,
+      // fetch process data via scraper before persisting.
+      const isAutoLookup = body.numeroProcesso && !body.ultimoAndamento && !body.classe;
+
+      if (isAutoLookup && body.tribunal) {
+        const { spawn } = await import("child_process");
+        const scriptPath = path.join(process.cwd(), "scraper", "run_scraper.py");
+
+        const scraperResult = await new Promise<any>((resolve) => {
+          const proc = spawn("python3", [scriptPath, "consultar", body.tribunal, body.numeroProcesso, "numero"], {
+            env: { ...process.env },
+            timeout: 60000,
+          });
+          let stdout = "";
+          proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+          proc.on("close", () => {
+            try {
+              const js = stdout.indexOf("{"); const je = stdout.lastIndexOf("}");
+              if (js !== -1) resolve(JSON.parse(stdout.slice(js, je + 1)));
+              else resolve(null);
+            } catch { resolve(null); }
+          });
+          proc.on("error", () => resolve(null));
+        });
+
+        if (scraperResult && scraperResult.processos && scraperResult.processos.length > 0) {
+          const proc = scraperResult.processos[0];
+          const movs: Array<{ data: string; descricao: string }> = proc.movimentacoes || [];
+          const ultimo = movs[0];
+          body.classe = proc.classe || null;
+          body.assunto = proc.assunto || null;
+          body.tribunal = proc.tribunal || body.tribunal;
+          body.ultimoAndamento = ultimo?.descricao || null;
+          body.dataUltimoAndamento = ultimo?.data || null;
+          body.fonte = scraperResult.fonte || null;
+        }
+      }
+
+      const data = insertProcessoAcompanhadoSchema.parse(body);
+      const item = await storage.createProcessoAcompanhado(data);
+      res.status(201).json(item);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  app.patch("/api/acompanhamentos/:id", async (req, res) => {
+    try {
+      const existing = await storage.getProcessoAcompanhado(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Processo acompanhado não encontrado" });
+
+      // If refresh=true, re-fetch via scraper and update stored data
+      if (req.body.refresh === true) {
+        const { spawn } = await import("child_process");
+        const scriptPath = path.join(process.cwd(), "scraper", "run_scraper.py");
+
+        const scraperResult = await new Promise<any>((resolve) => {
+          const proc = spawn("python3", [scriptPath, "consultar", existing.tribunal, existing.numeroProcesso, "numero"], {
+            env: { ...process.env },
+            timeout: 60000,
+          });
+          let stdout = "";
+          proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+          proc.on("close", () => {
+            try {
+              const js = stdout.indexOf("{"); const je = stdout.lastIndexOf("}");
+              if (js !== -1) resolve(JSON.parse(stdout.slice(js, je + 1)));
+              else resolve(null);
+            } catch { resolve(null); }
+          });
+          proc.on("error", () => resolve(null));
+        });
+
+        if (scraperResult && scraperResult.processos && scraperResult.processos.length > 0) {
+          const proc = scraperResult.processos[0];
+          const movs: Array<{ data: string; descricao: string }> = proc.movimentacoes || [];
+          const ultimo = movs[0];
+          const updated = await storage.updateProcessoAcompanhado(existing.id, {
+            classe: proc.classe || existing.classe,
+            assunto: proc.assunto || existing.assunto,
+            tribunal: proc.tribunal || existing.tribunal,
+            ultimoAndamento: ultimo?.descricao || existing.ultimoAndamento,
+            dataUltimoAndamento: ultimo?.data || existing.dataUltimoAndamento,
+            fonte: scraperResult.fonte || existing.fonte,
+          });
+          return res.json(updated);
+        }
+
+        // Even if no new data found, just touch updatedAt
+        const updated = await storage.updateProcessoAcompanhado(existing.id, {});
+        return res.json(updated);
+      }
+
+      // Regular update (anotacao, etc.)
+      const { refresh: _r, ...updateData } = req.body;
+      const updated = await storage.updateProcessoAcompanhado(existing.id, updateData);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao atualizar processo acompanhado: " + error.message });
+    }
+  });
+
+  app.delete("/api/acompanhamentos/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteProcessoAcompanhado(req.params.id);
+      if (!success) return res.status(404).json({ error: "Processo acompanhado não encontrado" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao remover processo acompanhado" });
     }
   });
 

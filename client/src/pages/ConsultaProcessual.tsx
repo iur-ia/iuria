@@ -5,7 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap, Archive, BookOpen } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Loader2, Search, Scale, ExternalLink, AlertCircle, Clock, User, FileText, Building, Users, Bell, Check, Database, Globe, Wifi, Fingerprint, Info, Zap, Archive, BookOpen, Eye } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -77,6 +85,9 @@ function useDebounce<T>(value: T, delay: number): T {
 function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResultado; certConfigurado?: boolean }) {
   const [adicionadoMonitoramento, setAdicionadoMonitoramento] = useState(false);
   const [salvoAcervo, setSalvoAcervo] = useState(!!processo.acervoId);
+  const [adicionadoAcompanhamento, setAdicionadoAcompanhamento] = useState(false);
+  const [acompDialogOpen, setAcompDialogOpen] = useState(false);
+  const [anotacaoAcomp, setAnotacaoAcomp] = useState("");
   const { toast } = useToast();
 
   const acervoMutation = useMutation({
@@ -143,9 +154,37 @@ function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResu
     },
   });
 
+  const acompanhamentoMutation = useMutation({
+    mutationFn: async (anotacao: string) => {
+      const movs = processo.movimentacoes || [];
+      const ultimo = movs[0];
+      const res = await apiRequest("POST", "/api/acompanhamentos", {
+        numeroProcesso: processo.numero_unico || processo.numero,
+        tribunal: processo.tribunal,
+        classe: processo.classe || null,
+        assunto: processo.assunto || null,
+        ultimoAndamento: ultimo?.descricao || null,
+        dataUltimoAndamento: ultimo?.data || null,
+        anotacao: anotacao || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setAdicionadoAcompanhamento(true);
+      setAcompDialogOpen(false);
+      setAnotacaoAcomp("");
+      queryClient.invalidateQueries({ queryKey: ["/api/acompanhamentos"] });
+      toast({ title: "Processo adicionado aos acompanhados!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao adicionar aos acompanhados", variant: "destructive" });
+    },
+  });
+
   const movimentacoes = processo.movimentacoes || [];
 
   return (
+    <>
     <Card data-testid="card-processo-detalhe">
       {/* CAPA DO PROCESSO */}
       <CardHeader className="pb-3 border-b">
@@ -202,6 +241,22 @@ function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResu
                 <Bell className="h-4 w-4 mr-1" />
               )}
               {adicionadoMonitoramento ? "Monitorando" : "Monitorar"}
+            </Button>
+            <Button
+              variant={adicionadoAcompanhamento ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => { if (!adicionadoAcompanhamento) setAcompDialogOpen(true); }}
+              disabled={adicionadoAcompanhamento || acompanhamentoMutation.isPending}
+              data-testid="button-adicionar-acompanhamento"
+            >
+              {acompanhamentoMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              ) : adicionadoAcompanhamento ? (
+                <Check className="h-4 w-4 mr-1" />
+              ) : (
+                <Eye className="h-4 w-4 mr-1" />
+              )}
+              {adicionadoAcompanhamento ? "Acompanhando" : "Acompanhar"}
             </Button>
             {processo.url && (
               <Button 
@@ -335,6 +390,42 @@ function ProcessoDetalhe({ processo, certConfigurado }: { processo: ProcessoResu
         </div>
       </CardContent>
     </Card>
+
+    <Dialog open={acompDialogOpen} onOpenChange={(v) => { if (!v) setAcompDialogOpen(false); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Adicionar aos Acompanhados</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Processo: <span className="font-medium text-foreground">{processo.numero_unico || processo.numero}</span>
+          </p>
+          <Label htmlFor="anotacao-acomp">Anotação (opcional)</Label>
+          <Textarea
+            id="anotacao-acomp"
+            data-testid="textarea-anotacao-acompanhamento"
+            placeholder="Ex: Falência da Empresa X, Interesse cliente Y..."
+            value={anotacaoAcomp}
+            onChange={(e) => setAnotacaoAcomp(e.target.value)}
+            rows={3}
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => setAcompDialogOpen(false)} disabled={acompanhamentoMutation.isPending}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() => acompanhamentoMutation.mutate(anotacaoAcomp)}
+            disabled={acompanhamentoMutation.isPending}
+            data-testid="button-confirmar-acompanhamento"
+          >
+            {acompanhamentoMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+            Acompanhar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

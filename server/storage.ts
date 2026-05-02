@@ -17,10 +17,12 @@ import {
   type AcervoAndamento, type InsertAcervoAndamento,
   type AcervoDocumento, type InsertAcervoDocumento,
   type AcervoTramitacao, type InsertAcervoTramitacao,
+  type ProcessoAcompanhado, type InsertProcessoAcompanhado,
   users, clientes, equipe, processos, atividades, documentos, 
   contasReceber, contasPagar, honorarios, templates,
   tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento,
   acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
+  processosAcompanhados
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, inArray } from "drizzle-orm";
@@ -142,6 +144,13 @@ export interface IStorage {
   createAcervoTramitacao(tramitacao: InsertAcervoTramitacao): Promise<AcervoTramitacao>;
   updateAcervoTramitacao(id: string, tramitacao: Partial<InsertAcervoTramitacao>): Promise<AcervoTramitacao | undefined>;
   deleteAcervoTramitacao(id: string): Promise<boolean>;
+
+  // Processos Acompanhados
+  getProcessosAcompanhados(userId?: string): Promise<ProcessoAcompanhado[]>;
+  getProcessoAcompanhado(id: string): Promise<ProcessoAcompanhado | undefined>;
+  createProcessoAcompanhado(data: InsertProcessoAcompanhado): Promise<ProcessoAcompanhado>;
+  updateProcessoAcompanhado(id: string, data: Partial<InsertProcessoAcompanhado>): Promise<ProcessoAcompanhado | undefined>;
+  deleteProcessoAcompanhado(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -593,6 +602,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAcervoTramitacao(id: string): Promise<boolean> {
     const result = await db.delete(acervoTramitacoes).where(eq(acervoTramitacoes.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Processos Acompanhados
+  async getProcessosAcompanhados(userId?: string): Promise<ProcessoAcompanhado[]> {
+    if (userId) {
+      return db.select().from(processosAcompanhados)
+        .where(eq(processosAcompanhados.userId, userId))
+        .orderBy(desc(processosAcompanhados.updatedAt));
+    }
+    return db.select().from(processosAcompanhados)
+      .orderBy(desc(processosAcompanhados.updatedAt));
+  }
+
+  async getProcessoAcompanhado(id: string): Promise<ProcessoAcompanhado | undefined> {
+    const [item] = await db.select().from(processosAcompanhados).where(eq(processosAcompanhados.id, id));
+    return item;
+  }
+
+  async createProcessoAcompanhado(data: InsertProcessoAcompanhado): Promise<ProcessoAcompanhado> {
+    const [item] = await db.insert(processosAcompanhados).values(data).returning();
+    return item;
+  }
+
+  async updateProcessoAcompanhado(id: string, data: Partial<InsertProcessoAcompanhado>): Promise<ProcessoAcompanhado | undefined> {
+    const [item] = await db.update(processosAcompanhados)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(processosAcompanhados.id, id))
+      .returning();
+    return item;
+  }
+
+  async deleteProcessoAcompanhado(id: string): Promise<boolean> {
+    const result = await db.delete(processosAcompanhados).where(eq(processosAcompanhados.id, id)).returning();
     return result.length > 0;
   }
 }

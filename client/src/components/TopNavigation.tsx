@@ -45,6 +45,7 @@ const menuItems = [
       { title: "Consulta Processual", href: "/consulta-processual" },
       { title: "Busca por Parte", href: "/busca-parte" },
       { title: "Monitoramento", href: "/monitoramento" },
+      { title: "Processos a Acompanhar", href: "/acompanhamentos" },
       { title: "Diários Oficiais", href: "/diarios" },
       { title: "Incompletos", href: "/processos/incompletos" },
       { title: "Movimentados", href: "/processos/movimentados" },
