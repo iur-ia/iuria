@@ -55,6 +55,7 @@ Enables users to track legal processes with configurable check intervals, automa
 - **Processos a Acompanhar**: Watchlist feature for monitoring processes; table `processos_acompanhados`.
 - **Pesquisa Jurídica** (`/pesquisa-juridica`): 4-tab deep search UI — Processos (CNJ number → tribunal scraping), Jurisprudência (STF/STJ/TRFs, with tribunal filter), Doutrina (CNJ/LexML/Senado), Empresas (CNPJ lookup). Each tab shows source badge, duration, "Enviar ao LexOS" button that injects markdownContent into sessionStorage for the IA chat.
 - **Fallback Scraping na Consulta Processual**: When DataJud returns 0 results, "Tentar via Scraping Direto" button appears and calls `/api/pesquisa/processo/:numero`, showing result with "via Scraping Direto" badge.
+- **Engine Automática de Prazos Legais**: Automated deadline engine that generates tasks from processual events. Includes configurable rules (`deadline_rules` table), extended `atividades` with `risco`/`deadlineRuleId`/`fundamentoLegal`/`eventoGatilho` fields, 8 pre-configured rules for cível and trabalhista, a "Regras de Prazos" management page, a "Prazos Críticos" panel (72h window), email alert job (48h/24h via nodemailer), and a manual engine trigger UI. Server modules: `server/deadlineEngine.ts`, `server/emailAlerts.ts`.
 
 ## API Endpoints — Pesquisa Jurídica
 - `GET /api/pesquisa/processo/:numero` — orchestrates tribunal detection → DataJud → portal scraping

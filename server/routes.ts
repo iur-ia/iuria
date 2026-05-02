@@ -22,9 +22,11 @@ import {
   insertMonitoramentoSchema,
   insertAcervoProcessoSchema, insertAcervoAndamentoSchema,
   insertAcervoDocumentoSchema, insertAcervoTramitacaoSchema,
-  insertProcessoAcompanhadoSchema
-
+  insertProcessoAcompanhadoSchema,
+  insertDeadlineRuleSchema,
 } from "@shared/schema";
+import { aplicarRegrasDeadline, seedRegrasPreconfigured, detectarEventoGatilho } from "./deadlineEngine";
+import { iniciarJobAlertas } from "./emailAlerts";
 import { z } from "zod";
 
 // ==================== CAMINHOS CONFIÁVEIS (allowlist de segurança) ====================
@@ -962,16 +964,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!norm) continue;
           const chave = `${norm.data}|${norm.descricao}`;
           if (!chaves.has(chave)) {
-            await storage.createAcervoAndamento({
+            const critico = detectarCritico(norm.descricao);
+            const novoAndamento = await storage.createAcervoAndamento({
               acervoId: existente.id,
               data: norm.data,
               descricao: norm.descricao,
               detalhes: norm.detalhes,
               tipo: "automatico",
               origem: "consulta",
-              critico: detectarCritico(norm.descricao),
+              critico,
             });
             chaves.add(chave);
+            // Trigger deadline engine for any recognizable event (not gated by critico)
+            const eventoGatilhoSync = detectarEventoGatilho(norm.descricao);
+            if (eventoGatilhoSync) {
+              const andamentoId = novoAndamento.id;
+              const acervoNumero = existente.numero;
+              const dataEvento = norm.data ? new Date(norm.data) : new Date();
+              (async () => {
+                const processoVinculado = await storage.getProcessoByNumero(acervoNumero);
+                await aplicarRegrasDeadline({
+                  eventoGatilho: eventoGatilhoSync,
+                  processoId: processoVinculado?.id || null,
+                  dataEvento,
+                  sourceEventId: andamentoId,
+                  area: processoVinculado?.area || "geral",
+                });
+              })().catch((err) => console.error("[engine] Erro ao aplicar regras de prazo:", err));
+            }
           }
         }
       }
@@ -2264,16 +2284,34 @@ except Exception as e:
             if (!norm) continue;
             const chave = `${norm.data}|${norm.descricao}`;
             if (!chaves.has(chave)) {
-              await storage.createAcervoAndamento({
+              const critico = detectarCritico(norm.descricao);
+              const novoAndamento = await storage.createAcervoAndamento({
                 acervoId: existente.id,
                 data: norm.data,
                 descricao: norm.descricao,
                 detalhes: norm.detalhes,
                 tipo: "automatico",
                 origem: "consulta",
-                critico: detectarCritico(norm.descricao),
+                critico,
               });
               chaves.add(chave);
+              // Trigger deadline engine for any recognizable event (not gated by critico)
+              const eventoGatilhoUpdate = detectarEventoGatilho(norm.descricao);
+              if (eventoGatilhoUpdate) {
+                const andamentoId = novoAndamento.id;
+                const acervoNumero = existente.numero;
+                const dataEvento = norm.data ? new Date(norm.data) : new Date();
+                (async () => {
+                  const processoVinculado = await storage.getProcessoByNumero(acervoNumero);
+                  await aplicarRegrasDeadline({
+                    eventoGatilho: eventoGatilhoUpdate,
+                    processoId: processoVinculado?.id || null,
+                    dataEvento,
+                    sourceEventId: andamentoId,
+                    area: processoVinculado?.area || "geral",
+                  });
+                })().catch((err) => console.error("[engine] Erro ao aplicar regras de prazo:", err));
+              }
             }
           }
         }
@@ -2303,16 +2341,34 @@ except Exception as e:
           if (!norm) continue;
           const chave = `${norm.data}|${norm.descricao}`;
           if (!chaves.has(chave)) {
-            await storage.createAcervoAndamento({
+            const critico = detectarCritico(norm.descricao);
+            const novoAndamento = await storage.createAcervoAndamento({
               acervoId: processo.id,
               data: norm.data,
               descricao: norm.descricao,
               detalhes: norm.detalhes,
               tipo: "automatico",
               origem: "consulta",
-              critico: detectarCritico(norm.descricao),
+              critico,
             });
             chaves.add(chave);
+            // Trigger deadline engine for any recognizable event (not gated by critico)
+            const eventoGatilhoCreate = detectarEventoGatilho(norm.descricao);
+            if (eventoGatilhoCreate) {
+              const andamentoId = novoAndamento.id;
+              const acervoNumero = processo.numero;
+              const dataEvento = norm.data ? new Date(norm.data) : new Date();
+              (async () => {
+                const processoVinculado = await storage.getProcessoByNumero(acervoNumero);
+                await aplicarRegrasDeadline({
+                  eventoGatilho: eventoGatilhoCreate,
+                  processoId: processoVinculado?.id || null,
+                  dataEvento,
+                  sourceEventId: andamentoId,
+                  area: processoVinculado?.area || "geral",
+                });
+              })().catch((err) => console.error("[engine] Erro ao aplicar regras de prazo:", err));
+            }
           }
         }
       }
@@ -2371,6 +2427,27 @@ except Exception as e:
       const data = insertAcervoAndamentoSchema.parse({ ...req.body, acervoId: req.params.id });
       const andamento = await storage.createAcervoAndamento(data);
       res.status(201).json(andamento);
+
+      // Trigger deadline engine whenever a recognizable event is recorded (non-blocking, after response sent)
+      const eventoGatilho = detectarEventoGatilho(andamento.descricao);
+      if (eventoGatilho) {
+        const acervoId = req.params.id;
+        const andamentoId = andamento.id;
+        const dataEvento = andamento.data ? new Date(andamento.data) : new Date();
+        (async () => {
+          const acervoProcesso = await storage.getAcervoProcesso(acervoId);
+          const processoVinculado = acervoProcesso
+            ? await storage.getProcessoByNumero(acervoProcesso.numero)
+            : undefined;
+          await aplicarRegrasDeadline({
+            eventoGatilho,
+            processoId: processoVinculado?.id || null,
+            dataEvento,
+            sourceEventId: andamentoId,
+            area: processoVinculado?.area || "geral",
+          });
+        })().catch((err) => console.error("[engine] Erro ao aplicar regras (andamento manual):", err));
+      }
     } catch (error) {
       res.status(400).json({ error: "Dados inválidos" });
     }
@@ -2520,6 +2597,98 @@ except Exception as e:
       res.status(500).json({ error: "Erro ao consultar CNPJ", details: String(error) });
     }
   });
+
+  // ==================== ENGINE DE PRAZOS LEGAIS ====================
+
+  // Regras de Prazos
+  app.get("/api/deadline-rules", async (req, res) => {
+    try {
+      const filters: { ativo?: boolean; area?: string } = {};
+      if (req.query.ativo !== undefined) filters.ativo = req.query.ativo === "true";
+      if (req.query.area) filters.area = req.query.area as string;
+      const rules = await storage.getDeadlineRules(filters);
+      res.json(rules);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar regras de prazos" });
+    }
+  });
+
+  app.get("/api/deadline-rules/:id", async (req, res) => {
+    try {
+      const rule = await storage.getDeadlineRule(req.params.id);
+      if (!rule) return res.status(404).json({ error: "Regra não encontrada" });
+      res.json(rule);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar regra" });
+    }
+  });
+
+  app.post("/api/deadline-rules", async (req, res) => {
+    try {
+      const data = insertDeadlineRuleSchema.parse(req.body);
+      const rule = await storage.createDeadlineRule(data);
+      res.status(201).json(rule);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  app.patch("/api/deadline-rules/:id", async (req, res) => {
+    try {
+      const rule = await storage.updateDeadlineRule(req.params.id, req.body);
+      if (!rule) return res.status(404).json({ error: "Regra não encontrada" });
+      res.json(rule);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao atualizar regra" });
+    }
+  });
+
+  app.delete("/api/deadline-rules/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteDeadlineRule(req.params.id);
+      if (!success) return res.status(404).json({ error: "Regra não encontrada" });
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao excluir regra" });
+    }
+  });
+
+  // Aplicar regras manualmente (disparar engine)
+  const aplicarRegrasSchema = z.object({
+    eventoGatilho: z.string().min(1),
+    processoId: z.string().optional().nullable(),
+    dataEvento: z.string().min(1),
+    sourceEventId: z.string().optional(),
+    area: z.string().optional(),
+  });
+
+  app.post("/api/deadline-rules/aplicar", async (req, res) => {
+    try {
+      const data = aplicarRegrasSchema.parse(req.body);
+      const resultado = await aplicarRegrasDeadline({
+        ...data,
+        dataEvento: new Date(data.dataEvento),
+      });
+      res.json(resultado);
+    } catch (error) {
+      res.status(400).json({ error: "Dados inválidos" });
+    }
+  });
+
+  // Painel de prazos críticos (próximas 72h)
+  app.get("/api/prazos-criticos", async (req, res) => {
+    try {
+      const horas = parseInt(req.query.horas as string) || 72;
+      const tarefas = await storage.getAtividadesPrazosCriticos(horas);
+      res.json(tarefas);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar prazos críticos" });
+    }
+  });
+
+  // Inicializar seed de regras pré-configuradas e job de alertas
+  seedRegrasPreconfigured().catch(console.error);
+  iniciarJobAlertas();
 
   const httpServer = createServer(app);
   return httpServer;

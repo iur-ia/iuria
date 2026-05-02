@@ -110,6 +110,12 @@ export const atividades = pgTable("atividades", {
   hora: text("hora"),
   prioridade: text("prioridade").notNull().default("Média"),
   status: text("status").notNull().default("Pendente"),
+  // Campos da engine de prazos legais
+  risco: text("risco"), // BAIXO | MEDIO | ALTO | CRITICO
+  deadlineRuleId: varchar("deadline_rule_id"),
+  sourceEventId: text("source_event_id"),
+  fundamentoLegal: text("fundamento_legal"),
+  eventoGatilho: text("evento_gatilho"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -359,6 +365,51 @@ export const insertVerificacaoMonitoramentoSchema = createInsertSchema(verificac
 
 export type InsertVerificacaoMonitoramento = z.infer<typeof insertVerificacaoMonitoramentoSchema>;
 export type VerificacaoMonitoramento = typeof verificacoesMonitoramento.$inferSelect;
+
+// ==================== ENGINE DE PRAZOS LEGAIS ====================
+
+// Regras de prazos automáticos
+export const deadlineRules = pgTable("deadline_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  nome: text("nome").notNull(),
+  eventoGatilho: text("evento_gatilho").notNull(), // citacao | intimacao_decisao | sentenca | audiencia | despacho | recurso | outro
+  dias: integer("dias").notNull(),
+  tipoDia: text("tipo_dia").notNull().default("corrido"), // corrido | util
+  area: text("area").notNull().default("geral"), // civel | trabalhista | tributario | criminal | geral
+  riscoDefault: text("risco_default").notNull().default("MEDIO"), // BAIXO | MEDIO | ALTO | CRITICO
+  fundamentoLegal: text("fundamento_legal"),
+  descricao: text("descricao"),
+  responsavelPadraoId: varchar("responsavel_padrao_id").references(() => equipe.id),
+  ativo: boolean("ativo").notNull().default(true),
+  preConfigurada: boolean("pre_configurada").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertDeadlineRuleSchema = createInsertSchema(deadlineRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDeadlineRule = z.infer<typeof insertDeadlineRuleSchema>;
+export type DeadlineRule = typeof deadlineRules.$inferSelect;
+
+// Alertas enviados para prazos críticos (evita reenvio)
+export const deadlineAlerts = pgTable("deadline_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  atividadeId: varchar("atividade_id").notNull().references(() => atividades.id, { onDelete: "cascade" }),
+  tipoAlerta: text("tipo_alerta").notNull(), // 48h | 24h
+  enviadoEm: timestamp("enviado_em").defaultNow(),
+});
+
+export const insertDeadlineAlertSchema = createInsertSchema(deadlineAlerts).omit({
+  id: true,
+  enviadoEm: true,
+});
+
+export type InsertDeadlineAlert = z.infer<typeof insertDeadlineAlertSchema>;
+export type DeadlineAlert = typeof deadlineAlerts.$inferSelect;
 
 // ==================== ACERVO DE PROCESSOS ====================
 

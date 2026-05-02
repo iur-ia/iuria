@@ -18,14 +18,16 @@ import {
   type AcervoDocumento, type InsertAcervoDocumento,
   type AcervoTramitacao, type InsertAcervoTramitacao,
   type ProcessoAcompanhado, type InsertProcessoAcompanhado,
+  type DeadlineRule, type InsertDeadlineRule,
+  type DeadlineAlert, type InsertDeadlineAlert,
   users, clientes, equipe, processos, atividades, documentos, 
   contasReceber, contasPagar, honorarios, templates,
   tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento,
   acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
-  processosAcompanhados
+  processosAcompanhados, deadlineRules, deadlineAlerts
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, lte, and, inArray } from "drizzle-orm";
+import { eq, desc, lte, and, inArray, gte, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -50,6 +52,7 @@ export interface IStorage {
   // Processos
   getProcessos(): Promise<Processo[]>;
   getProcesso(id: string): Promise<Processo | undefined>;
+  getProcessoByNumero(numero: string): Promise<Processo | undefined>;
   createProcesso(processo: InsertProcesso): Promise<Processo>;
   updateProcesso(id: string, processo: Partial<InsertProcesso>): Promise<Processo | undefined>;
   deleteProcesso(id: string): Promise<boolean>;
@@ -151,6 +154,20 @@ export interface IStorage {
   createProcessoAcompanhado(data: InsertProcessoAcompanhado): Promise<ProcessoAcompanhado>;
   updateProcessoAcompanhado(id: string, data: Partial<InsertProcessoAcompanhado>): Promise<ProcessoAcompanhado | undefined>;
   deleteProcessoAcompanhado(id: string): Promise<boolean>;
+
+  // Deadline Rules (Engine de Prazos)
+  getDeadlineRules(filters?: { ativo?: boolean; preConfigurada?: boolean; area?: string }): Promise<DeadlineRule[]>;
+  getDeadlineRule(id: string): Promise<DeadlineRule | undefined>;
+  createDeadlineRule(rule: InsertDeadlineRule): Promise<DeadlineRule>;
+  updateDeadlineRule(id: string, rule: Partial<InsertDeadlineRule>): Promise<DeadlineRule | undefined>;
+  deleteDeadlineRule(id: string): Promise<boolean>;
+
+  // Deadline Alerts
+  getDeadlineAlert(atividadeId: string, tipoAlerta: string): Promise<DeadlineAlert | undefined>;
+  createDeadlineAlert(alert: InsertDeadlineAlert): Promise<DeadlineAlert>;
+
+  // Atividades com prazos críticos
+  getAtividadesPrazosCriticos(horasJanela: number): Promise<Atividade[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -227,6 +244,11 @@ export class DatabaseStorage implements IStorage {
 
   async getProcesso(id: string): Promise<Processo | undefined> {
     const [processo] = await db.select().from(processos).where(eq(processos.id, id));
+    return processo;
+  }
+
+  async getProcessoByNumero(numero: string): Promise<Processo | undefined> {
+    const [processo] = await db.select().from(processos).where(eq(processos.numero, numero));
     return processo;
   }
 
@@ -637,6 +659,75 @@ export class DatabaseStorage implements IStorage {
   async deleteProcessoAcompanhado(id: string): Promise<boolean> {
     const result = await db.delete(processosAcompanhados).where(eq(processosAcompanhados.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ==================== DEADLINE RULES ====================
+
+  async getDeadlineRules(filters?: { ativo?: boolean; preConfigurada?: boolean; area?: string }): Promise<DeadlineRule[]> {
+    const conditions = [];
+    if (filters?.ativo !== undefined) conditions.push(eq(deadlineRules.ativo, filters.ativo));
+    if (filters?.preConfigurada !== undefined) conditions.push(eq(deadlineRules.preConfigurada, filters.preConfigurada));
+    if (filters?.area) conditions.push(eq(deadlineRules.area, filters.area));
+    if (conditions.length > 0) {
+      return db.select().from(deadlineRules).where(and(...conditions)).orderBy(deadlineRules.createdAt);
+    }
+    return db.select().from(deadlineRules).orderBy(deadlineRules.createdAt);
+  }
+
+  async getDeadlineRule(id: string): Promise<DeadlineRule | undefined> {
+    const [rule] = await db.select().from(deadlineRules).where(eq(deadlineRules.id, id));
+    return rule;
+  }
+
+  async createDeadlineRule(rule: InsertDeadlineRule): Promise<DeadlineRule> {
+    const [created] = await db.insert(deadlineRules).values(rule).returning();
+    return created;
+  }
+
+  async updateDeadlineRule(id: string, updateData: Partial<InsertDeadlineRule>): Promise<DeadlineRule | undefined> {
+    const [updated] = await db.update(deadlineRules)
+      .set({ ...updateData, updatedAt: new Date() })
+      .where(eq(deadlineRules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDeadlineRule(id: string): Promise<boolean> {
+    const result = await db.delete(deadlineRules).where(eq(deadlineRules.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== DEADLINE ALERTS ====================
+
+  async getDeadlineAlert(atividadeId: string, tipoAlerta: string): Promise<DeadlineAlert | undefined> {
+    const [alert] = await db.select().from(deadlineAlerts)
+      .where(and(eq(deadlineAlerts.atividadeId, atividadeId), eq(deadlineAlerts.tipoAlerta, tipoAlerta)));
+    return alert;
+  }
+
+  async createDeadlineAlert(alert: InsertDeadlineAlert): Promise<DeadlineAlert> {
+    const [created] = await db.insert(deadlineAlerts).values(alert).returning();
+    return created;
+  }
+
+  // ==================== ATIVIDADES PRAZOS CRÍTICOS ====================
+
+  async getAtividadesPrazosCriticos(horasJanela: number): Promise<Atividade[]> {
+    const agora = new Date();
+    const limite = new Date(agora.getTime() + horasJanela * 60 * 60 * 1000);
+    const agoraDate = agora.toISOString().split("T")[0];
+    const limiteDate = limite.toISOString().split("T")[0];
+
+    return db.select().from(atividades)
+      .where(
+        and(
+          gte(atividades.data, agoraDate),
+          lte(atividades.data, limiteDate),
+          sql`${atividades.risco} IS NOT NULL`,
+          sql`${atividades.status} != 'Concluído'`
+        )
+      )
+      .orderBy(atividades.data);
   }
 }
 

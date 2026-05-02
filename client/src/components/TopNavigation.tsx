@@ -33,6 +33,8 @@ const menuItems = [
       { title: "Lista de atividades", href: "/atividades" },
       { title: "Painel de Tarefas", href: "/atividades/painel" },
       { title: "Kanban de Tarefas", href: "/atividades/kanban" },
+      { title: "Prazos Críticos", href: "/atividades/prazos-criticos" },
+      { title: "Regras de Prazos", href: "/atividades/regras-prazos" },
       { title: "Timesheet", href: "/atividades/timesheet" },
       { title: "Relatórios", href: "/atividades/relatorios" },
     ],

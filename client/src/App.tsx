@@ -13,6 +13,8 @@ import ListaAtividades from "@/pages/atividades/Lista";
 import PainelTarefas from "@/pages/atividades/Painel";
 import KanbanTarefas from "@/pages/atividades/Kanban";
 import RelatoriosAtividades from "@/pages/atividades/RelatoriosAtividades";
+import RegrasPrazos from "@/pages/atividades/RegrasPrazos";
+import PrazosCriticos from "@/pages/atividades/PrazosCriticos";
 import ContasReceber from "@/pages/financeiro/ContasReceber";
 import ContasPagar from "@/pages/financeiro/ContasPagar";
 import Honorarios from "@/pages/financeiro/Honorarios";
@@ -50,6 +52,8 @@ function Router() {
       <Route path="/atividades/painel" component={PainelTarefas} />
       <Route path="/atividades/kanban" component={KanbanTarefas} />
       <Route path="/atividades/relatorios" component={RelatoriosAtividades} />
+      <Route path="/atividades/regras-prazos" component={RegrasPrazos} />
+      <Route path="/atividades/prazos-criticos" component={PrazosCriticos} />
       <Route path="/atividades" component={ListaAtividades} />
       <Route path="/financeiro/receber" component={ContasReceber} />
       <Route path="/financeiro/pagar" component={ContasPagar} />
