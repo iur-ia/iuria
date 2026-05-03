@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TextAlign from "@tiptap/extension-text-align";
-import { TextStyle } from "@tiptap/extension-text-style";
+import { TextStyle, FontSize } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { Table, TableRow, TableCell, TableHeader } from "@tiptap/extension-table";
 import Placeholder from "@tiptap/extension-placeholder";
 import { FontFamily } from "@tiptap/extension-font-family";
+import Image from "@tiptap/extension-image";
 import {
   TextB,
   TextItalic,
@@ -36,11 +37,17 @@ import {
   Sparkle,
   Archive,
   CaretDown,
-  Pencil,
   MagicWand,
   CircleNotch,
   Copy as CopyIcon,
   Check,
+  PaintBrush,
+  Link as LinkIcon,
+  Image as ImageIcon,
+  TextIndent,
+  TextOutdent,
+  Pencil,
+  Copy,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +63,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -69,6 +86,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -90,6 +112,21 @@ const CATEGORIAS = [
   "Outro",
 ];
 
+const FONT_FAMILIES = [
+  { label: "Serif (Petição)", value: "'Times New Roman', Georgia, serif" },
+  { label: "Inter", value: "'Inter', sans-serif" },
+  { label: "Arial", value: "Arial, Helvetica, sans-serif" },
+  { label: "Courier", value: "'Courier New', monospace" },
+];
+
+const FONT_SIZES = ["10px", "11px", "12px", "13px", "14px", "16px", "18px", "20px", "24px", "32px"];
+
+const COLORS = [
+  "#000000", "#222222", "#555555", "#888888",
+  "#C96442", "#0F766E", "#1D4ED8", "#7C2D12",
+  "#A16207", "#15803D", "#9333EA", "#BE185D",
+];
+
 const QUICK_ACTIONS = [
   { label: "Gerar petição inicial", prompt: "Gere uma petição inicial completa com endereçamento, qualificação genérica das partes, fatos, fundamentação jurídica, pedidos e fechamento." },
   { label: "Revisar fundamentação", prompt: "Revise a fundamentação jurídica do documento, fortalecendo a argumentação e adicionando referências legais quando pertinente." },
@@ -99,11 +136,26 @@ const QUICK_ACTIONS = [
   { label: "Resumir documento", prompt: "Faça um resumo executivo do documento, em até 5 parágrafos." },
 ];
 
+type ChatMode = "gerar" | "editar" | "revisar";
+
 type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
-  mode?: "gerar" | "editar" | "revisar";
+  mode?: ChatMode;
   ts: number;
+};
+
+type EscritorioConfig = {
+  nome?: string;
+  oab?: string;
+  cnpj?: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
+  telefone?: string;
+  email?: string;
+  website?: string;
+  cabecalhoHtml?: string | null;
 };
 
 export default function PeticoesIA() {
@@ -112,12 +164,16 @@ export default function PeticoesIA() {
   // Editor state
   const [titulo, setTitulo] = useState("Nova Petição");
   const [rascunhoId, setRascunhoId] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({}),
       TextStyle,
       Color,
       FontFamily,
+      FontSize,
+      Image.configure({ inline: false, allowBase64: true }),
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       Table.configure({ resizable: true }),
       TableRow,
@@ -134,13 +190,15 @@ export default function PeticoesIA() {
           "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[60vh] font-serif text-[15px] leading-[1.75]",
       },
     },
+    onUpdate: () => setDirty(true),
   });
 
-  // Templates query
+  // Queries
   const { data: templates = [] } = useQuery<Template[]>({ queryKey: ["/api/templates"] });
   const { data: rascunhos = [] } = useQuery<PeticaoRascunho[]>({ queryKey: ["/api/peticao-rascunhos"] });
+  const { data: escritorio } = useQuery<EscritorioConfig>({ queryKey: ["/api/escritorio-config"] });
 
-  // Filtros painel templates
+  // Filtros
   const [filtroCat, setFiltroCat] = useState<string>("todas");
   const [buscaTpl, setBuscaTpl] = useState("");
   const templatesFiltrados = useMemo(() => {
@@ -157,25 +215,38 @@ export default function PeticoesIA() {
   useEffect(() => {
     if (!editor) return;
     if (rascunhoId) return;
-    if (editor.getHTML() && editor.getHTML() !== "<p></p>") return;
+    const cur = editor.getHTML();
+    if (cur && cur !== "<p></p>") return;
     if (templatesPadrao.length > 0) {
       const html = templatesPadrao[0].conteudoHtml || templatesPadrao[0].conteudo || "";
-      if (html) editor.commands.setContent(html);
+      if (html) {
+        editor.commands.setContent(html);
+        setDirty(false);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templatesPadrao.length, editor]);
 
-  // Chat state
+  // Header do documento (fallback escritorio config)
+  const headerHtml = useMemo(() => {
+    return escritorio?.cabecalhoHtml || "";
+  }, [escritorio]);
+
+  // Chat
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [chatMode, setChatMode] = useState<"gerar" | "editar" | "revisar">("gerar");
+  const [chatMode, setChatMode] = useState<ChatMode>("gerar");
   const chatEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.length]);
 
-  const chatMutation = useMutation({
-    mutationFn: async (payload: { instruction: string; mode: typeof chatMode; selection?: string }) => {
+  const chatMutation = useMutation<
+    { html: string; mode: ChatMode; provider: string },
+    Error,
+    { instruction: string; mode: ChatMode; selection?: string }
+  >({
+    mutationFn: async (payload) => {
       const res = await apiRequest("POST", "/api/peticoes-ia/chat", {
         instruction: payload.instruction,
         contentHtml: editor?.getHTML() || "",
@@ -184,10 +255,9 @@ export default function PeticoesIA() {
       });
       return res.json();
     },
-    onSuccess: (data: { html: string; mode: string }) => {
+    onSuccess: (data) => {
       if (!editor) return;
       if (data.mode === "editar") {
-        // substitui a seleção atual (ou no fim se não houver)
         const { from, to } = editor.state.selection;
         if (from !== to) {
           editor.chain().focus().deleteSelection().insertContent(data.html).run();
@@ -197,7 +267,6 @@ export default function PeticoesIA() {
       } else if (data.mode === "revisar") {
         editor.commands.setContent(data.html);
       } else {
-        // gerar — se editor está vazio, substitui; senão append
         const cur = editor.getHTML();
         if (!cur || cur === "<p></p>") {
           editor.commands.setContent(data.html);
@@ -205,10 +274,11 @@ export default function PeticoesIA() {
           editor.chain().focus("end").insertContent(data.html).run();
         }
       }
-      setChat((prev) => [...prev, { role: "assistant", content: "Pronto. Aplicado ao documento.", mode: data.mode as any, ts: Date.now() }]);
+      setDirty(true);
+      setChat((prev) => [...prev, { role: "assistant", content: "Pronto. Aplicado ao documento.", mode: data.mode, ts: Date.now() }]);
     },
-    onError: (err: any) => {
-      const msg = err?.message || "Erro na IA";
+    onError: (err) => {
+      const msg = err.message || "Erro na IA";
       setChat((prev) => [...prev, { role: "system", content: msg, ts: Date.now() }]);
       toast({ title: "IA indisponível", description: msg, variant: "destructive" });
     },
@@ -237,17 +307,59 @@ export default function PeticoesIA() {
       apiRequest("POST", `/api/templates/${id}/padrao`, { isPadrao }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/templates"] }),
   });
+  const updateTpl = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Template> }) =>
+      apiRequest("PATCH", `/api/templates/${id}`, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/templates"] }),
+  });
+  const duplicateTpl = useMutation({
+    mutationFn: async (t: Template) => {
+      const res = await apiRequest("POST", "/api/templates", {
+        nome: `${t.nome} (cópia)`,
+        categoria: t.categoria,
+        descricao: t.descricao,
+        conteudo: t.conteudo,
+        conteudoHtml: t.conteudoHtml,
+        headerHtml: t.headerHtml,
+        origem: "manual",
+        isPadrao: false,
+        usos: 0,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({ title: "Template duplicado" });
+    },
+  });
 
+  // Overwrite confirmation when loading a template into a dirty editor
+  const [pendingLoad, setPendingLoad] = useState<Template | null>(null);
   const loadTemplate = (t: Template) => {
+    if (!editor) return;
+    if (dirty) {
+      setPendingLoad(t);
+      return;
+    }
+    applyTemplate(t);
+  };
+  const applyTemplate = (t: Template) => {
     if (!editor) return;
     const html = t.conteudoHtml || (t.conteudo ? `<p>${t.conteudo}</p>` : "");
     editor.commands.setContent(html);
     setTitulo(t.nome);
+    setRascunhoId(null);
+    setDirty(false);
+    apiRequest("POST", `/api/templates/${t.id}/uso`, {}).catch(() => {
+      apiRequest("PATCH", `/api/templates/${t.id}`, { usos: (t.usos || 0) + 1 }).catch(() => {});
+    });
     toast({ title: "Template carregado", description: t.nome });
-    apiRequest("PATCH", `/api/templates/${t.id}`, { usos: (t.usos || 0) + 1 }).catch(() => {});
   };
 
-  // ===== Novo template dialog =====
+  // ===== Edit metadata dialog =====
+  const [editTpl, setEditTpl] = useState<Template | null>(null);
+
+  // ===== Novo template =====
   const [tplDialogOpen, setTplDialogOpen] = useState(false);
   const [novoTpl, setNovoTpl] = useState({ nome: "", categoria: "Cível", descricao: "" });
   const createTplMut = useMutation({
@@ -285,39 +397,34 @@ export default function PeticoesIA() {
       credentials: "include",
     });
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
+      const err = await res.json().catch(() => ({} as { error?: string }));
       toast({ title: "Falha ao importar", description: err.error || "Erro", variant: "destructive" });
       return;
     }
-    const data = await res.json();
+    const data: { html?: string } = await res.json();
     if (asTemplate) {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       toast({ title: "Template importado", description: file.name });
     } else if (editor && data.html) {
       editor.commands.setContent(data.html);
       setTitulo(file.name.replace(/\.[^.]+$/, ""));
+      setDirty(true);
       toast({ title: "Documento importado", description: file.name });
     }
   };
 
   // ===== Salvar rascunho =====
-  const salvarRascunho = useMutation({
+  const salvarRascunho = useMutation<PeticaoRascunho>({
     mutationFn: async () => {
       const html = editor?.getHTML() || "";
-      if (rascunhoId) {
-        const r = await apiRequest("PATCH", `/api/peticao-rascunhos/${rascunhoId}`, {
-          titulo, conteudoHtml: html,
-        });
-        return r.json();
-      } else {
-        const r = await apiRequest("POST", "/api/peticao-rascunhos", {
-          titulo, conteudoHtml: html,
-        });
-        return r.json();
-      }
+      const path = rascunhoId ? `/api/peticao-rascunhos/${rascunhoId}` : "/api/peticao-rascunhos";
+      const method = rascunhoId ? "PATCH" : "POST";
+      const r = await apiRequest(method, path, { titulo, conteudoHtml: html });
+      return r.json();
     },
-    onSuccess: (r: PeticaoRascunho) => {
+    onSuccess: (r) => {
       setRascunhoId(r.id);
+      setDirty(false);
       queryClient.invalidateQueries({ queryKey: ["/api/peticao-rascunhos"] });
       toast({ title: "Rascunho salvo", description: r.titulo });
     },
@@ -325,9 +432,13 @@ export default function PeticoesIA() {
 
   const carregarRascunho = (r: PeticaoRascunho) => {
     if (!editor) return;
+    if (dirty) {
+      if (!confirm("Há alterações não salvas. Descartar e abrir o rascunho?")) return;
+    }
     editor.commands.setContent(r.conteudoHtml || "");
     setTitulo(r.titulo);
     setRascunhoId(r.id);
+    setDirty(false);
   };
 
   // ===== Export =====
@@ -336,14 +447,15 @@ export default function PeticoesIA() {
     if (!editor) return;
     setExporting(format);
     try {
+      const fullHtml = headerHtml ? `${headerHtml}<hr/>${editor.getHTML()}` : editor.getHTML();
       const res = await fetch("/api/peticoes-ia/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: editor.getHTML(), format, titulo }),
+        body: JSON.stringify({ html: fullHtml, format, titulo }),
         credentials: "include",
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.json().catch(() => ({} as { error?: string }));
         throw new Error(err.error || `Erro ${res.status}`);
       }
       const blob = await res.blob();
@@ -355,8 +467,9 @@ export default function PeticoesIA() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (e: any) {
-      toast({ title: "Falha ao exportar", description: e.message, variant: "destructive" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast({ title: "Falha ao exportar", description: msg, variant: "destructive" });
     } finally {
       setExporting(null);
     }
@@ -374,15 +487,30 @@ export default function PeticoesIA() {
     },
   });
 
-  // ===== Copiar =====
+  // ===== Copy HTML =====
   const [copiado, setCopiado] = useState(false);
-  const copiar = async () => {
+  const copiarHtml = async () => {
     if (!editor) return;
     try {
-      await navigator.clipboard.writeText(editor.getText());
+      const html = editor.getHTML();
+      if (typeof ClipboardItem !== "undefined" && navigator.clipboard.write) {
+        const blobHtml = new Blob([html], { type: "text/html" });
+        const blobText = new Blob([editor.getText()], { type: "text/plain" });
+        await navigator.clipboard.write([
+          new ClipboardItem({ "text/html": blobHtml, "text/plain": blobText }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(html);
+      }
       setCopiado(true);
       setTimeout(() => setCopiado(false), 1500);
-    } catch {}
+    } catch {
+      try {
+        await navigator.clipboard.writeText(editor.getHTML());
+        setCopiado(true);
+        setTimeout(() => setCopiado(false), 1500);
+      } catch {}
+    }
   };
 
   if (!editor) {
@@ -462,7 +590,7 @@ export default function PeticoesIA() {
                   <div className="flex items-start justify-between gap-1">
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium truncate">{t.nome}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4">
                           {t.categoria}
                         </Badge>
@@ -472,33 +600,45 @@ export default function PeticoesIA() {
                         <span className="text-[10px] text-muted-foreground">{t.usos || 0} usos</span>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPadraoTpl.mutate({ id: t.id, isPadrao: !t.isPadrao });
-                        }}
-                        data-testid={`button-padrao-${t.id}`}
-                      >
-                        <Star weight={t.isPadrao ? "fill" : "regular"} className={t.isPadrao ? "text-primary" : ""} />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (confirm(`Excluir "${t.nome}"?`)) deleteTpl.mutate(t.id);
-                        }}
-                        data-testid={`button-excluir-${t.id}`}
-                      >
-                        <Trash />
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100" data-testid={`button-menu-tpl-${t.id}`}>
+                          <CaretDown />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => setEditTpl(t)} data-testid={`menu-edit-${t.id}`}>
+                          <Pencil className="mr-2" /> Editar metadados
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => duplicateTpl.mutate(t)} data-testid={`menu-duplicate-${t.id}`}>
+                          <Copy className="mr-2" /> Duplicar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => setPadraoTpl.mutate({ id: t.id, isPadrao: !t.isPadrao })}
+                          data-testid={`menu-padrao-${t.id}`}
+                        >
+                          <Star weight={t.isPadrao ? "fill" : "regular"} className={cn("mr-2", t.isPadrao && "text-primary")} />
+                          {t.isPadrao ? "Remover padrão" : "Definir como padrão"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => {
+                            if (confirm(`Excluir "${t.nome}"?`)) deleteTpl.mutate(t.id);
+                          }}
+                          data-testid={`menu-delete-${t.id}`}
+                        >
+                          <Trash className="mr-2" /> Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
+                  {t.isPadrao && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <Star weight="fill" className="text-primary text-xs" />
+                      <span className="text-[10px] text-primary">Padrão</span>
+                    </div>
+                  )}
                   {t.descricao && (
                     <div className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{t.descricao}</div>
                   )}
@@ -513,6 +653,7 @@ export default function PeticoesIA() {
                   {rascunhos.slice(0, 8).map((r) => (
                     <button
                       key={r.id}
+                      type="button"
                       className="w-full text-left rounded-md border bg-card p-2 hover-elevate"
                       onClick={() => carregarRascunho(r)}
                       data-testid={`card-rascunho-${r.id}`}
@@ -531,14 +672,14 @@ export default function PeticoesIA() {
 
         {/* ============================ COLUNA 2 — EDITOR ============================ */}
         <section className="flex-1 flex flex-col min-w-0 gap-2">
-          {/* Header com título e ações */}
           <div className="flex items-center gap-2">
             <Input
               value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
+              onChange={(e) => { setTitulo(e.target.value); setDirty(true); }}
               className="text-base font-medium border-none shadow-none focus-visible:ring-1 px-2 max-w-md"
               data-testid="input-titulo-peticao"
             />
+            {dirty && <Badge variant="outline" className="text-[10px]">não salvo</Badge>}
             <div className="flex-1" />
             <Button
               size="sm"
@@ -557,18 +698,18 @@ export default function PeticoesIA() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => exportar("docx")} disabled={!!exporting}>
+                <DropdownMenuItem onClick={() => exportar("docx")} disabled={!!exporting} data-testid="menu-export-docx">
                   <FileDoc className="mr-2" /> {exporting === "docx" ? "Gerando…" : "Word (.docx)"}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportar("pdf")} disabled={!!exporting}>
+                <DropdownMenuItem onClick={() => exportar("pdf")} disabled={!!exporting} data-testid="menu-export-pdf">
                   <FilePdf className="mr-2" /> {exporting === "pdf" ? "Gerando…" : "PDF"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={copiar}>
+                <DropdownMenuItem onClick={copiarHtml} data-testid="menu-copy-html">
                   {copiado ? <Check className="mr-2" /> : <CopyIcon className="mr-2" />}
-                  {copiado ? "Copiado!" : "Copiar texto"}
+                  {copiado ? "Copiado!" : "Copiar HTML"}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => window.print()}>
+                <DropdownMenuItem onClick={() => window.print()} data-testid="menu-print">
                   <FilePdf className="mr-2" /> Imprimir / PDF do navegador
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -584,13 +725,25 @@ export default function PeticoesIA() {
             </Button>
           </div>
 
-          {/* Toolbar */}
           <EditorToolbar editor={editor} />
 
-          {/* Página A4 */}
           <ScrollArea className="flex-1 surface-elevated rounded-md">
             <div className="mx-auto my-6 bg-white text-zinc-900 dark:bg-[#fafaf7] shadow-sm border border-border max-w-[820px] min-h-[1000px] px-[80px] py-[72px] print:shadow-none print:border-0 print:max-w-full print:p-0">
+              {headerHtml && (
+                <div
+                  className="text-xs text-zinc-700 mb-6 pb-3 border-b border-zinc-300 [&>*]:!my-0"
+                  dangerouslySetInnerHTML={{ __html: headerHtml }}
+                  data-testid="editor-header"
+                />
+              )}
               <EditorContent editor={editor} />
+              {escritorio?.nome && !headerHtml && (
+                <div className="mt-12 pt-4 border-t border-zinc-300 text-[10px] text-zinc-500 text-center">
+                  {escritorio.nome}
+                  {escritorio.oab ? ` — OAB ${escritorio.oab}` : ""}
+                  {escritorio.endereco ? ` • ${escritorio.endereco}` : ""}
+                </div>
+              )}
             </div>
           </ScrollArea>
         </section>
@@ -602,7 +755,7 @@ export default function PeticoesIA() {
               <Sparkle className="text-primary" />
               <h2 className="text-sm font-semibold tracking-tight">Assistente IA</h2>
             </div>
-            <Select value={chatMode} onValueChange={(v) => setChatMode(v as any)}>
+            <Select value={chatMode} onValueChange={(v) => setChatMode(v as ChatMode)}>
               <SelectTrigger className="h-7 w-[120px] text-xs" data-testid="select-chat-mode">
                 <SelectValue />
               </SelectTrigger>
@@ -650,6 +803,7 @@ export default function PeticoesIA() {
                     m.role === "assistant" && "bg-card",
                     m.role === "system" && "bg-destructive/10 border-destructive/30 text-destructive"
                   )}
+                  data-testid={`chat-msg-${i}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
                     {m.role === "user" ? "Você" : m.role === "assistant" ? "IA" : "Sistema"}
@@ -742,6 +896,81 @@ export default function PeticoesIA() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog: Editar metadados */}
+      <Dialog open={!!editTpl} onOpenChange={(o) => !o && setEditTpl(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar template</DialogTitle>
+            <DialogDescription>Atualizar metadados (nome, categoria, descrição).</DialogDescription>
+          </DialogHeader>
+          {editTpl && (
+            <div className="space-y-3">
+              <div>
+                <Label>Nome</Label>
+                <Input value={editTpl.nome} onChange={(e) => setEditTpl({ ...editTpl, nome: e.target.value })} data-testid="input-edit-tpl-nome" />
+              </div>
+              <div>
+                <Label>Categoria</Label>
+                <Select value={editTpl.categoria} onValueChange={(v) => setEditTpl({ ...editTpl, categoria: v })}>
+                  <SelectTrigger data-testid="select-edit-tpl-categoria"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Descrição</Label>
+                <Textarea
+                  rows={2}
+                  value={editTpl.descricao || ""}
+                  onChange={(e) => setEditTpl({ ...editTpl, descricao: e.target.value })}
+                  data-testid="textarea-edit-tpl-descricao"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTpl(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!editTpl) return;
+                updateTpl.mutate(
+                  { id: editTpl.id, data: { nome: editTpl.nome, categoria: editTpl.categoria, descricao: editTpl.descricao } },
+                  { onSuccess: () => setEditTpl(null) }
+                );
+              }}
+              data-testid="button-confirmar-edit-tpl"
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* AlertDialog: Overwrite confirmation */}
+      <AlertDialog open={!!pendingLoad} onOpenChange={(o) => !o && setPendingLoad(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sobrescrever documento atual?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Há alterações não salvas no editor. Carregar o template <strong>{pendingLoad?.nome}</strong> substituirá o conteúdo. Salve um rascunho antes se quiser preservar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingLoad) applyTemplate(pendingLoad);
+                setPendingLoad(null);
+              }}
+              data-testid="button-confirmar-overwrite"
+            >
+              Sobrescrever
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </TooltipProvider>
   );
 }
@@ -760,7 +989,7 @@ function EditorToolbar({ editor }: { editor: Editor }) {
   }: {
     onClick: () => void;
     active?: boolean;
-    icon: any;
+    icon: React.ComponentType<{ weight?: any; className?: string }>;
     label: string;
     testId: string;
   }) => (
@@ -782,123 +1011,138 @@ function EditorToolbar({ editor }: { editor: Editor }) {
 
   const Sep = () => <div className="w-px h-6 bg-border mx-0.5" />;
 
+  const setLink = () => {
+    const prev = editor.getAttributes("link").href as string | undefined;
+    const url = window.prompt("URL do link:", prev || "https://");
+    if (url === null) return;
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  };
+
+  const insertImage = () => {
+    const url = window.prompt("URL da imagem:");
+    if (!url) return;
+    editor.chain().focus().setImage({ src: url }).run();
+  };
+
+  const indent = () => {
+    if (editor.can().sinkListItem("listItem")) {
+      editor.chain().focus().sinkListItem("listItem").run();
+    }
+  };
+  const outdent = () => {
+    if (editor.can().liftListItem("listItem")) {
+      editor.chain().focus().liftListItem("listItem").run();
+    }
+  };
+
   return (
     <div className="flex items-center gap-0.5 flex-wrap p-1.5 rounded-md border bg-card">
-      <Btn
-        onClick={() => editor.chain().focus().undo().run()}
-        icon={ArrowCounterClockwise}
-        label="Desfazer"
-        testId="toolbar-undo"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().redo().run()}
-        icon={ArrowClockwise}
-        label="Refazer"
-        testId="toolbar-redo"
-      />
+      <Btn onClick={() => editor.chain().focus().undo().run()} icon={ArrowCounterClockwise} label="Desfazer" testId="toolbar-undo" />
+      <Btn onClick={() => editor.chain().focus().redo().run()} icon={ArrowClockwise} label="Refazer" testId="toolbar-redo" />
       <Sep />
-      <Btn
-        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-        active={editor.isActive("heading", { level: 1 })}
-        icon={TextHOne}
-        label="Título 1"
-        testId="toolbar-h1"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-        active={editor.isActive("heading", { level: 2 })}
-        icon={TextHTwo}
-        label="Título 2"
-        testId="toolbar-h2"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        active={editor.isActive("heading", { level: 3 })}
-        icon={TextHThree}
-        label="Título 3"
-        testId="toolbar-h3"
-      />
+
+      {/* Font family */}
+      <Select
+        value={(editor.getAttributes("textStyle").fontFamily as string) || ""}
+        onValueChange={(v) => {
+          if (v === "__default__") editor.chain().focus().unsetFontFamily().run();
+          else editor.chain().focus().setFontFamily(v).run();
+        }}
+      >
+        <SelectTrigger className="h-8 w-[140px] text-xs" data-testid="toolbar-fontfamily">
+          <SelectValue placeholder="Fonte" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__default__">Padrão</SelectItem>
+          {FONT_FAMILIES.map((f) => (
+            <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Font size */}
+      <Select
+        value={(editor.getAttributes("textStyle").fontSize as string) || ""}
+        onValueChange={(v) => {
+          const cmd = editor.chain().focus() as ReturnType<typeof editor.chain> & {
+            setFontSize?: (s: string) => typeof cmd;
+            unsetFontSize?: () => typeof cmd;
+          };
+          if (v === "__default__") cmd.unsetFontSize?.().run();
+          else cmd.setFontSize?.(v).run();
+        }}
+      >
+        <SelectTrigger className="h-8 w-[80px] text-xs" data-testid="toolbar-fontsize">
+          <SelectValue placeholder="Tam." />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__default__">Padrão</SelectItem>
+          {FONT_SIZES.map((s) => (
+            <SelectItem key={s} value={s}>{s.replace("px", "")}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
       <Sep />
-      <Btn
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        active={editor.isActive("bold")}
-        icon={TextB}
-        label="Negrito"
-        testId="toolbar-bold"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        active={editor.isActive("italic")}
-        icon={TextItalic}
-        label="Itálico"
-        testId="toolbar-italic"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleUnderline().run()}
-        active={editor.isActive("underline")}
-        icon={TextUnderline}
-        label="Sublinhado"
-        testId="toolbar-underline"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        active={editor.isActive("strike")}
-        icon={TextStrikethrough}
-        label="Tachado"
-        testId="toolbar-strike"
-      />
+      <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} icon={TextHOne} label="Título 1" testId="toolbar-h1" />
+      <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} icon={TextHTwo} label="Título 2" testId="toolbar-h2" />
+      <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} icon={TextHThree} label="Título 3" testId="toolbar-h3" />
       <Sep />
-      <Btn
-        onClick={() => editor.chain().focus().setTextAlign("left").run()}
-        active={editor.isActive({ textAlign: "left" })}
-        icon={TextAlignLeft}
-        label="Esquerda"
-        testId="toolbar-align-left"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().setTextAlign("center").run()}
-        active={editor.isActive({ textAlign: "center" })}
-        icon={TextAlignCenter}
-        label="Centro"
-        testId="toolbar-align-center"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().setTextAlign("right").run()}
-        active={editor.isActive({ textAlign: "right" })}
-        icon={TextAlignRight}
-        label="Direita"
-        testId="toolbar-align-right"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-        active={editor.isActive({ textAlign: "justify" })}
-        icon={TextAlignJustify}
-        label="Justificar"
-        testId="toolbar-align-justify"
-      />
+      <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} icon={TextB} label="Negrito" testId="toolbar-bold" />
+      <Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={TextItalic} label="Itálico" testId="toolbar-italic" />
+      <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={TextUnderline} label="Sublinhado" testId="toolbar-underline" />
+      <Btn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={TextStrikethrough} label="Tachado" testId="toolbar-strike" />
+
+      {/* Color picker */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button size="icon" variant="ghost" className="h-8 w-8" data-testid="toolbar-color">
+            <PaintBrush />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-2">
+          <div className="grid grid-cols-6 gap-1">
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                aria-label={`cor ${c}`}
+                className="h-6 w-6 rounded-md border hover-elevate"
+                style={{ backgroundColor: c }}
+                onClick={() => editor.chain().focus().setColor(c).run()}
+                data-testid={`color-${c}`}
+              />
+            ))}
+            <button
+              type="button"
+              className="h-6 col-span-6 rounded-md border text-[10px] hover-elevate"
+              onClick={() => editor.chain().focus().unsetColor().run()}
+              data-testid="color-reset"
+            >
+              Remover cor
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+
       <Sep />
-      <Btn
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        active={editor.isActive("bulletList")}
-        icon={ListBullets}
-        label="Lista"
-        testId="toolbar-bullet-list"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        active={editor.isActive("orderedList")}
-        icon={ListNumbers}
-        label="Lista numerada"
-        testId="toolbar-ordered-list"
-      />
-      <Btn
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        active={editor.isActive("blockquote")}
-        icon={Quotes}
-        label="Citação"
-        testId="toolbar-blockquote"
-      />
+      <Btn onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} icon={TextAlignLeft} label="Esquerda" testId="toolbar-align-left" />
+      <Btn onClick={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} icon={TextAlignCenter} label="Centro" testId="toolbar-align-center" />
+      <Btn onClick={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} icon={TextAlignRight} label="Direita" testId="toolbar-align-right" />
+      <Btn onClick={() => editor.chain().focus().setTextAlign("justify").run()} active={editor.isActive({ textAlign: "justify" })} icon={TextAlignJustify} label="Justificar" testId="toolbar-align-justify" />
       <Sep />
+      <Btn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} icon={ListBullets} label="Lista" testId="toolbar-bullet-list" />
+      <Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} icon={ListNumbers} label="Lista numerada" testId="toolbar-ordered-list" />
+      <Btn onClick={indent} icon={TextIndent} label="Aumentar recuo" testId="toolbar-indent" />
+      <Btn onClick={outdent} icon={TextOutdent} label="Diminuir recuo" testId="toolbar-outdent" />
+      <Btn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={Quotes} label="Citação" testId="toolbar-blockquote" />
+      <Sep />
+      <Btn onClick={setLink} active={editor.isActive("link")} icon={LinkIcon} label="Inserir link" testId="toolbar-link" />
+      <Btn onClick={insertImage} icon={ImageIcon} label="Inserir imagem" testId="toolbar-image" />
       <Btn
         onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         icon={TableIcon}

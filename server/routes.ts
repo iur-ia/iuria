@@ -766,6 +766,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/templates/:id/uso", async (req, res) => {
+    try {
+      await storage.incrementTemplateUsos(req.params.id);
+      res.status(204).send();
+    } catch {
+      res.status(500).json({ error: "Erro ao registrar uso" });
+    }
+  });
+
   app.delete("/api/templates/:id", async (req, res) => {
     try {
       const success = await storage.deleteTemplate(req.params.id);
@@ -829,7 +838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           origem: "importado",
           isPadrao: false,
           usos: 0,
-        } as any);
+        });
         return res.status(201).json({ template: created, html: safeHtml });
       }
 
@@ -1057,7 +1066,7 @@ td, th { border: 1px solid #444; padding: 4px 8px; }
         extracaoStatus: "concluida",
         versao: 1,
         processoId: processoId || null,
-      } as any);
+      });
       res.status(201).json(doc);
     } catch (error: any) {
       console.error("[peticoes-ia/salvar-no-acervo]", error);

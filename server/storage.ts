@@ -466,6 +466,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setTemplatePadrao(id: string, isPadrao: boolean): Promise<Template | undefined> {
+    if (isPadrao) {
+      // Garante padrão único: desmarca todos os outros
+      await db.update(templates).set({ isPadrao: false, updatedAt: new Date() }).where(eq(templates.isPadrao, true));
+    }
     const [t] = await db.update(templates).set({ isPadrao, updatedAt: new Date() }).where(eq(templates.id, id)).returning();
     return t;
   }
