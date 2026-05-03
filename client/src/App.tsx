@@ -4,6 +4,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TopNavigation } from "@/components/TopNavigation";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { CommandPalette, useCommandPalette } from "@/components/CommandPalette";
+import { useTheme } from "@/components/ThemeToggle";
 import Dashboard from "@/pages/Dashboard";
 import Processos from "@/pages/Processos";
 import Clientes from "@/pages/gestao/Clientes";
@@ -38,6 +41,13 @@ import Timesheet from "@/pages/Timesheet";
 import RelatoriosGerenciais from "@/pages/RelatoriosGerenciais";
 import NotFound from "@/pages/not-found";
 
+const SectionPlaceholder = ({ title }: { title: string }) => (
+  <div className="p-8 min-h-[60vh]">
+    <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+    <p className="text-muted-foreground mt-2 text-sm">Selecione uma opção no menu acima.</p>
+  </div>
+);
+
 function Router() {
   return (
     <Switch>
@@ -49,7 +59,7 @@ function Router() {
       <Route path="/gestao/clientes" component={Clientes} />
       <Route path="/gestao/equipe" component={Equipe} />
       <Route path="/gestao/relatorios" component={Relatorios} />
-      <Route path="/gestao" component={() => <div className="p-6 bg-[#f5f5f5] min-h-screen"><h1 className="text-2xl font-semibold">Gestão</h1><p className="text-muted-foreground mt-2">Selecione uma opção no menu</p></div>} />
+      <Route path="/gestao" component={() => <SectionPlaceholder title="Gestão" />} />
       <Route path="/atividades/painel" component={PainelTarefas} />
       <Route path="/atividades/kanban" component={KanbanTarefas} />
       <Route path="/atividades/relatorios" component={RelatoriosAtividades} />
@@ -59,7 +69,7 @@ function Router() {
       <Route path="/financeiro/receber" component={ContasReceber} />
       <Route path="/financeiro/pagar" component={ContasPagar} />
       <Route path="/financeiro/honorarios" component={Honorarios} />
-      <Route path="/financeiro" component={() => <div className="p-6 bg-[#f5f5f5] min-h-screen"><h1 className="text-2xl font-semibold">Financeiro</h1><p className="text-muted-foreground mt-2">Selecione uma opção no menu</p></div>} />
+      <Route path="/financeiro" component={() => <SectionPlaceholder title="Financeiro" />} />
       <Route path="/documentos/peticoes" component={Peticoes} />
       <Route path="/documentos/contratos" component={Contratos} />
       <Route path="/documentos/oficios" component={Oficios} />
@@ -83,16 +93,27 @@ function Router() {
   );
 }
 
+function Shell() {
+  const { open, setOpen } = useCommandPalette();
+  const { toggle: toggleTheme } = useTheme();
+
+  return (
+    <div className="min-h-screen">
+      <TopNavigation onOpenPalette={() => setOpen(true)} />
+      <Breadcrumbs />
+      <main>
+        <Router />
+      </main>
+      <CommandPalette open={open} onOpenChange={setOpen} onToggleTheme={toggleTheme} />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <div className="min-h-screen">
-          <TopNavigation />
-          <main>
-            <Router />
-          </main>
-        </div>
+        <Shell />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

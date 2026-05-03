@@ -1,7 +1,6 @@
 import { Bell, Search, User, ChevronDown, Settings, LogOut, Command } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -13,7 +12,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import avatarImage from "@assets/stock_images/professional_lawyer__9acf90aa.jpg";
+
+type TopNavProps = {
+  onOpenPalette?: () => void;
+};
 
 const menuItems = [
   {
@@ -93,7 +97,7 @@ const menuItems = [
   },
 ];
 
-export function TopNavigation() {
+export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
   const [location, setLocation] = useLocation();
 
   const isActive = (href: string) => {
@@ -161,19 +165,22 @@ export function TopNavigation() {
 
         <div className="flex-1" />
 
-        {/* Search (cmd+k style) */}
-        <div className="relative hidden md:block w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Pesquisar processos, clientes, intimações..."
-            className="pl-9 pr-14 h-9 text-[13px] bg-card border-border placeholder:text-muted-foreground/70"
-            data-testid="input-top-search"
-          />
-          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden md:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+        {/* Search trigger (opens command palette) */}
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="hidden md:flex items-center gap-2 h-9 w-72 rounded-md border border-border bg-card px-3 text-left text-[13px] text-muted-foreground hover:text-foreground hover-elevate"
+          data-testid="button-open-palette"
+        >
+          <Search className="w-3.5 h-3.5 shrink-0" />
+          <span className="flex-1 truncate">Pesquisar páginas, ações...</span>
+          <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono">
             <Command className="w-2.5 h-2.5" />K
           </kbd>
-        </div>
+        </button>
+
+        {/* Theme toggle */}
+        <ThemeToggle />
 
         {/* Notifications */}
         <Button
