@@ -26,7 +26,21 @@ import type { Processo, Cliente, Equipe } from "@shared/schema";
 
 export default function Processos() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [filterTab, setFilterTab] = useState("todos");
+
+  // Read drill filter from sessionStorage (set by Dashboard KPI card clicks)
+  const [filterTab, setFilterTab] = useState(() => {
+    const drillFilter = sessionStorage.getItem("dashboard_drill_filter");
+    if (drillFilter) { sessionStorage.removeItem("dashboard_drill_filter"); return drillFilter; }
+    // Also support path-based tab: /processos/parados → Parado, etc.
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      if (path.includes("/parados")) return "Parado";
+      if (path.includes("/movimentados")) return "Movimentado";
+      if (path.includes("/incompletos")) return "Incompleto";
+    }
+    return "todos";
+  });
+
   const [searchTerm, setSearchTerm] = useState("");
 
   const { data: processos = [], isLoading } = useQuery<Processo[]>({

@@ -64,6 +64,14 @@ const NENHUM = "__nenhum__";
 export default function ListaAtividades() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("todas");
+
+  // Read drill filter from sessionStorage (set by Dashboard KPI card clicks)
+  const [statusFiltro, setStatusFiltro] = useState<string>(() => {
+    const drill = sessionStorage.getItem("dashboard_drill_filter");
+    if (drill) { sessionStorage.removeItem("dashboard_drill_filter"); return drill; }
+    return "todas";
+  });
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAtividade, setEditingAtividade] = useState<Atividade | null>(null);
   const { toast } = useToast();
@@ -209,9 +217,12 @@ export default function ListaAtividades() {
       atividade.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       getProcessoNumero(atividade.processoId)?.includes(searchTerm) ||
       getResponsavelNome(atividade.responsavelId).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTipo =
-      tipoFilter === "todas" || atividade.tipo === tipoFilter;
-    return matchesSearch && matchesTipo;
+    const matchesTipo = tipoFilter === "todas" || atividade.tipo === tipoFilter;
+    // statusFiltro: "todas" = all, "Atrasado" = vencidas e não concluídas, or exact status match
+    const hoje = new Date().toISOString().split("T")[0];
+    const matchesStatus = statusFiltro === "todas" ||
+      (statusFiltro === "Atrasado" ? (atividade.status !== "Concluído" && atividade.status !== "Cancelado" && atividade.data < hoje) : atividade.status === statusFiltro);
+    return matchesSearch && matchesTipo && matchesStatus;
   });
 
   const tipoIcons: Record<string, typeof Clock> = {

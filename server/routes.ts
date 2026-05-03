@@ -2732,18 +2732,21 @@ except Exception as e:
   // ==================== DASHBOARD KPIs ====================
   app.get("/api/dashboard/kpis", async (req, res) => {
     try {
-      const [proc, atv, cr, cp, acomp] = await Promise.all([
+      const [proc, atv, cr, cp, acomp, eq] = await Promise.all([
         storage.getProcessos(),
         storage.getAtividades(),
         storage.getContasReceber(),
         storage.getContasPagar(),
         storage.getProcessosAcompanhados(),
+        storage.getEquipe(),
       ]);
 
-      // Period windows based on ?periodo= query param
+      // ---- Query params ----
       const periodo = (req.query.periodo as string) || "mes";
+      const areaFiltro = (req.query.area as string) || "";
+      const responsavelFiltro = (req.query.responsavel as string) || "";
       const periodoDias = periodo === "semana" ? 7 : periodo === "trimestre" ? 90 : 30;
-      const periodoLabel = periodo === "semana" ? "Semana" : periodo === "trimestre" ? "Trimestre" : "Mês";
+      const periodoLabel = periodo === "semana" ? "7 dias" : periodo === "trimestre" ? "90 dias" : "30 dias";
 
       const hoje = new Date();
       const hojeStr = hoje.toISOString().split("T")[0];
@@ -2752,18 +2755,29 @@ except Exception as e:
       const haPeriodo = new Date(hoje.getTime() - periodoDias * 86400000).toISOString().split("T")[0];
       const ha30dDate = new Date(hoje.getTime() - 30 * 86400000).toISOString().split("T")[0];
 
-      // Processos
-      const processosAtivos = proc.filter((p) => p.status === "Ativo");
+      // ---- Apply global filters ----
+      const procFiltrado = proc
+        .filter((p) => !areaFiltro || p.area === areaFiltro)
+        .filter((p) => !responsavelFiltro || p.responsavelId === responsavelFiltro);
+      const atvFiltrada = atv
+        .filter((a) => !responsavelFiltro || a.responsavelId === responsavelFiltro);
+
+      // ---- Build processo lookup for composite risk ----
+      const processoMap = new Map(proc.map((p) => [p.id, p]));
+      const equipeMap = new Map(eq.map((m) => [m.id, m.nome]));
+
+      // ---- Processos KPIs ----
+      const processosAtivos = procFiltrado.filter((p) => p.status === "Ativo");
       const porAreaMap: Record<string, number> = {};
       for (const p of processosAtivos) {
         porAreaMap[p.area] = (porAreaMap[p.area] || 0) + 1;
       }
-      const semMovimentacao30d = proc.filter(
+      const semMovimentacao30d = procFiltrado.filter(
         (p) => p.status === "Ativo" && p.dataAtualizacao && p.dataAtualizacao < ha30dDate
       ).length;
 
-      // Atividades
-      const naoConc = atv.filter((a) => a.status !== "Concluído" && a.status !== "Cancelado");
+      // ---- Atividades KPIs ----
+      const naoConc = atvFiltrada.filter((a) => a.status !== "Concluído" && a.status !== "Cancelado");
       const atrasadas = naoConc.filter((a) => a.data < hojeStr);
       const vencendo7dList = naoConc.filter((a) => a.data >= hojeStr && a.data <= em7d);
       const vencendoPeriodoList = naoConc.filter((a) => a.data >= hojeStr && a.data <= emPeriodo);
@@ -2775,8 +2789,26 @@ except Exception as e:
         else if (a.risco === "BAIXO") porRisco.BAIXO++;
       }
 
-      // Mapa de risco: atividades CRITICO/ALTO deduplicadas, ordenadas por data
-      // Window expands with period: semana=+7d, mes=+30d, trimestre=+90d
+      // ---- Composite risk score for Mapa de Risco ----
+      // Score = deadline imminence (0-4) + valor causa (0-3) + days without movement (0-2)
+      const computeRiscoScore = (a: (typeof atv)[0]): number => {
+        const diasAtraso = a.data < hojeStr
+          ? Math.round((new Date(hojeStr).getTime() - new Date(a.data + "T00:00:00").getTime()) / 86400000)
+          : 0;
+        const deadlinePts = diasAtraso > 30 ? 4 : diasAtraso > 7 ? 3 : diasAtraso > 0 ? 2 : a.data <= em7d ? 1 : 0;
+
+        const processo = a.processoId ? processoMap.get(a.processoId) : null;
+        const valor = processo?.valorCausa ? parseFloat(processo.valorCausa) : 0;
+        const valorPts = valor >= 500000 ? 3 : valor >= 100000 ? 2 : valor >= 10000 ? 1 : 0;
+
+        const diasSemMov = processo?.dataAtualizacao
+          ? Math.round((hoje.getTime() - new Date(processo.dataAtualizacao + "T00:00:00").getTime()) / 86400000)
+          : 0;
+        const movPts = diasSemMov > 60 ? 2 : diasSemMov > 30 ? 1 : 0;
+
+        return deadlinePts + valorPts + movPts;
+      };
+
       const riscoWindow = naoConc.filter((a) => a.data <= emPeriodo);
       const seenIds = new Set<string>();
       const mapaRisco = [...atrasadas, ...riscoWindow]
@@ -2785,11 +2817,30 @@ except Exception as e:
           seenIds.add(a.id);
           return a.risco === "CRITICO" || a.risco === "ALTO";
         })
-        .sort((a, b) => a.data.localeCompare(b.data))
-        .slice(0, 12)
-        .map((a) => ({ id: a.id, titulo: a.titulo, risco: a.risco, data: a.data, tipo: a.tipo }));
+        .map((a) => {
+          const score = computeRiscoScore(a);
+          const processo = a.processoId ? processoMap.get(a.processoId) : null;
+          const diasAtraso = a.data < hojeStr
+            ? Math.round((new Date(hojeStr).getTime() - new Date(a.data + "T00:00:00").getTime()) / 86400000)
+            : 0;
+          return {
+            id: a.id,
+            titulo: a.titulo,
+            risco: a.risco,
+            data: a.data,
+            tipo: a.tipo,
+            processoNumero: processo?.numero ?? null,
+            area: processo?.area ?? null,
+            responsavel: a.responsavelId ? equipeMap.get(a.responsavelId) ?? null : null,
+            valorCausa: processo?.valorCausa ?? null,
+            diasAtraso,
+            score,
+          };
+        })
+        .sort((a, b) => b.score - a.score || a.data.localeCompare(b.data))
+        .slice(0, 15);
 
-      // Financeiro — filtered by selected period
+      // ---- Financial KPIs ----
       const totalReceber = cr
         .filter((c) => c.status !== "Pago")
         .reduce((acc, c) => acc + parseFloat(c.valor), 0);
@@ -2800,12 +2851,57 @@ except Exception as e:
         .filter((c) => c.status !== "Pago" && c.vencimento <= emPeriodo)
         .reduce((acc, c) => acc + parseFloat(c.valor), 0);
 
-      // Acompanhados
+      // ---- Honorários por status (breakdown for drill-down) ----
+      const honorariosPorStatus = cr.reduce<Record<string, number>>((acc, c) => {
+        acc[c.status] = (acc[c.status] || 0) + parseFloat(c.valor);
+        return acc;
+      }, {});
+
+      // ---- Financial trend: last 6 months ----
+      const trendFinanceiro: { mes: string; label: string; recebido: number; pago: number; aVencer: number }[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+        const anoMes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+        const recebido = cr
+          .filter((c) => c.dataPagamento && c.dataPagamento.startsWith(anoMes) && c.status === "Pago")
+          .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+        const pago = cp
+          .filter((c) => c.dataPagamento && c.dataPagamento.startsWith(anoMes) && c.status === "Pago")
+          .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+        const aVencer = cr
+          .filter((c) => c.vencimento && c.vencimento.startsWith(anoMes) && c.status !== "Pago")
+          .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+        trendFinanceiro.push({ mes: anoMes, label, recebido, pago, aVencer });
+      }
+
+      // ---- Tasks by week: last 8 weeks (concluidas vs abertas) ----
+      const tarefasPorSemana: { label: string; concluidas: number; abertas: number }[] = [];
+      for (let i = 7; i >= 0; i--) {
+        const fimD = new Date(hoje.getTime() - i * 7 * 86400000);
+        const inicioD = new Date(fimD.getTime() - 6 * 86400000);
+        const inicioStr = inicioD.toISOString().split("T")[0];
+        const fimStr = fimD.toISOString().split("T")[0];
+        const label = `${inicioD.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`;
+        const concluidas = atvFiltrada.filter(
+          (a) => a.status === "Concluído" && a.data >= inicioStr && a.data <= fimStr
+        ).length;
+        const abertas = atvFiltrada.filter(
+          (a) => a.status !== "Concluído" && a.status !== "Cancelado" && a.data >= inicioStr && a.data <= fimStr
+        ).length;
+        tarefasPorSemana.push({ label, concluidas, abertas });
+      }
+
+      // ---- Acompanhados ----
       const comNovos = acomp.filter((a) => (a.novosAndamentos ?? 0) > 0).length;
+
+      // ---- Filter options for UI ----
+      const areas = [...new Set(proc.map((p) => p.area))].filter(Boolean).sort();
+      const equipeParaFiltro = eq.map((m) => ({ id: m.id, nome: m.nome }));
 
       res.json({
         processos: {
-          total: proc.length,
+          total: procFiltrado.length,
           ativos: processosAtivos.length,
           porArea: Object.entries(porAreaMap)
             .sort((a, b) => b[1] - a[1])
@@ -2814,11 +2910,11 @@ except Exception as e:
           semMovimentacao30d,
         },
         atividades: {
-          total: atv.length,
+          total: atvFiltrada.length,
           atrasadas: atrasadas.length,
           vencendo7d: vencendo7dList.length,
           vencendoPeriodo: vencendoPeriodoList.length,
-          concluidas: atv.filter((a) => a.status === "Concluído").length,
+          concluidas: atvFiltrada.filter((a) => a.status === "Concluído").length,
           porRisco,
         },
         financeiro: {
@@ -2826,14 +2922,18 @@ except Exception as e:
           totalPagarPeriodo,
           totalRecebidoPeriodo,
           honorariosPendentes: cr.filter((c) => c.status === "Pendente").length,
+          honorariosPorStatus,
         },
         periodo,
         periodoLabel,
         mapaRisco,
+        trendFinanceiro,
+        tarefasPorSemana,
         acompanhados: {
           total: acomp.length,
           comNovosAndamentos: comNovos,
         },
+        filtros: { areas, equipe: equipeParaFiltro },
         geradoEm: new Date().toISOString(),
       });
     } catch (error) {
