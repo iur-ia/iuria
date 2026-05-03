@@ -252,7 +252,7 @@ export default function PeticoesIA() {
   ];
 
   return (
-    <div className="p-6 bg-[#f5f5f5] min-h-screen space-y-6">
+    <div className="p-6 min-h-screen space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
@@ -273,8 +273,8 @@ export default function PeticoesIA() {
                 etapa === e.num
                   ? "bg-blue-600 text-white"
                   : etapa > e.num
-                    ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-500"
+                    ? "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300"
+                    : "bg-muted text-muted-foreground"
               }`}
             >
               {etapa > e.num ? (
@@ -395,7 +395,7 @@ export default function PeticoesIA() {
                     variant={tom === "combativo" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setTom("combativo")}
-                    className={tom === "combativo" ? "bg-red-600 hover:bg-red-700" : ""}
+                    className={tom === "combativo" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
                   >
                     <Swords className="w-4 h-4 mr-1" />
                     Combativo
@@ -404,7 +404,7 @@ export default function PeticoesIA() {
                     variant={tom === "reflexivo" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setTom("reflexivo")}
-                    className={tom === "reflexivo" ? "bg-blue-600 hover:bg-blue-700" : ""}
+                    className={tom === "reflexivo" ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}
                   >
                     <BookOpen className="w-4 h-4 mr-1" />
                     Reflexivo
@@ -429,7 +429,7 @@ export default function PeticoesIA() {
               <Button
                 onClick={() => setEtapa(2)}
                 disabled={!canProceed}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 Avancar para Conselho
                 <ChevronRight className="w-4 h-4 ml-1" />
@@ -452,14 +452,14 @@ export default function PeticoesIA() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600">{m.resumo}</p>
+                  <p className="text-sm text-muted-foreground">{m.resumo}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
           {/* Memorando resumido */}
-          <Card className="border-2 border-purple-300 bg-purple-50/30">
+          <Card className="border-primary/40 bg-primary/5">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-purple-600" />
@@ -498,7 +498,7 @@ export default function PeticoesIA() {
               <ChevronLeft className="w-4 h-4 mr-1" />
               Voltar
             </Button>
-            <Button onClick={iniciarGeracao} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={iniciarGeracao} className="bg-primary text-primary-foreground hover:bg-primary/90">
               <Zap className="w-4 h-4 mr-1" />
               Gerar Peticao
             </Button>
@@ -519,10 +519,10 @@ export default function PeticoesIA() {
                   <div
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all ${
                       i < faseAtual
-                        ? "bg-green-500 text-white"
+                        ? "bg-emerald-500/100 text-white"
                         : i === faseAtual
-                          ? "bg-blue-500 text-white animate-pulse"
-                          : "bg-gray-200 text-gray-500"
+                          ? "bg-blue-500/100 text-white animate-pulse"
+                          : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {i < faseAtual ? <Check className="w-3.5 h-3.5" /> : i + 1}
@@ -555,23 +555,23 @@ export default function PeticoesIA() {
         <div className="space-y-4">
           {/* Badges de qualidade */}
           <div className="flex items-center gap-3 flex-wrap">
-            <Badge className="bg-green-100 text-green-800">
+            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
               <Check className="w-3 h-3 mr-1" />
               Qualificacao [VERDE]
             </Badge>
-            <Badge className="bg-green-100 text-green-800">
+            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
               <Check className="w-3 h-3 mr-1" />
               Fatos [VERDE]
             </Badge>
-            <Badge className="bg-green-100 text-green-800">
+            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
               <Check className="w-3 h-3 mr-1" />
               Fundamentacao [VERDE]
             </Badge>
-            <Badge className="bg-yellow-100 text-yellow-800">
+            <Badge className="bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300">
               <AlertTriangle className="w-3 h-3 mr-1" />
               Notificacao [AMARELO]
             </Badge>
-            <Badge className="bg-green-100 text-green-800">
+            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
               <Check className="w-3 h-3 mr-1" />
               Pedidos [VERDE]
             </Badge>
@@ -585,24 +585,24 @@ export default function PeticoesIA() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span>Tom: </span>
                   {tom === "combativo" ? (
-                    <Badge className="bg-red-100 text-red-700">
+                    <Badge className="bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300">
                       <Swords className="w-3 h-3 mr-1" />
                       Combativo
                     </Badge>
                   ) : (
-                    <Badge className="bg-blue-100 text-blue-700">
+                    <Badge className="bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300">
                       <BookOpen className="w-3 h-3 mr-1" />
                       Reflexivo
                     </Badge>
                   )}
                   {tutela && (
-                    <Badge className="bg-purple-100 text-purple-700">Tutela Provisoria</Badge>
+                    <Badge className="bg-primary/15 text-primary">Tutela Provisoria</Badge>
                   )}
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="bg-white border rounded-lg p-8 font-serif text-sm leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-y-auto">
+              <div className="bg-card border rounded-lg p-8 font-serif text-sm leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-y-auto">
                 {SEED_PREVIEW}
               </div>
             </CardContent>
@@ -632,7 +632,7 @@ export default function PeticoesIA() {
                 <Download className="w-4 h-4 mr-1" />
                 Exportar DOCX
               </Button>
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
                 <Edit className="w-4 h-4 mr-1" />
                 Revisar
               </Button>

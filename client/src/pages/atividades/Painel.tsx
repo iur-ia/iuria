@@ -119,7 +119,7 @@ export default function PainelTarefas() {
   );
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">
@@ -142,7 +142,7 @@ export default function PainelTarefas() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">A Fazer</p>
-            <p className="text-3xl font-bold text-gray-600">
+            <p className="text-3xl font-bold text-muted-foreground">
               {tarefasPorStatus["a-fazer"].length}
             </p>
           </CardContent>
@@ -190,13 +190,13 @@ export default function PainelTarefas() {
               status="em-andamento"
               titulo="Em Andamento"
               tarefas={tarefasPorStatus["em-andamento"]}
-              color="bg-blue-500"
+              color="bg-blue-500/100"
             />
             <StatusColumn
               status="concluido"
               titulo="Concluído"
               tarefas={tarefasPorStatus["concluido"]}
-              color="bg-green-500"
+              color="bg-emerald-500/100"
             />
           </div>
         </CardContent>

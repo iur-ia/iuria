@@ -90,7 +90,7 @@ export default function ConselhoMinistros() {
   const ministros = ["barroso", "gilmar", "streck", "celso"] as const;
 
   return (
-    <div className="p-6 bg-[#f5f5f5] min-h-screen space-y-6">
+    <div className="p-6 min-h-screen space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
@@ -120,7 +120,7 @@ export default function ConselhoMinistros() {
           <Button
             onClick={handleConvocar}
             disabled={!fatos.trim() || loading}
-            className="bg-purple-600 hover:bg-purple-700"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {loading ? (
               <>
@@ -153,7 +153,7 @@ export default function ConselhoMinistros() {
                     <span className="text-xs text-muted-foreground">Peso: {m.peso}</span>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm leading-relaxed text-gray-700">{m.deliberacao}</p>
+                    <p className="text-sm leading-relaxed text-foreground">{m.deliberacao}</p>
                   </CardContent>
                 </Card>
               );
@@ -161,7 +161,7 @@ export default function ConselhoMinistros() {
           </div>
 
           {/* Memorando Estrategico */}
-          <Card className="border-2 border-purple-400 bg-purple-50/50">
+          <Card className="border-primary/40 bg-primary/5">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <Shield className="w-6 h-6 text-purple-600" />
@@ -175,7 +175,7 @@ export default function ConselhoMinistros() {
                   <Scale className="w-4 h-4 text-purple-600" />
                   Tese Principal
                 </h3>
-                <p className="text-sm bg-white p-4 rounded-lg border">{SEED_MEMORANDO.tesePrincipal}</p>
+                <p className="text-sm bg-card p-4 rounded-lg border">{SEED_MEMORANDO.tesePrincipal}</p>
               </div>
 
               {/* 3 Argumentos */}
@@ -183,8 +183,8 @@ export default function ConselhoMinistros() {
                 <h3 className="font-semibold text-base mb-2">Argumentos Centrais</h3>
                 <div className="space-y-2">
                   {SEED_MEMORANDO.argumentos.map((arg, i) => (
-                    <div key={i} className="flex gap-3 bg-white p-3 rounded-lg border">
-                      <Badge className="bg-green-100 text-green-800 h-6 w-6 flex items-center justify-center shrink-0">
+                    <div key={i} className="flex gap-3 bg-card p-3 rounded-lg border">
+                      <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300 h-6 w-6 flex items-center justify-center shrink-0">
                         {i + 1}
                       </Badge>
                       <p className="text-sm">{arg}</p>
@@ -201,8 +201,8 @@ export default function ConselhoMinistros() {
                 </h3>
                 <div className="space-y-2">
                   {SEED_MEMORANDO.contraArgumentos.map((ca, i) => (
-                    <div key={i} className="flex gap-3 bg-white p-3 rounded-lg border border-orange-200">
-                      <Badge className="bg-orange-100 text-orange-800 h-6 shrink-0">{`C${i + 1}`}</Badge>
+                    <div key={i} className="flex gap-3 bg-card p-3 rounded-lg border border-orange-200">
+                      <Badge className="bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300 h-6 shrink-0">{`C${i + 1}`}</Badge>
                       <p className="text-sm">{ca}</p>
                     </div>
                   ))}
@@ -217,8 +217,8 @@ export default function ConselhoMinistros() {
                 </h3>
                 <div className="space-y-2">
                   {SEED_MEMORANDO.riscos.map((r, i) => (
-                    <div key={i} className="flex gap-3 bg-white p-3 rounded-lg border border-red-200">
-                      <Badge className="bg-red-100 text-red-800 h-6 shrink-0">{`R${i + 1}`}</Badge>
+                    <div key={i} className="flex gap-3 bg-card p-3 rounded-lg border border-red-200">
+                      <Badge className="bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300 h-6 shrink-0">{`R${i + 1}`}</Badge>
                       <p className="text-sm">{r}</p>
                     </div>
                   ))}

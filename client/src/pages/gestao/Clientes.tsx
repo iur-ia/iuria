@@ -43,14 +43,14 @@ export default function Clientes() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando clientes...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Clientes</h1>
@@ -194,8 +194,8 @@ export default function Clientes() {
                     <Badge
                       className={
                         cliente.status === "Ativo"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
+                          ? "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300"
+                          : "bg-muted text-foreground"
                       }
                     >
                       {cliente.status}

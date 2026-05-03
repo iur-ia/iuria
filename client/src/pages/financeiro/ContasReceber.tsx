@@ -48,10 +48,10 @@ export default function ContasReceberPage() {
   );
 
   const statusColors: Record<string, string> = {
-    Pago: "bg-green-100 text-green-800",
-    Pendente: "bg-yellow-100 text-yellow-800",
-    Atrasado: "bg-red-100 text-red-800",
-    Parcial: "bg-blue-100 text-blue-800",
+    Pago: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+    Pendente: "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
+    Atrasado: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300",
+    Parcial: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
   };
 
   const totalReceber = contas
@@ -68,14 +68,14 @@ export default function ContasReceberPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando contas...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">
@@ -193,7 +193,7 @@ export default function ContasReceberPage() {
                     {new Date(conta.vencimento).toLocaleDateString("pt-BR")}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColors[conta.status] || "bg-gray-100"}>
+                    <Badge className={statusColors[conta.status] || "bg-muted"}>
                       {conta.status}
                     </Badge>
                   </TableCell>

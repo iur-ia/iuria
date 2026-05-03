@@ -73,14 +73,14 @@ const mockPeticoesRecentes = [
 
 export default function Peticoes() {
   const categoriaColors = {
-    Cível: "bg-blue-100 text-blue-800",
-    Trabalhista: "bg-purple-100 text-purple-800",
-    Criminal: "bg-red-100 text-red-800",
-    Empresarial: "bg-green-100 text-green-800",
+    Cível: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Trabalhista: "bg-primary/15 text-primary",
+    Criminal: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300",
+    Empresarial: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
   };
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Petições</h1>

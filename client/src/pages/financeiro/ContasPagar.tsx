@@ -90,9 +90,9 @@ export default function ContasPagar() {
   );
 
   const statusColors = {
-    Pago: "bg-green-100 text-green-800",
-    Pendente: "bg-yellow-100 text-yellow-800",
-    Atrasado: "bg-red-100 text-red-800",
+    Pago: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+    Pendente: "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
+    Atrasado: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300",
   };
 
   const totalPagar = mockContas
@@ -108,7 +108,7 @@ export default function ContasPagar() {
     .reduce((acc, c) => acc + c.valor, 0);
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">

@@ -13,12 +13,12 @@ const SAMPLE_ENTRIES = [
 ];
 
 const CATEGORIAS: Record<string, string> = {
-  "Pesquisa": "bg-blue-100 text-blue-800",
-  "Audiência": "bg-purple-100 text-purple-800",
-  "Redação": "bg-green-100 text-green-800",
-  "Reunião": "bg-yellow-100 text-yellow-800",
-  "Consultoria": "bg-orange-100 text-orange-800",
-  "Administrativo": "bg-gray-100 text-gray-800",
+  "Pesquisa": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+  "Audiência": "bg-primary/15 text-primary",
+  "Redação": "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+  "Reunião": "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
+  "Consultoria": "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300",
+  "Administrativo": "bg-muted text-foreground",
 };
 
 export default function Timesheet() {
@@ -33,7 +33,7 @@ export default function Timesheet() {
   }, 0);
 
   return (
-    <div className="p-6 bg-[#f5f5f5] min-h-screen space-y-6">
+    <div className="p-6 min-h-screen space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Timesheet</h1>
@@ -43,10 +43,10 @@ export default function Timesheet() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border-0 shadow-sm bg-white">
+        <Card className="border-0 shadow-sm bg-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded bg-blue-100"><Clock className="w-5 h-5 text-blue-600" /></div>
+              <div className="p-2 rounded bg-blue-500/15"><Clock className="w-5 h-5 text-blue-400" /></div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Horas Mês</p>
                 <p className="text-2xl font-bold">{totalHoras.toFixed(1)}h</p>
@@ -54,10 +54,10 @@ export default function Timesheet() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm bg-white">
+        <Card className="border-0 shadow-sm bg-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded bg-green-100"><DollarSign className="w-5 h-5 text-green-600" /></div>
+              <div className="p-2 rounded bg-emerald-500/15"><DollarSign className="w-5 h-5 text-emerald-400" /></div>
               <div>
                 <p className="text-xs text-muted-foreground">Valor Total</p>
                 <p className="text-2xl font-bold">R$ {totalValor.toLocaleString("pt-BR")}</p>
@@ -65,10 +65,10 @@ export default function Timesheet() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm bg-white">
+        <Card className="border-0 shadow-sm bg-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded bg-purple-100"><BarChart3 className="w-5 h-5 text-purple-600" /></div>
+              <div className="p-2 rounded bg-primary/15"><BarChart3 className="w-5 h-5 text-primary" /></div>
               <div>
                 <p className="text-xs text-muted-foreground">Horas Faturáveis</p>
                 <p className="text-2xl font-bold">{horasFaturaveis.toFixed(1)}h</p>
@@ -76,7 +76,7 @@ export default function Timesheet() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-sm bg-white">
+        <Card className="border-0 shadow-sm bg-card">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded bg-amber-100"><BarChart3 className="w-5 h-5 text-amber-600" /></div>
@@ -89,7 +89,7 @@ export default function Timesheet() {
         </Card>
       </div>
 
-      <Card className="border-0 shadow-sm bg-white">
+      <Card className="border-0 shadow-sm bg-card">
         <CardHeader><CardTitle className="text-base">Registros de Horas</CardTitle></CardHeader>
         <CardContent>
           <div className="overflow-x-auto">

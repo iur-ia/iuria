@@ -57,20 +57,20 @@ const mockContratos: Contrato[] = [
 
 export default function Contratos() {
   const statusColors = {
-    Ativo: "bg-green-100 text-green-800",
-    Vencido: "bg-red-100 text-red-800",
-    Rascunho: "bg-gray-100 text-gray-800",
+    Ativo: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+    Vencido: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300",
+    Rascunho: "bg-muted text-foreground",
   };
 
   const tipoColors = {
-    Honorários: "bg-purple-100 text-purple-800",
-    "Prestação de Serviços": "bg-blue-100 text-blue-800",
-    Social: "bg-orange-100 text-orange-800",
-    Outro: "bg-gray-100 text-gray-800",
+    Honorários: "bg-primary/15 text-primary",
+    "Prestação de Serviços": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Social: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300",
+    Outro: "bg-muted text-foreground",
   };
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Contratos</h1>
@@ -105,7 +105,7 @@ export default function Contratos() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Rascunhos</p>
-            <p className="text-3xl font-bold text-gray-600">
+            <p className="text-3xl font-bold text-muted-foreground">
               {mockContratos.filter((c) => c.status === "Rascunho").length}
             </p>
           </CardContent>

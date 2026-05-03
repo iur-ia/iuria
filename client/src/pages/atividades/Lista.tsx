@@ -238,17 +238,17 @@ export default function ListaAtividades() {
   };
 
   const tipoColors: Record<string, string> = {
-    Tarefa: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-    Intimação: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-    Audiência: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-    Compromisso: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    Tarefa: "bg-primary/15 text-primary dark:bg-purple-900/30 dark:text-purple-300",
+    Intimação: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300 dark:bg-orange-900/30 dark:text-orange-300",
+    Audiência: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300 dark:bg-green-900/30 dark:text-green-300",
+    Compromisso: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300 dark:bg-blue-900/30 dark:text-blue-300",
   };
 
   const statusColors: Record<string, string> = {
-    Pendente: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
-    "Em Andamento": "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-    Concluído: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-    Atrasado: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+    Pendente: "bg-muted text-foreground",
+    "Em Andamento": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300 dark:bg-blue-900/30 dark:text-blue-300",
+    Concluído: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300 dark:bg-green-900/30 dark:text-green-300",
+    Atrasado: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300 dark:bg-red-900/30 dark:text-red-300",
   };
 
   const prioridadeColors: Record<string, string> = {
@@ -261,14 +261,14 @@ export default function ListaAtividades() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando atividades...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">
@@ -373,7 +373,7 @@ export default function ListaAtividades() {
                   <TableRow key={atividade.id} data-testid={`row-activity-${atividade.id}`}>
                     <TableCell className="font-medium">{atividade.titulo}</TableCell>
                     <TableCell>
-                      <Badge className={tipoColors[atividade.tipo] || "bg-gray-100"}>
+                      <Badge className={tipoColors[atividade.tipo] || "bg-muted"}>
                         <Icon className="w-3 h-3 mr-1" />
                         {atividade.tipo}
                       </Badge>
@@ -400,7 +400,7 @@ export default function ListaAtividades() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge className={statusColors[atividade.status] || "bg-gray-100"}>
+                      <Badge className={statusColors[atividade.status] || "bg-muted"}>
                         {atividade.status}
                       </Badge>
                     </TableCell>

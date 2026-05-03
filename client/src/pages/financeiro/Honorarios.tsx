@@ -80,16 +80,16 @@ export default function Honorarios() {
   );
 
   const statusColors = {
-    Ativo: "bg-green-100 text-green-800",
-    Finalizado: "bg-gray-100 text-gray-800",
-    Suspenso: "bg-yellow-100 text-yellow-800",
+    Ativo: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+    Finalizado: "bg-muted text-foreground",
+    Suspenso: "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
   };
 
   const tipoColors = {
-    Fixo: "bg-blue-100 text-blue-800",
-    Êxito: "bg-purple-100 text-purple-800",
-    Hora: "bg-orange-100 text-orange-800",
-    Misto: "bg-pink-100 text-pink-800",
+    Fixo: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Êxito: "bg-primary/15 text-primary",
+    Hora: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300",
+    Misto: "bg-pink-500/15 text-pink-400",
   };
 
   const totalContratado = mockHonorarios.reduce(
@@ -105,7 +105,7 @@ export default function Honorarios() {
   const totalAtivos = mockHonorarios.filter((h) => h.status === "Ativo").length;
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">

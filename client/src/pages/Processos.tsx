@@ -72,10 +72,10 @@ export default function Processos() {
   };
 
   const statusColors: Record<string, string> = {
-    Ativo: "bg-green-100 text-green-800",
-    Movimentado: "bg-blue-100 text-blue-800",
-    Parado: "bg-gray-100 text-gray-800",
-    Arquivado: "bg-yellow-100 text-yellow-800",
+    Ativo: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+    Movimentado: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Parado: "bg-muted text-foreground",
+    Arquivado: "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
   };
 
   const filteredProcessos = processos.filter((processo) => {
@@ -96,14 +96,14 @@ export default function Processos() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando processos...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Processos</h1>
@@ -163,15 +163,15 @@ export default function Processos() {
             </TabsTrigger>
             <TabsTrigger value="Ativo" data-testid="tab-active">
               Ativos
-              <Badge className="ml-2 h-5 min-w-5 px-1.5 bg-green-500 text-white">{filterCounts.Ativo}</Badge>
+              <Badge className="ml-2 h-5 min-w-5 px-1.5 bg-emerald-500/100 text-white">{filterCounts.Ativo}</Badge>
             </TabsTrigger>
             <TabsTrigger value="Movimentado" data-testid="tab-moved">
               Movimentados
-              <Badge className="ml-2 h-5 min-w-5 px-1.5 bg-blue-500 text-white">{filterCounts.Movimentado}</Badge>
+              <Badge className="ml-2 h-5 min-w-5 px-1.5 bg-blue-500/100 text-white">{filterCounts.Movimentado}</Badge>
             </TabsTrigger>
             <TabsTrigger value="Parado" data-testid="tab-stopped">
               Parados
-              <Badge className="ml-2 h-5 min-w-5 px-1.5 bg-gray-500 text-white">{filterCounts.Parado}</Badge>
+              <Badge className="ml-2 h-5 min-w-5 px-1.5 bg-muted text-foreground">{filterCounts.Parado}</Badge>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -198,7 +198,7 @@ export default function Processos() {
                     <p className="font-mono text-sm text-primary">{processo.numero}</p>
                     <p className="font-semibold mt-1">{processo.titulo}</p>
                   </div>
-                  <Badge className={statusColors[processo.status] || "bg-gray-100"}>
+                  <Badge className={statusColors[processo.status] || "bg-muted"}>
                     {processo.status}
                   </Badge>
                 </div>
@@ -269,7 +269,7 @@ export default function Processos() {
                     <TableCell>{processo.tribunal || "-"}</TableCell>
                     <TableCell>{getResponsavelNome(processo.responsavelId)}</TableCell>
                     <TableCell>
-                      <Badge className={statusColors[processo.status] || "bg-gray-100"}>
+                      <Badge className={statusColors[processo.status] || "bg-muted"}>
                         {processo.status}
                       </Badge>
                     </TableCell>

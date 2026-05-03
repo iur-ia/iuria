@@ -163,12 +163,12 @@ function KanbanColumn({
       <div className={`rounded-t-lg p-3 ${color} text-white`}>
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold truncate">{titulo}</h3>
-          <Badge className="bg-white/20 text-white border-0 flex-shrink-0">
+          <Badge className="bg-card/20 text-white border-0 flex-shrink-0">
             {tarefas.length}
           </Badge>
         </div>
       </div>
-      <div className="bg-gray-100 dark:bg-gray-800 rounded-b-lg p-3 min-h-80 space-y-3">
+      <div className="bg-muted rounded-b-lg p-3 min-h-80 space-y-3">
         <SortableContext
           items={tarefas.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
@@ -398,14 +398,14 @@ export default function KanbanTarefas() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] dark:bg-background min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] dark:bg-background min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1" data-testid="text-page-title">
@@ -431,7 +431,7 @@ export default function KanbanTarefas() {
           <Input
             type="search"
             placeholder="Pesquisar tarefas..."
-            className="pl-9 bg-white dark:bg-card"
+            className="pl-9 bg-card"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             data-testid="input-kanban-search"

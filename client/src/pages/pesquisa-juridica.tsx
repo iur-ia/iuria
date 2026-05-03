@@ -820,7 +820,7 @@ function AbaEmpresas() {
 
 export default function PesquisaJuridica() {
   return (
-    <div className="min-h-screen bg-[#f5f5f5] dark:bg-background">
+    <div className="min-h-screen">
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

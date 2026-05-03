@@ -38,11 +38,11 @@ const STATUS_EXTRACAO = {
 };
 
 const TIPO_COLORS: Record<string, string> = {
-  Petição: "bg-purple-100 text-purple-800",
-  Contrato: "bg-blue-100 text-blue-800",
-  Procuração: "bg-green-100 text-green-800",
-  Sentença: "bg-orange-100 text-orange-800",
-  Outro: "bg-gray-100 text-gray-800",
+  Petição: "bg-primary/15 text-primary",
+  Contrato: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+  Procuração: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+  Sentença: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300",
+  Outro: "bg-muted text-foreground",
 };
 
 function ExtracaoStatusIcon({ status }: { status: string }) {
@@ -175,14 +175,14 @@ export default function TodosDocumentos() {
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando documentos...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Documentos</h1>
@@ -270,7 +270,7 @@ export default function TodosDocumentos() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge className={TIPO_COLORS[doc.tipo] ?? "bg-gray-100 text-gray-800"}>
+                    <Badge className={TIPO_COLORS[doc.tipo] ?? "bg-muted text-foreground"}>
                       {doc.tipo}
                     </Badge>
                   </TableCell>
@@ -375,7 +375,7 @@ export default function TodosDocumentos() {
                   </div>
 
                   {selectedDoc.extracaoStatus !== "ok" && (
-                    <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                    <div className="flex items-center gap-2 p-3 bg-amber-500/10 border border-yellow-200 rounded-md">
                       <AlertTriangle className="w-4 h-4 text-yellow-600 shrink-0" />
                       <p className="text-sm text-yellow-800">
                         {selectedDoc.extracaoStatus === "pendente"

@@ -36,7 +36,7 @@ const STATUS_COLORS: Record<string, string> = {
   gerada: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   enviada: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   respondida: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  arquivada: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+  arquivada: "bg-muted text-muted-foreground",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -69,7 +69,7 @@ function PrintPreview({ html, onClose }: { html: string; onClose: () => void }) 
         <DialogHeader>
           <DialogTitle>Visualizar Comunicação</DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto border rounded-md bg-white min-h-[400px]">
+        <div className="flex-1 overflow-y-auto border rounded-md bg-card min-h-[400px]">
           <div dangerouslySetInnerHTML={{ __html: html }} />
         </div>
         <DialogFooter>
@@ -145,7 +145,7 @@ function GerarComunicacaoDialog({
           <DialogHeader>
             <DialogTitle>Prévia — {template.nome}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto border rounded-md bg-white min-h-[400px]">
+          <div className="flex-1 overflow-y-auto border rounded-md bg-card min-h-[400px]">
             <div dangerouslySetInnerHTML={{ __html: preview }} />
           </div>
           <DialogFooter>
@@ -405,7 +405,7 @@ function TemplateFormDialog({
             </div>
           </div>
           {livePreview && (
-            <div className="border rounded-md overflow-auto bg-white p-2" style={{ maxHeight: "580px" }}>
+            <div className="border rounded-md overflow-auto bg-card p-2" style={{ maxHeight: "580px" }}>
               <p className="text-xs text-muted-foreground mb-2 text-center">Prévia (dados de exemplo)</p>
               <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
             </div>
@@ -585,7 +585,7 @@ export default function Oficios() {
   );
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       {previewHtml && <PrintPreview html={previewHtml} onClose={() => setPreviewHtml(null)} />}
       {templateParaGerar && (
         <GerarComunicacaoDialog

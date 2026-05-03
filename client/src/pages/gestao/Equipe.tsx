@@ -24,24 +24,24 @@ export default function EquipePage() {
   );
 
   const roleColors: Record<string, string> = {
-    "Advogado Sênior": "bg-purple-100 text-purple-800",
-    "Advogada": "bg-blue-100 text-blue-800",
-    "Advogado": "bg-blue-100 text-blue-800",
-    "Assistente": "bg-green-100 text-green-800",
-    "Estagiário": "bg-yellow-100 text-yellow-800",
-    "Sócio": "bg-purple-100 text-purple-800",
+    "Advogado Sênior": "bg-primary/15 text-primary",
+    "Advogada": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    "Advogado": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    "Assistente": "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
+    "Estagiário": "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
+    "Sócio": "bg-primary/15 text-primary",
   };
 
   if (isLoading) {
     return (
-      <div className="p-6 bg-[#f5f5f5] min-h-screen flex items-center justify-center">
+      <div className="p-6 min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando equipe...</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6 bg-[#f5f5f5] min-h-screen">
+    <div className="p-6 space-y-6 min-h-screen">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Equipe</h1>
@@ -131,7 +131,7 @@ export default function EquipePage() {
                         </Avatar>
                         <div>
                           <CardTitle className="text-base">{membro.nome}</CardTitle>
-                          <Badge className={`mt-1 ${roleColors[membro.cargo] || "bg-gray-100 text-gray-800"}`}>
+                          <Badge className={`mt-1 ${roleColors[membro.cargo] || "bg-muted text-foreground"}`}>
                             {membro.cargo}
                           </Badge>
                         </div>

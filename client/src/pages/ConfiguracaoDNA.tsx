@@ -91,7 +91,7 @@ export default function ConfiguracaoDNA() {
   };
 
   return (
-    <div className="p-6 bg-[#f5f5f5] min-h-screen space-y-6">
+    <div className="p-6 min-h-screen space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
@@ -222,7 +222,7 @@ export default function ConfiguracaoDNA() {
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="combativo" className="mt-4">
-                <div className="bg-white border rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                <div className="bg-card border rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto">
                   {PREVIEW_COMBATIVO}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -230,7 +230,7 @@ export default function ConfiguracaoDNA() {
                 </p>
               </TabsContent>
               <TabsContent value="reflexivo" className="mt-4">
-                <div className="bg-white border rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                <div className="bg-card border rounded-lg p-4 text-sm leading-relaxed whitespace-pre-wrap max-h-[400px] overflow-y-auto">
                   {PREVIEW_REFLEXIVO}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
@@ -253,7 +253,7 @@ export default function ConfiguracaoDNA() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* MCP TecJustica */}
-            <div className="space-y-3 p-4 bg-white rounded-lg border">
+            <div className="space-y-3 p-4 bg-card rounded-lg border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Key className="w-5 h-5 text-indigo-600" />
@@ -265,7 +265,7 @@ export default function ConfiguracaoDNA() {
                     Conectado
                   </Badge>
                 ) : (
-                  <Badge className="bg-gray-100 text-gray-600">Nao configurado</Badge>
+                  <Badge className="bg-muted text-muted-foreground">Nao configurado</Badge>
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -293,7 +293,7 @@ export default function ConfiguracaoDNA() {
             </div>
 
             {/* Certificado Digital */}
-            <div className="space-y-3 p-4 bg-white rounded-lg border">
+            <div className="space-y-3 p-4 bg-card rounded-lg border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Shield className="w-5 h-5 text-emerald-600" />
@@ -308,7 +308,7 @@ export default function ConfiguracaoDNA() {
                 Certificado A1/A3 para assinatura digital e protocolamento automatico de peticoes.
               </p>
               <div className="flex items-center gap-3 text-sm">
-                <div className="flex items-center gap-1 text-gray-500">
+                <div className="flex items-center gap-1 text-muted-foreground">
                   <XCircle className="w-4 h-4" />
                   <span>Nenhum certificado configurado</span>
                 </div>

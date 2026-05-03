@@ -22,7 +22,12 @@ Preferred communication style: Simple, everyday language.
 - **Brand utilities**: `.text-brand-gradient`, `.bg-brand-aurora`, `.surface-glass` (backdrop-blur sticky chrome), `.bg-grid-dot`.
 - **Dark mode**: forçado por padrão em `client/src/main.tsx`.
 - **Logo**: `client/src/components/brand/Logo.tsx` — gradient bar (violet→cyan) + violet dot + wordmark "iuria". Favicon SVG inline em `client/public/favicon.svg`.
-- **Chrome**: `TopNavigation.tsx` reescrito com sticky header glassy, Cmd+K hint, dropdowns refinados, capitalize labels.
+- **Chrome**: `TopNavigation.tsx` reescrito com sticky header glassy, dropdowns refinados, capitalize labels.
+- **Command Palette** (`client/src/components/CommandPalette.tsx`): cmdk-based, atalho global Cmd/Ctrl+K, 30+ páginas catalogadas e agrupadas (Geral, Processos, Atividades, Gestão, Acervo, Financeiro, Documentos, IA), mais ações rápidas (alternar tema, ir ao painel, nova consulta).
+- **Theme Toggle** (`client/src/components/ThemeToggle.tsx`): hook `useTheme` com `useSyncExternalStore` (estado compartilhado entre componentes), persistência em `localStorage` chave `iuria-theme`. Funções módulo-level `setTheme`/`toggleTheme` para uso fora de React.
+- **Breadcrumbs** (`client/src/components/Breadcrumbs.tsx`): mono, derivado de `useLocation`, dicionário PT-BR.
+- **Shell** (`client/src/App.tsx`): wrapper que monta `TopNavigation`/`Breadcrumbs`/`CommandPalette` globalmente.
+- **Sweep dark-mode**: 26 páginas convertidas — `bg-[#f5f5f5]` removido, `bg-gray-100/text-gray-800` → `bg-muted/text-muted-foreground`, `bg-white` → `bg-card`, `text-gray-500-900` → tokens semânticos, badges coloridos `bg-{color}-100 text-{color}-800` → `bg-{color}-500/15 text-{color}-400` com variantes dark.
 - **Referências (canvas)**: satnaing/shadcn-admin, Tremor (Vercel), Magic UI + Aceternity, Geist, Kibo UI.
 
 ### Web Scraping and Data Acquisition — TypeScript Engine (server/scraping/)

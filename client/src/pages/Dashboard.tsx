@@ -387,7 +387,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 print:bg-white">
+    <div className="min-h-screen bg-muted/30 print:bg-card">
       <div className="p-6 space-y-6 print:p-4 print:space-y-4 max-w-screen-2xl mx-auto">
 
         {/* ── Header ── */}
@@ -505,7 +505,7 @@ export default function Dashboard() {
         {/* Print header */}
         <div className="hidden print:block">
           <h1 className="text-xl font-bold">Painel de Controle</h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             Período: {periodoLbl}{area && ` · Área: ${area}`}{resp && ` · Responsável`}{cliente && ` · Cliente`} · Gerado em {new Date().toLocaleString("pt-BR")}
           </p>
         </div>

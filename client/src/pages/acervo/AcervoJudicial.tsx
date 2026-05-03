@@ -332,7 +332,7 @@ const STATUS_COMM_COLORS: Record<string, string> = {
   gerada: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   enviada: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   respondida: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  arquivada: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+  arquivada: "bg-muted text-muted-foreground",
 };
 const STATUS_COMM_LABELS: Record<string, string> = {
   gerada: "Gerada", enviada: "Enviada", respondida: "Respondida", arquivada: "Arquivada",
@@ -351,7 +351,7 @@ function PrintPreviewDialog({ html, onClose }: { html: string; onClose: () => vo
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
         <DialogHeader><DialogTitle>Visualizar Comunicação</DialogTitle></DialogHeader>
-        <div className="flex-1 overflow-y-auto border rounded-md bg-white min-h-64">
+        <div className="flex-1 overflow-y-auto border rounded-md bg-card min-h-64">
           <div dangerouslySetInnerHTML={{ __html: html }} />
         </div>
         <DialogFooter>
