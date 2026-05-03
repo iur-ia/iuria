@@ -11,7 +11,7 @@ type LogoProps = {
  *
  * The icon is a vertical stem ("the column of law") with a small detached
  * square "tittle" above it. Reads as a stylized lowercase i. Distinctive
- * at any size, recognizable at 16px, monochrome cinnabar — no gradients,
+ * at any size, recognizable at 16px, monochrome coral — no gradients,
  * no AI shimmer. The wordmark is set in Fraunces, an editorial serif,
  * because legal practice IS editorial work.
  */
