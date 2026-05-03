@@ -991,7 +991,7 @@ export default function ProcessosAcompanhar() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 data-testid="input-filtro-lista"
-                placeholder="Filtrar por número, tribunal, assunto, anotação..."
+                placeholder="Filtrar por número, tribunal, classe, assunto, anotação..."
                 value={filtroTexto}
                 onChange={(e) => setFiltroTexto(e.target.value)}
                 className="pl-9 pr-9"
