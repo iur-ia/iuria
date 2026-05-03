@@ -481,15 +481,19 @@ export default function PeticoesIA() {
       toast({ title: "Falha ao importar", description: err.error || "Erro", variant: "destructive" });
       return;
     }
-    const data: { html?: string } = await res.json();
+    const data: { html?: string; headerHtml?: string; footerHtml?: string } = await res.json();
     if (asTemplate) {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       toast({ title: "Template importado", description: file.name });
     } else if (editor && data.html) {
       editor.commands.setContent(data.html);
+      setActiveHeaderHtml(data.headerHtml || "");
       setTitulo(file.name.replace(/\.[^.]+$/, ""));
       setDirty(true);
-      toast({ title: "Documento importado", description: file.name });
+      toast({
+        title: "Documento importado",
+        description: data.headerHtml ? `${file.name} (cabeçalho/rodapé detectados)` : file.name,
+      });
     }
   };
 

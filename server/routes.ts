@@ -819,10 +819,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let html = "";
+      let headerHtmlRaw = "";
+      let footerHtmlRaw = "";
       if (ext === ".docx") {
-        const mammoth = (await import("mammoth")).default;
-        const result = await mammoth.convertToHtml({ path: req.file.path });
-        html = result.value || "";
+        const { importDocxFile } = await import("./docxImporter");
+        const result = importDocxFile(req.file.path);
+        html = result.bodyHtml || "";
+        headerHtmlRaw = result.headerHtml || "";
+        footerHtmlRaw = result.footerHtml || "";
+        // Fallback: se nosso conversor não produziu corpo, usamos mammoth
+        if (!html.replace(/<[^>]+>/g, "").trim()) {
+          const mammoth = (await import("mammoth")).default;
+          const mres = await mammoth.convertToHtml({ path: req.file.path });
+          html = mres.value || "";
+        }
       } else if (ext === ".html" || ext === ".htm") {
         html = fs.readFileSync(req.file.path, "utf-8");
       } else {
@@ -832,25 +842,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try { fs.unlinkSync(req.file.path); } catch {}
 
+      const safeHtml = sanitizeLegalHtml(html);
+      const safeHeader = headerHtmlRaw ? sanitizeLegalHtml(headerHtmlRaw) : "";
+      const safeFooter = footerHtmlRaw ? sanitizeLegalHtml(footerHtmlRaw) : "";
+      // headerHtml combina cabeçalho + rodapé separados por marcador para o editor renderizar nas duas zonas
+      const combinedHeader = (safeHeader || safeFooter)
+        ? `${safeHeader}${safeFooter ? `<hr data-iuria-footer="1"/>${safeFooter}` : ""}`
+        : "";
+
       // Se vier ?asTemplate=1, persiste como Template; senão devolve apenas o html
       if (req.query.asTemplate === "1") {
         const nome = (req.body.nome as string) || req.file.originalname.replace(ext, "");
         const categoria = (req.body.categoria as string) || "Importado";
         const descricao = (req.body.descricao as string) || `Importado de ${req.file.originalname}`;
-        const safeHtml = sanitizeLegalHtml(html);
         const created = await storage.createTemplate({
           nome, categoria, descricao,
           conteudo: safeHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000),
           conteudoHtml: safeHtml,
-          headerHtml: null,
+          headerHtml: combinedHeader || null,
           origem: "importado",
           isPadrao: false,
           usos: 0,
         });
-        return res.status(201).json({ template: created, html: safeHtml });
+        return res.status(201).json({ template: created, html: safeHtml, headerHtml: combinedHeader, footerHtml: safeFooter });
       }
 
-      res.json({ html: sanitizeLegalHtml(html), fileName: req.file.originalname });
+      res.json({ html: safeHtml, headerHtml: combinedHeader, footerHtml: safeFooter, fileName: req.file.originalname });
     } catch (error: any) {
       console.error("[templates/import]", error);
       res.status(500).json({ error: error?.message || "Erro ao importar arquivo" });
