@@ -1,10 +1,14 @@
 """
-Scraper TJRJ com Playwright de interação real
+Scraper TJRJ com Playwright de interação real.
 Estratégia: abrir o portal Angular, digitar o número, clicar em Consultar,
 aguardar os resultados renderizarem, extrair dados estruturados.
 
-Isso contorna o bloqueio da API interna (que exige token de sessão Angular)
-pois o próprio browser obtém o token ao carregar o portal.
+Anti-detecção reforçada:
+- User-agent Firefox realista em vez de Chromium padrão
+- Viewport e screen realistas (1366x768, comum no Brasil)
+- Locale pt-BR, timezone America/Sao_Paulo
+- --disable-blink-features=AutomationControlled
+- Página navegada com referer do Google
 """
 import re
 import sys
@@ -18,6 +22,9 @@ from base_scraper import BaseScraper, ResultadoBusca, ProcessoInfo, Movimentacao
 
 PORTAL_URL = "https://www3.tjrj.jus.br/consultaprocessual/"
 CONSULTA_URL = "https://www3.tjrj.jus.br/consultaprocessual/#/consultapublica"
+
+FIREFOX_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"
+CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
 class TJRJPlaywright(BaseScraper):
@@ -46,36 +53,66 @@ class TJRJPlaywright(BaseScraper):
 import asyncio
 import json
 import sys
+import random
+
+FIREFOX_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0"
+CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+VIEWPORTS = [
+    {{"width": 1366, "height": 768}},
+    {{"width": 1440, "height": 900}},
+    {{"width": 1920, "height": 1080}},
+    {{"width": 1280, "height": 800}},
+]
 
 async def scrape():
     try:
-        from playwright.async_api import async_playwright
+        try:
+            from rebrowser_playwright.async_api import async_playwright
+        except ImportError:
+            from playwright.async_api import async_playwright
         numero = {json.dumps(numero)}
         numero_limpo = numero.replace('-','').replace('.','').strip()
-        portal_url = f"https://www3.tjrj.jus.br/consultaprocessual/"
+        portal_url = "https://www3.tjrj.jus.br/consultaprocessual/"
+        viewport = random.choice(VIEWPORTS)
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
+            browser = await p.firefox.launch(
                 headless=True,
                 args=[
                     '--no-sandbox',
                     '--disable-setuid-sandbox',
-                    '--disable-blink-features=AutomationControlled',
-                    '--lang=pt-BR',
-                ]
+                ],
+                firefox_user_prefs={{
+                    "dom.webdriver.enabled": False,
+                    "useAutomationExtension": False,
+                    "privacy.trackingprotection.enabled": False,
+                }},
             )
             context = await browser.new_context(
                 locale='pt-BR',
                 timezone_id='America/Sao_Paulo',
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                viewport={{'width': 1280, 'height': 800}},
+                user_agent=FIREFOX_UA,
+                viewport=viewport,
+                screen={{"width": viewport["width"], "height": viewport["height"]}},
+                extra_http_headers={{
+                    "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+                    "Referer": "https://www.google.com.br/",
+                }},
             )
+
             page = await context.new_page()
 
-            # Navegar para o portal
-            await page.goto(portal_url, wait_until='networkidle', timeout=45000)
+            # Ocultar webdriver
+            await page.add_init_script(\"\"\"
+                Object.defineProperty(navigator, 'webdriver', {{get: () => undefined}});
+                Object.defineProperty(navigator, 'languages', {{get: () => ['pt-BR', 'pt', 'en-US', 'en']}});
+                window.chrome = {{runtime: {{}}}};
+            \"\"\")
 
-            # Aguardar o Angular inicializar (campo de busca aparecer)
+            await page.goto(portal_url, wait_until='networkidle', timeout=45000)
+            await asyncio.sleep(random.uniform(1.0, 2.5))
+
             campo = None
             seletores_campo = [
                 'input[placeholder*="número"]',
@@ -99,20 +136,20 @@ async def scrape():
             resultado = {{'erro': None, 'processos': []}}
 
             if not campo:
-                # Tentar extrair dados do HTML atual
-                content = await page.content()
                 resultado['erro'] = 'Campo de busca nao encontrado no portal TJRJ'
                 resultado['portal_url'] = f"https://www3.tjrj.jus.br/consultaprocessual/#/consultapublica?numProcesso={{numero_limpo}}"
                 print(json.dumps(resultado))
                 await browser.close()
                 return
 
-            # Digitar o número do processo
-            await campo.clear()
-            await campo.fill(numero)
-            await asyncio.sleep(0.5)
+            await campo.fill("")  # ElementHandle: fill("") limpa o campo
+            await asyncio.sleep(random.uniform(0.2, 0.5))
 
-            # Pressionar Enter ou clicar no botão de busca
+            for char in numero:
+                await campo.type(char, delay=random.randint(50, 150))
+
+            await asyncio.sleep(random.uniform(0.3, 0.8))
+
             btn_seletores = [
                 'button[type="submit"]',
                 'button:has-text("Consultar")',
@@ -134,7 +171,6 @@ async def scrape():
             else:
                 await campo.press('Enter')
 
-            # Aguardar resultados (Angular faz requisição autenticada)
             resultado_seletores = [
                 'app-processo-cabecalho',
                 'app-resultado-consulta',
@@ -145,59 +181,57 @@ async def scrape():
                 '.resultado-consulta',
                 'mat-card',
             ]
-            encontrou_resultado = False
             for sel in resultado_seletores:
                 try:
-                    await page.wait_for_selector(sel, timeout=12000, state='visible')
-                    encontrou_resultado = True
+                    await page.wait_for_selector(sel, timeout=15000, state='visible')
                     break
                 except:
                     continue
 
-            if not encontrou_resultado:
-                # Aguardar network idle e tentar extrair
-                try:
-                    await page.wait_for_load_state('networkidle', timeout=8000)
-                except:
-                    pass
+            try:
+                await page.wait_for_load_state('networkidle', timeout=8000)
+            except:
+                pass
 
-            await asyncio.sleep(2)
+            await asyncio.sleep(random.uniform(1.5, 2.5))
 
-            # Extrair dados via JavaScript (acessa dados do Angular)
-            dados_js = await page.evaluate("""
+            dados_js = await page.evaluate(\"\"\"
                 () => {{
-                    // Tentar pegar dados do store Angular ou variáveis globais
                     const allText = document.body.innerText;
-                    const cnj_regex = /\\d{{7}}-\\d{{2}}\\.\\d{{4}}\\.\\d\\.\\d{{2}}\\.\\d{{4}}/g;
+                    const cnj_regex = /\\\\d{{7}}-\\\\d{{2}}\\\\.\\\\d{{4}}\\\\.\\\\d\\\\.\\\\d{{2}}\\\\.\\\\d{{4}}/g;
                     const numeros = [...allText.matchAll(cnj_regex)].map(m => m[0]);
 
-                    // Extrair andamentos da tabela se existir
                     const andamentos = [];
                     const rows = document.querySelectorAll('tr, [class*="andamento"], [class*="movimentacao"]');
                     rows.forEach(row => {{
                         const text = row.innerText || '';
-                        const dateMatch = text.match(/\\d{{2}}\\/\\d{{2}}\\/\\d{{4}}/);
+                        const dateMatch = text.match(/\\\\d{{2}}\\\\/\\\\d{{2}}\\\\/\\\\d{{4}}/);
                         if (dateMatch && text.length > 15) {{
                             andamentos.push(text.trim());
                         }}
                     }});
 
+                    const partes = [];
+                    document.querySelectorAll('[class*="parte"], [class*="polo"]').forEach(el => {{
+                        const t = el.innerText.trim();
+                        if (t && t.length > 3 && t.length < 200) partes.push(t);
+                    }});
+
                     return {{
                         numeros: [...new Set(numeros)],
                         andamentos: andamentos.slice(0, 30),
-                        page_text: allText.substring(0, 5000),
+                        partes: [...new Set(partes)].slice(0, 15),
+                        page_text: allText.substring(0, 8000),
                         url: window.location.href,
                     }};
                 }}
-            """)
+            \"\"\")
 
-            # Extrair HTML completo para parse
-            content = await page.content()
             page_text = dados_js.get('page_text', '')
             numeros_cnj = dados_js.get('numeros', [])
             andamentos_raw = dados_js.get('andamentos', [])
+            partes_js = dados_js.get('partes', [])
 
-            # Verificar se encontrou processo ou retornou "não encontrado"
             nao_encontrado = any(t in page_text.lower() for t in [
                 'não encontrado', 'nenhum processo', 'processo não localizado',
                 '0 processo', 'nenhum resultado'
@@ -205,12 +239,11 @@ async def scrape():
 
             if nao_encontrado and not numeros_cnj:
                 resultado['erro'] = f'Processo {{numero}} não encontrado no portal TJRJ'
-                resultado['portal_url'] = f"https://www3.tjrj.jus.br/consultaprocessual/#/consultapublica"
+                resultado['portal_url'] = "https://www3.tjrj.jus.br/consultaprocessual/#/consultapublica"
                 print(json.dumps(resultado))
                 await browser.close()
                 return
 
-            # Montar objeto processo
             num_display = numeros_cnj[0] if numeros_cnj else numero
             num_limpo_display = num_display.replace('-','').replace('.','')
             portal_processo_url = f"https://www3.tjrj.jus.br/consultaprocessual/#/consultapublica?numProcesso={{num_limpo_display}}"
@@ -224,29 +257,41 @@ async def scrape():
                 'assunto': None,
                 'relator': None,
                 'origem': None,
-                'partes': [],
+                'comarca': None,
+                'valor_causa': None,
+                'data_distribuicao': None,
+                'partes': partes_js,
                 'movimentacoes': [],
             }}
 
-            # Extrair classe
             import re as re_mod
-            classe_m = re_mod.search(r'(?:Classe[:\\s]+|class[eE]\\s*:\\s*)([A-ZÇÃÕa-záéíóúãõçÃõàâêî][^\\n\\r|]{{3,80}})', page_text)
+
+            classe_m = re_mod.search(r'(?:Classe[:\\\\s]+|class[eE]\\\\s*:\\\\s*)([A-ZÇÃÕa-záéíóúãõçÃõàâêî][^\\\\n\\\\r|]{{3,80}})', page_text)
             if classe_m:
                 processo['classe'] = classe_m.group(1).strip()[:100]
 
-            # Extrair assunto
-            assunto_m = re_mod.search(r'(?:Assunto[:\\s]+)([^\\n\\r|]{{3,150}})', page_text)
+            assunto_m = re_mod.search(r'(?:Assunto[:\\\\s]+)([^\\\\n\\\\r|]{{3,150}})', page_text)
             if assunto_m:
                 processo['assunto'] = assunto_m.group(1).strip()[:200]
 
-            # Extrair relator/juiz
-            juiz_m = re_mod.search(r'(?:Juiz|Juíza|Relator|Magistrad)[^:]*:[^\\n]*\\n?\\s*([A-Z][^\\n]{{5,80}})', page_text)
+            juiz_m = re_mod.search(r'(?:Juiz|Juíza|Relator|Magistrad)[^:]*:[^\\\\n]*\\\\n?\\\\s*([A-Z][^\\\\n]{{5,80}})', page_text)
             if juiz_m:
                 processo['relator'] = juiz_m.group(1).strip()[:100]
 
-            # Processar andamentos extraídos pelo JS
+            comarca_m = re_mod.search(r'[Cc]omarca[:\\\\s]+([^\\\\n|]{{3,80}})', page_text)
+            if comarca_m:
+                processo['comarca'] = comarca_m.group(1).strip()
+
+            valor_m = re_mod.search(r'[Vv]alor[^:]*:[^\\\\n]*R\\\\$\\\\s*([\\\\d.,]+)', page_text)
+            if valor_m:
+                processo['valor_causa'] = valor_m.group(1).strip()
+
+            dist_m = re_mod.search(r'[Dd]istribuição[:\\\\s]+(\\\\d{{2}}/\\\\d{{2}}/\\\\d{{4}})', page_text)
+            if dist_m:
+                processo['data_distribuicao'] = dist_m.group(1)
+
             movs = []
-            date_re = re_mod.compile(r'(\\d{{2}}/\\d{{2}}/\\d{{4}})')
+            date_re = re_mod.compile(r'(\\\\d{{2}}/\\\\d{{2}}/\\\\d{{4}})')
             for andamento in andamentos_raw:
                 date_m = date_re.search(andamento)
                 if date_m:
@@ -279,9 +324,11 @@ asyncio.run(scrape())
                 timeout=90,
                 encoding='utf-8'
             )
-            output = proc.stdout.strip()
-            if output:
-                return json.loads(output)
+            # Extract only the last non-blank line to guard against incidental
+            # stdout noise from Playwright/libs that would break json.loads().
+            lines = [l for l in proc.stdout.splitlines() if l.strip()]
+            if lines:
+                return json.loads(lines[-1])
             stderr = proc.stderr.strip()
             return {'erro': f'Playwright nao retornou output: {stderr[:300]}', 'processos': []}
         except subprocess.TimeoutExpired:
@@ -293,7 +340,7 @@ asyncio.run(scrape())
         finally:
             try:
                 os.unlink(tmp_path)
-            except:
+            except Exception:
                 pass
 
     async def buscar_por_numero(self, numero: str) -> ResultadoBusca:
@@ -325,6 +372,10 @@ asyncio.run(scrape())
                     origem=p.get('origem'),
                     partes=p.get('partes', []),
                 )
+                processo.comarca = p.get('comarca')
+                processo.valor_causa = p.get('valor_causa')
+                processo.data_distribuicao = p.get('data_distribuicao')
+
                 movs_raw = p.get('movimentacoes', [])
                 processo.movimentacoes = [
                     Movimentacao(
@@ -333,6 +384,19 @@ asyncio.run(scrape())
                         detalhes=m.get('detalhes')
                     ) for m in movs_raw if m.get('data') or m.get('descricao')
                 ]
+
+                campos = sum(1 for f in [
+                    processo.classe, processo.assunto, processo.relator,
+                    processo.comarca, processo.valor_causa, processo.data_distribuicao,
+                ] if f)
+                campos += min(len(processo.partes), 5) + min(len(processo.movimentacoes), 10)
+                print(
+                    f"[tjrj] fonte=Playwright tribunal=TJRJ "
+                    f"campos={campos} movs={len(processo.movimentacoes)} "
+                    f"partes={len(processo.partes)}",
+                    file=sys.stderr
+                )
+
                 resultado.processos.append(processo)
 
             resultado.total_encontrados = len(resultado.processos)

@@ -121,13 +121,13 @@ async def consultar_datajud(tribunal: str, termo: str, tipo: str = "numero") -> 
         if tipo == "numero":
             resultado = client.buscar_por_numero(tribunal, termo)
         else:
+            from base_scraper import ResultadoBusca
             resultado = ResultadoBusca(
                 tribunal=tribunal,
                 tipo_busca=tipo,
                 termo_busca=termo,
                 erro="DataJud API suporta apenas busca por numero CNJ"
             )
-            from base_scraper import ResultadoBusca
             return resultado.to_dict()
 
         result_dict = resultado.to_dict()
@@ -184,14 +184,54 @@ async def consultar_tecjustica(tribunal: str, termo: str) -> dict:
         return {"erro": f"Erro ao consultar TecJustiça: {str(e)}", "fonte": "tecjustica"}
 
 
+async def consultar_mni(tribunal: str, numero: str) -> dict:
+    """
+    Query via MNI SOAP (zeep + UsernameToken) when SSO/Bearer credentials are present.
+
+    MNISoapClient expects:
+      - access_token: the CNJ SSO Bearer token (from DATAJUD_AUTH_TOKEN env var).
+        This becomes the WS-Security UsernameToken password field.
+      - MNI_USERNAME env var: the username (OAB number or CPF) used as
+        the WS-Security UsernameToken username field. Picked up internally
+        by the MNI client from the environment — not passed to the constructor.
+
+    Falls through silently (returns empty dict) when no Bearer token is available
+    so the caller continues to the next strategy without error.
+    """
+    mni_token = os.environ.get("DATAJUD_AUTH_TOKEN")
+    if not mni_token:
+        return {}
+
+    try:
+        from mni_client import MNISoapClient
+        soap = MNISoapClient(access_token=mni_token)
+        processo = soap.consultar_processo(numero, tribunal)
+        if processo:
+            proc_dict = processo.to_dict() if hasattr(processo, "to_dict") else processo
+            print(f"[MNI SOAP] processo encontrado para {tribunal}/{numero}", file=sys.stderr)
+            return {
+                "processos": [proc_dict] if not isinstance(proc_dict, list) else proc_dict,
+                "fonte": "mni_soap",
+                "fonte_label": "MNI SOAP (zeep/UsernameToken)",
+                "fonte_descricao": "Dados em tempo real via protocolo MNI/SOAP do PJe",
+            }
+    except Exception as e:
+        print(f"[MNI SOAP] falha ({e}), continuando para próxima fonte", file=sys.stderr)
+
+    return {}
+
+
 async def consultar(tribunal: str, termo: str, tipo: str = "numero") -> dict:
     """
     Execute a search on a tribunal.
-    Strategy:
-    1. If CNJ number → try DataJud first (fast, reliable, covers all tribunals)
-    2. Try TecJustiça MCP if DataJud returns no results
-    3. Fall through to scraping if TecJustiça also returns no results
-    4. If nome/oab/cnpj → go straight to scraping
+
+    Strategy (in priority order):
+    1. MNI SOAP — when MNI_USERNAME or DATAJUD_AUTH_TOKEN env var is set and
+       the search is by CNJ number. Provides real-time data with full sigilo.
+    2. DataJud (polite, cached, auth-first) — for CNJ-number lookups.
+    3. TecJustiça MCP — secondary enrichment when DataJud has no results.
+    4. Web scraping — portal/HTML fallback for all search types.
+    5. DataJud again as last-resort fallback if scraping returns nothing.
 
     Args:
         tribunal: Tribunal code (e.g., "STF", "TJSP")
@@ -205,28 +245,38 @@ async def consultar(tribunal: str, termo: str, tipo: str = "numero") -> dict:
         import re
         is_cnj = bool(re.match(r'^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$', termo.strip()))
 
-    if tipo == "numero" and is_cnj and tribunal in TRIBUNAL_INDICES:
-        datajud_result = await consultar_datajud(tribunal, termo, tipo)
+    if tipo == "numero" and is_cnj:
+        # Step 1: MNI SOAP — auth-first when credentials are available
+        mni_result = await consultar_mni(tribunal, termo)
+        if mni_result.get("processos"):
+            return mni_result
 
-        processos = datajud_result.get("processos", [])
-        if processos and len(processos) > 0:
-            print(f"DataJud retornou {len(processos)} processo(s) para {tribunal}", file=sys.stderr)
-            return datajud_result
+        # Step 2: DataJud — polite, cached, authenticated-first
+        if tribunal in TRIBUNAL_INDICES:
+            datajud_result = await consultar_datajud(tribunal, termo, tipo)
 
-        print(f"DataJud sem resultados para {tribunal}, tentando TecJustiça MCP...", file=sys.stderr)
-        tecjustica_result = await consultar_tecjustica(tribunal, termo)
-        tecjustica_processos = tecjustica_result.get("processos", [])
-        if tecjustica_processos and len(tecjustica_processos) > 0:
-            print(f"TecJustiça retornou {len(tecjustica_processos)} processo(s) para {tribunal}", file=sys.stderr)
-            return tecjustica_result
+            processos = datajud_result.get("processos", [])
+            if processos and len(processos) > 0:
+                print(f"DataJud retornou {len(processos)} processo(s) para {tribunal}", file=sys.stderr)
+                return datajud_result
 
-        print(f"TecJustiça sem resultados para {tribunal}, tentando scraping...", file=sys.stderr)
+            # Step 3: TecJustiça MCP
+            print(f"DataJud sem resultados para {tribunal}, tentando TecJustiça MCP...", file=sys.stderr)
+            tecjustica_result = await consultar_tecjustica(tribunal, termo)
+            tecjustica_processos = tecjustica_result.get("processos", [])
+            if tecjustica_processos and len(tecjustica_processos) > 0:
+                print(f"TecJustiça retornou {len(tecjustica_processos)} processo(s) para {tribunal}", file=sys.stderr)
+                return tecjustica_result
 
+            print(f"TecJustiça sem resultados para {tribunal}, tentando scraping...", file=sys.stderr)
+
+    # Step 4: Web scraping (portal / HTML)
     scraping_result = await consultar_scraping(tribunal, termo, tipo)
 
     scraping_processos = scraping_result.get("processos", [])
     if not scraping_processos and tribunal in TRIBUNAL_INDICES:
         if tipo == "numero":
+            # Step 5: DataJud last-resort fallback
             print(f"Scraping sem resultados, tentando DataJud como fallback para {tribunal}...", file=sys.stderr)
             datajud_result = await consultar_datajud(tribunal, termo, tipo)
             if datajud_result.get("processos"):

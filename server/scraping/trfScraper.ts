@@ -1,9 +1,9 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult, TribunalInfo } from "./types";
-import { DATAJUD_AUTH } from "./types";
-import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { makeLogger, randomDelay } from "./utils";
 import { CrawlerManager } from "./crawlerManager";
+import { queryDataJudShared, type DataJudHit } from "./datajudClient";
 
 const TRF_INDICES: Record<string, string> = {
   TRF1: "api_publica_trf1",
@@ -27,31 +27,13 @@ const TRF_PJE_URLS: Record<string, string> = {
   TRF6: "https://pje.trf6.jus.br/pje/ConsultaPublica/listView.seam",
 };
 
-interface DataJudHit {
-  _source?: {
-    numeroProcesso?: string;
-    classe?: { descricao?: string };
-    assuntos?: { descricao?: string }[];
-    tribunal?: string;
-    orgaoJulgador?: { nome?: string };
-    partes?: { nome?: string; tipo?: string }[];
-    movimentos?: {
-      dataHora?: string;
-      nome?: string;
-      complementosTabelados?: { descricao?: string }[];
-    }[];
-    dataAjuizamento?: string;
-    relator?: string;
-  };
-}
-
-async function consultarDataJud(indice: string, body: string): Promise<{ hits?: { hits?: DataJudHit[] } }> {
-  return fetchJson(`https://api.datajud.cnj.jus.br/${indice}/_search`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
-    body,
-    timeoutMs: 20000,
-  });
+/** Wrapper que encaminha para o cliente DataJud compartilhado (pacing + cache + auth-first) */
+async function consultarDataJud(
+  indice: string,
+  body: string,
+  log: (l: "info" | "warn" | "error", m: string) => void
+): Promise<{ hits?: { hits?: DataJudHit[] } } | null> {
+  return queryDataJudShared(indice, body, log);
 }
 
 /**
@@ -193,62 +175,68 @@ export async function buscarProcessoTrf(
     };
   }
 
-  // Tentativa 1: Scraping direto do portal PJe
-  let processo = await buscarProcessoTrfPje(numero, sigla, tribunal, log);
-  let sourceLabel = `${sigla} — Portal PJe (scraping direto)`;
+  // Tentativa 1: DataJud (cliente compartilhado — pacing, cache, auth-first).
+  // DataJud tem cobertura garantida para todos os TRFs e é o ponto de partida obrigatório.
+  const djBody = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
+  let processo: ProcessoScrapeData | null = null;
+  let sourceLabel = `${sigla} — DataJud`;
+  let actualSource: "datajud" | "trf" = "datajud";
 
-  // Tentativa 2: DataJud como fallback/enriquecimento
-  if (!processo) {
-    log("info", `PJe sem resultado para ${sigla} — usando DataJud como fallback`);
-    try {
-      const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
-      const data = await withRetry(() => consultarDataJud(indice, body));
-      const src = data?.hits?.hits?.[0]?._source;
+  try {
+    const data = await consultarDataJud(indice, djBody, log);
+    const src: DataJudHit["_source"] = data?.hits?.hits?.[0]?._source;
 
-      if (src) {
-        processo = {
-          numero: src.numeroProcesso || numero,
-          tribunal: sigla,
-          classe: src.classe?.descricao || undefined,
-          assunto: src.assuntos?.[0]?.descricao || undefined,
-          vara: src.orgaoJulgador?.nome || undefined,
-          partes: (src.partes || []).map(p => `${p.tipo || "Parte"}: ${p.nome || ""}`),
-          movimentacoes: (src.movimentos || []).slice(0, 50).map(m => ({
-            data: m.dataHora?.slice(0, 10) || "",
-            descricao: m.nome || "",
-            detalhes: m.complementosTabelados?.map(c => c.descricao).join("; ") || undefined,
-          })),
-          documentos: [],
-          urlPortal: tribunal.urlPortal,
-        };
-        sourceLabel = `${sigla} — DataJud (fallback)`;
-        log("info", `DataJud ${sigla}: processo encontrado`);
-      }
-    } catch (err) {
-      log("error", `DataJud ${sigla} falhou: ${err}`);
+    if (src) {
+      processo = {
+        numero: src.numeroProcesso || numero,
+        tribunal: sigla,
+        classe: src.classe?.descricao || undefined,
+        assunto: src.assuntos?.[0]?.descricao || undefined,
+        vara: src.orgaoJulgador?.nome || undefined,
+        partes: (src.partes || []).map(p => `${p.tipo || "Parte"}: ${p.nome || ""}`),
+        movimentacoes: (src.movimentos || []).slice(0, 50).map(m => ({
+          data: m.dataHora?.slice(0, 10) || "",
+          descricao: m.nome || "",
+          detalhes: m.complementosTabelados?.map(c => c.descricao).join("; ") || undefined,
+        })),
+        documentos: [],
+        urlPortal: tribunal.urlPortal,
+      };
+      log("info", `DataJud ${sigla}: processo encontrado`);
     }
-  } else {
-    // Enriquecer com DataJud se PJe não trouxe todos os metadados
-    if (!processo.classe || !processo.assunto || processo.movimentacoes.length === 0) {
-      try {
-        const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
-        const data = await withRetry(() => consultarDataJud(indice, body));
-        const src = data?.hits?.hits?.[0]?._source;
-        if (src) {
-          processo.classe = processo.classe || src.classe?.descricao || undefined;
-          processo.assunto = processo.assunto || src.assuntos?.[0]?.descricao || undefined;
-          processo.vara = processo.vara || src.orgaoJulgador?.nome || undefined;
-          if (processo.movimentacoes.length === 0) {
-            processo.movimentacoes = (src.movimentos || []).slice(0, 50).map(m => ({
-              data: m.dataHora?.slice(0, 10) || "",
-              descricao: m.nome || "",
-              detalhes: m.complementosTabelados?.map(c => c.descricao).join("; ") || undefined,
-            }));
+  } catch (err) {
+    log("warn", `DataJud ${sigla} falhou: ${err}`);
+  }
+
+  // Tentativa 2: Scraping direto do portal PJe (fallback quando DataJud sem resultado)
+  if (!processo) {
+    log("info", `DataJud sem resultado para ${sigla} — tentando portal PJe`);
+    processo = await buscarProcessoTrfPje(numero, sigla, tribunal, log);
+    if (processo) {
+      sourceLabel = `${sigla} — Portal PJe (scraping direto)`;
+      actualSource = "trf";
+
+      // Enriquecer com DataJud se PJe não trouxe todos os metadados
+      if (!processo.classe || !processo.assunto || processo.movimentacoes.length === 0) {
+        try {
+          const enData = await consultarDataJud(indice, djBody, log);
+          const enSrc: DataJudHit["_source"] = enData?.hits?.hits?.[0]?._source;
+          if (enSrc) {
+            processo.classe = processo.classe || enSrc.classe?.descricao || undefined;
+            processo.assunto = processo.assunto || enSrc.assuntos?.[0]?.descricao || undefined;
+            processo.vara = processo.vara || enSrc.orgaoJulgador?.nome || undefined;
+            if (processo.movimentacoes.length === 0) {
+              processo.movimentacoes = (enSrc.movimentos || []).slice(0, 50).map(m => ({
+                data: m.dataHora?.slice(0, 10) || "",
+                descricao: m.nome || "",
+                detalhes: m.complementosTabelados?.map(c => c.descricao).join("; ") || undefined,
+              }));
+            }
+            log("info", `DataJud ${sigla}: dados de enriquecimento mesclados ao PJe`);
           }
-          log("info", `DataJud ${sigla}: dados de enriquecimento mesclados`);
+        } catch (enrichErr) {
+          log("warn", `Falha ao enriquecer com DataJud ${sigla}: ${enrichErr}`);
         }
-      } catch (enrichErr) {
-        log("warn", `Falha ao enriquecer com DataJud ${sigla}: ${enrichErr}`);
       }
     }
   }
@@ -266,7 +254,7 @@ export async function buscarProcessoTrf(
   }
 
   return {
-    source: "trf",
+    source: actualSource,
     sourceLabel,
     data: processo,
     markdownContent: buildProcessoMd(processo, sigla),
@@ -354,7 +342,7 @@ export async function buscarJurisprudenciaTrf(
         size: 10,
         sort: [{ dataJulgamento: { order: "desc" } }],
       });
-      const data = await withRetry(() => consultarDataJud(indice, body));
+      const data = await consultarDataJud(indice, body, log);
       for (const hit of data?.hits?.hits || []) {
         const src = hit._source;
         if (!src) continue;

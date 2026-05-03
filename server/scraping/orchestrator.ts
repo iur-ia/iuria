@@ -4,9 +4,11 @@ import type {
   JurisprudenciaItem,
   DoutrinaItem,
   EmpresaData,
+  ScrapingTelemetry,
 } from "./types";
-import { identificarTribunalCNJ, TRIBUNAIS, DATAJUD_AUTH } from "./types";
-import { makeLogger, fetchJson, withRetry } from "./utils";
+import { identificarTribunalCNJ, TRIBUNAIS } from "./types";
+import { makeLogger } from "./utils";
+import { queryDataJudShared, type DataJudHit as SharedDataJudHit } from "./datajudClient";
 import { buscarProcessoEsaj } from "./esajScraper";
 import { buscarProcessoStj, buscarJurisprudenciaStj } from "./stjScraper";
 import { buscarJurisprudenciaStf, buscarProcessoStf } from "./stfScraper";
@@ -14,19 +16,7 @@ import { buscarProcessoTrf, buscarJurisprudenciaTrf } from "./trfScraper";
 import { buscarCnpj } from "./cnpjScraper";
 import { buscarDoutrina } from "./doutrinaScraper";
 
-interface DataJudHit {
-  _source?: {
-    numeroProcesso?: string;
-    classe?: { descricao?: string };
-    assuntos?: { descricao?: string }[];
-    tribunal?: string;
-    orgaoJulgador?: { nome?: string };
-    partes?: { nome?: string; tipo?: string }[];
-    movimentos?: { dataHora?: string; nome?: string; complementosTabelados?: { descricao?: string }[] }[];
-    dataAjuizamento?: string;
-    relator?: string;
-  };
-}
+type DataJudHit = SharedDataJudHit;
 
 const TRIBUNAL_INDICE: Record<string, string> = {
   TJSP: "api_publica_tjsp",
@@ -49,7 +39,101 @@ const TRIBUNAL_INDICE: Record<string, string> = {
   TRF6: "api_publica_trf6",
   STJ: "api_publica_stj",
   STF: "api_publica_stf",
+  TRT1: "api_publica_trt1",
+  TRT2: "api_publica_trt2",
+  TRT3: "api_publica_trt3",
+  TRT4: "api_publica_trt4",
+  TRT5: "api_publica_trt5",
+  TRT6: "api_publica_trt6",
+  TRT7: "api_publica_trt7",
+  TRT8: "api_publica_trt8",
+  TRT9: "api_publica_trt9",
+  TRT10: "api_publica_trt10",
+  TRT11: "api_publica_trt11",
+  TRT12: "api_publica_trt12",
+  TRT13: "api_publica_trt13",
+  TRT14: "api_publica_trt14",
+  TRT15: "api_publica_trt15",
+  TRT16: "api_publica_trt16",
+  TRT17: "api_publica_trt17",
+  TRT18: "api_publica_trt18",
+  TRT19: "api_publica_trt19",
+  TRT20: "api_publica_trt20",
+  TRT21: "api_publica_trt21",
+  TRT22: "api_publica_trt22",
+  TRT23: "api_publica_trt23",
+  TRT24: "api_publica_trt24",
+  TJGO: "api_publica_tjgo",
+  TJPR: "api_publica_tjpr",
+  TJPI: "api_publica_tjpi",
+  TJMT: "api_publica_tjmt",
+  TJPA: "api_publica_tjpa",
+  TJPB: "api_publica_tjpb",
 };
+
+function contarCamposProcesso(p: ProcessoScrapeData | null): number {
+  if (!p) return 0;
+  const campos = [p.classe, p.assunto, p.vara, p.relator, p.comarca, p.valorCausa, p.dataDistribuicao];
+  return campos.filter(Boolean).length
+    + Math.min(p.partes.length, 5)
+    + Math.min(p.movimentacoes.length, 10)
+    + Math.min((p.advogados || []).length, 3);
+}
+
+// ---------------------------------------------------------------------------
+// DataJud hit parser — shared between live fetch and cache-hit paths
+// ---------------------------------------------------------------------------
+
+function _parseDataJudSource(
+  src: DataJudHit["_source"] | undefined,
+  numero: string,
+  sigla: string
+): ProcessoScrapeData | null {
+  if (!src) return null;
+
+  const partes: string[] = [];
+  const advogados: string[] = [];
+  for (const p of src.partes || []) {
+    const polo = p.polo || p.tipo || "Parte";
+    if (p.nome) partes.push(`${polo}: ${p.nome}`);
+    for (const adv of p.advogados || []) {
+      if (adv.nome) {
+        const oabStr = adv.estadoOAB && adv.numeroOAB
+          ? ` (OAB ${adv.estadoOAB} ${adv.numeroOAB})`
+          : adv.numeroOAB ? ` (OAB ${adv.numeroOAB})` : "";
+        advogados.push(`${adv.nome}${oabStr}`);
+      }
+    }
+  }
+
+  const valorCausa = src.valorCausa
+    ? src.valorCausa.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+    : undefined;
+
+  return {
+    numero: src.numeroProcesso || numero,
+    tribunal: sigla,
+    classe: src.classe?.nome || src.classe?.descricao || undefined,
+    assunto: src.assuntos?.map(a => a.nome || a.descricao).filter(Boolean).join(" / ") || undefined,
+    vara: src.orgaoJulgador?.nome || undefined,
+    comarca: src.comarca || undefined,
+    valorCausa,
+    dataDistribuicao: src.dataAjuizamento?.slice(0, 10) || undefined,
+    partes,
+    advogados: advogados.length ? advogados : undefined,
+    movimentacoes: (src.movimentos || []).slice(0, 50).map(m => ({
+      data: m.dataHora?.slice(0, 10) || "",
+      descricao: m.nome || "",
+      detalhes: m.complementosTabelados?.map(c => c.nome || c.descricao).filter(Boolean).join("; ") || undefined,
+    })),
+    documentos: [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// DataJud orchestrator client — delegates to the shared polite client
+// All pacing, cache, and auth-first logic lives in datajudClient.ts
+// ---------------------------------------------------------------------------
 
 async function buscarDataJudGenerico(
   numero: string,
@@ -59,39 +143,19 @@ async function buscarDataJudGenerico(
   const indice = TRIBUNAL_INDICE[sigla];
   if (!indice) return null;
 
-  log("info", `DataJud genérico: ${sigla} — ${numero}`);
+  log("info", `DataJud genérico (cliente compartilhado): ${sigla} — ${numero}`);
 
   try {
     const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
-    const data = await withRetry(() =>
-      fetchJson<{ hits?: { hits?: DataJudHit[] } }>(
-        `https://api.datajud.cnj.jus.br/${indice}/_search`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
-          body,
-          timeoutMs: 18000,
-        }
-      )
-    );
+    const data = await queryDataJudShared(indice, body, log);
 
-    const src = data?.hits?.hits?.[0]?._source;
-    if (!src) return null;
+    const proc = _parseDataJudSource(data?.hits?.hits?.[0]?._source, numero, sigla);
+    if (proc) {
+      const campos = contarCamposProcesso(proc);
+      log("info", `[telemetria] fonte=DataJud tribunal=${sigla} campos=${campos} movs=${proc.movimentacoes.length} partes=${proc.partes.length} advs=${(proc.advogados || []).length}`);
+    }
 
-    return {
-      numero: src.numeroProcesso || numero,
-      tribunal: sigla,
-      classe: src.classe?.descricao || undefined,
-      assunto: src.assuntos?.[0]?.descricao || undefined,
-      vara: src.orgaoJulgador?.nome || undefined,
-      partes: (src.partes || []).map(p => `${p.tipo || "Parte"}: ${p.nome || ""}`),
-      movimentacoes: (src.movimentos || []).slice(0, 50).map(m => ({
-        data: m.dataHora?.slice(0, 10) || "",
-        descricao: m.nome || "",
-        detalhes: m.complementosTabelados?.map(c => c.descricao).join("; ") || undefined,
-      })),
-      documentos: [],
-    };
+    return proc;
   } catch (err) {
     log("warn", `DataJud ${sigla} falhou: ${err}`);
     return null;
@@ -118,35 +182,59 @@ export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<
     };
   }
 
-  log("info", `Tribunal identificado: ${tribunal.sigla} (segmento ${tribunal.segmento}, TR ${tribunal.codigoTR})`);
+  log("info", `Tribunal identificado: ${tribunal.sigla} (segmento ${tribunal.segmento})`);
 
   let processo: ProcessoScrapeData | null = null;
   let sourceLabel = `${tribunal.sigla} — DataJud`;
+  // Track actual responder so ScrapingResult.source reflects the backend
+  // that answered (DataJud/MNI/e-SAJ/portal), not just the planned route.
+  let actualSource: import("./types").ScrapingSource = "datajud";
 
   if (tribunal.sigla === "STJ") {
     const r = await buscarProcessoStj(numero);
     logs.push(...r.logs);
     processo = r.data;
     sourceLabel = r.sourceLabel;
+    actualSource = r.source;
   } else if (tribunal.sigla === "STF") {
     const r = await buscarProcessoStf(numero);
     logs.push(...r.logs);
     processo = r.data;
     sourceLabel = r.sourceLabel;
+    actualSource = r.source;
   } else if (tribunal.sigla.startsWith("TRF")) {
     const r = await buscarProcessoTrf(numero, tribunal);
     logs.push(...r.logs);
     processo = r.data;
     sourceLabel = r.sourceLabel;
+    actualSource = r.source;
   } else if (tribunal.usaEsaj) {
     const r = await buscarProcessoEsaj(numero, tribunal);
     logs.push(...r.logs);
     processo = r.data;
     sourceLabel = r.sourceLabel;
+    actualSource = r.source;
   } else {
     processo = await buscarDataJudGenerico(numero, tribunal.sigla, log);
     sourceLabel = `${tribunal.sigla} — DataJud`;
+    actualSource = "datajud";
   }
+
+  const durationMs = Date.now() - t0;
+  const camposPreenchidos = contarCamposProcesso(processo);
+
+  const telemetry: ScrapingTelemetry = {
+    fonte: sourceLabel,
+    tribunal: tribunal.sigla,
+    latenciaMs: durationMs,
+    camposPreenchidos,
+  };
+
+  log("info",
+    `[telemetria-final] fonte="${sourceLabel}" tribunal=${tribunal.sigla} ` +
+    `latencia=${durationMs}ms campos=${camposPreenchidos} ` +
+    `processoEncontrado=${!!processo}`
+  );
 
   const md = processo
     ? [
@@ -155,9 +243,16 @@ export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<
         processo.classe ? `**Classe:** ${processo.classe}` : "",
         processo.assunto ? `**Assunto:** ${processo.assunto}` : "",
         processo.vara ? `**Vara/Órgão:** ${processo.vara}` : "",
+        processo.relator ? `**Juiz/Relator:** ${processo.relator}` : "",
+        processo.comarca ? `**Comarca:** ${processo.comarca}` : "",
+        processo.valorCausa ? `**Valor da causa:** R$ ${processo.valorCausa}` : "",
+        processo.dataDistribuicao ? `**Distribuição:** ${processo.dataDistribuicao}` : "",
         "",
         "## Partes",
         processo.partes.length > 0 ? processo.partes.map(p => `- ${p}`).join("\n") : "Não disponível",
+        ...(processo.advogados && processo.advogados.length > 0
+          ? ["", "## Advogados", ...processo.advogados.map(a => `- ${a}`)]
+          : []),
         "",
         "## Últimas Movimentações",
         processo.movimentacoes.slice(0, 15).map(m =>
@@ -167,13 +262,16 @@ export async function pesquisarProcesso(numero: string): Promise<ScrapingResult<
     : "";
 
   return {
-    source: tribunal.sigla.startsWith("TRF") ? "trf" : tribunal.usaEsaj ? "esaj" : tribunal.sigla === "STJ" ? "stj" : tribunal.sigla === "STF" ? "stf" : "datajud",
+    // Use the source the sub-scraper actually resolved to (may differ from
+    // planned route when a fallback occurs, e.g. e-SAJ → DataJud).
+    source: actualSource,
     sourceLabel,
     data: processo,
     markdownContent: md,
-    durationMs: Date.now() - t0,
+    durationMs,
     logs,
     error: processo ? undefined : `Processo ${numero} não encontrado`,
+    telemetry,
   };
 }
 
@@ -214,30 +312,20 @@ async function buscarJurisprudenciaTjEstadual(
       query: {
         multi_match: {
           query: q,
-          fields: ["ementa", "assuntos.descricao", "classe.descricao"],
+          fields: ["ementa", "assuntos.descricao", "assuntos.nome", "classe.descricao"],
         },
       },
       size: 10,
       sort: [{ dataJulgamento: { order: "desc" } }],
     });
 
-    const data = await withRetry(() =>
-      fetchJson<{ hits?: { hits?: DataJudHit[] } }>(
-        `https://api.datajud.cnj.jus.br/${indice}/_search`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
-          body,
-          timeoutMs: 15000,
-        }
-      )
-    );
+    const data = await queryDataJudShared(indice, body, log);
 
     for (const hit of data?.hits?.hits || []) {
       const src = hit._source;
       if (!src) continue;
-      const ementa = src.assuntos?.map(a => a.descricao).join("; ")
-        || src.classe?.descricao
+      const ementa = src.assuntos?.map(a => a.nome || a.descricao).filter(Boolean).join("; ")
+        || src.classe?.nome || src.classe?.descricao
         || "Processo " + sigla;
       items.push({
         tribunal: sigla,

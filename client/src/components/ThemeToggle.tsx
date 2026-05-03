@@ -21,7 +21,7 @@ const listeners = new Set<() => void>();
 let currentTheme: Theme = readTheme();
 
 function notify() {
-  for (const l of listeners) l();
+  listeners.forEach((l) => l());
 }
 
 function subscribe(cb: () => void) {

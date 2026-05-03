@@ -1,10 +1,10 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult } from "./types";
-import { DATAJUD_AUTH } from "./types";
 import { fetchUrl, fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
 import { CrawlerManager } from "./crawlerManager";
 import { extrairIntegraDecisao } from "./playwrightCrawler";
+import { queryDataJudShared, type DataJudHit } from "./datajudClient";
 
 interface StfJurisprudenciaResponse {
   result?: {
@@ -24,19 +24,6 @@ interface StfJurisprudenciaResponse {
   };
 }
 
-interface DataJudHit {
-  _source?: {
-    numeroProcesso?: string;
-    classe?: { descricao?: string };
-    assuntos?: { descricao?: string }[];
-    orgaoJulgador?: { nome?: string };
-    partes?: { nome?: string; tipo?: string }[];
-    movimentos?: { dataHora?: string; nome?: string; complementosTabelados?: { descricao?: string }[] }[];
-    dataAjuizamento?: string;
-    relator?: string;
-  };
-}
-
 /**
  * Busca dados do processo no STF via DataJud api_publica_stf e portal STF.
  * Usa PlaywrightCrawler (com degradação para CheerioCrawler) para extrair
@@ -50,22 +37,14 @@ export async function buscarProcessoStf(numero: string): Promise<ScrapingResult<
 
   let processo: ProcessoScrapeData | null = null;
 
-  // Tentativa 1: DataJud api_publica_stf
+  // Tentativa 1: DataJud api_publica_stf via cliente compartilhado (pacing, cache, auth-first)
+  let usedDataJud = false;
+  let usedRebrowserPortal = false;
   try {
     const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
-    const data = await withRetry(() =>
-      fetchJson<{ hits?: { hits?: DataJudHit[] } }>(
-        "https://api.datajud.cnj.jus.br/api_publica_stf/_search",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
-          body,
-          timeoutMs: 15000,
-        }
-      )
-    );
+    const data = await queryDataJudShared("api_publica_stf", body, log);
 
-    const src = data?.hits?.hits?.[0]?._source;
+    const src: DataJudHit["_source"] = data?.hits?.hits?.[0]?._source;
     if (src) {
       processo = {
         numero: src.numeroProcesso || numero,
@@ -82,6 +61,7 @@ export async function buscarProcessoStf(numero: string): Promise<ScrapingResult<
         documentos: [],
         urlPortal: `https://portal.stf.jus.br/processos/detalhe.asp?incidente=${encodeURIComponent(numero)}`,
       };
+      usedDataJud = true;
       log("info", `DataJud STF: processo ${src.numeroProcesso} encontrado`);
     }
   } catch (err) {
@@ -95,14 +75,17 @@ export async function buscarProcessoStf(numero: string): Promise<ScrapingResult<
 
     try {
       await randomDelay(1000, 2000);
-      const { html, usedBrowser } = await import("./playwrightCrawler").then(m =>
-        m.crawlUrlWithBrowser(portalUrl, {
+      // STF portal usa proteção anti-bot — tentamos rebrowser-playwright primeiro
+      const { html, usedRebrowser } = await import("./rebrowserCrawler").then(m =>
+        m.crawlUrlWithRebrowser(portalUrl, {
           timeoutMs: 25000,
           waitForSelector: ".partes, .movimentacoes, #incidente",
+          engine: "chromium",
         })
       );
+      usedRebrowserPortal = usedRebrowser;
 
-      log("info", `Portal STF: ${usedBrowser ? "Playwright" : "CheerioCrawler"} — ${html.length} chars`);
+      log("info", `Portal STF: ${usedRebrowser ? "Rebrowser" : "Playwright/Cheerio"} — ${html.length} chars`);
 
       const $ = cheerio.load(html);
 
@@ -191,9 +174,10 @@ export async function buscarProcessoStf(numero: string): Promise<ScrapingResult<
       ].filter(l => l !== null && l !== undefined).join("\n")
     : "";
 
+  const stfPortalEngine = usedRebrowserPortal ? "Rebrowser" : "Playwright";
   return {
-    source: "stf",
-    sourceLabel: "STF — DataJud / Portal (Playwright)",
+    source: usedDataJud ? "datajud" : "stf",
+    sourceLabel: usedDataJud ? "STF — DataJud" : `STF — Portal (${stfPortalEngine})`,
     data: processo,
     markdownContent: md,
     durationMs: Date.now() - t0,
@@ -270,27 +254,16 @@ export async function buscarJurisprudenciaStf(q: string): Promise<ScrapingResult
 
       log("info", `Scraping STF retornou ${items.length} resultado(s)`);
     } catch (err2) {
-      log("warn", `Scraping STF falhou: ${err2}. Tentando DataJud...`);
+      log("warn", `Scraping STF falhou: ${err2}. Tentando DataJud (cliente compartilhado)...`);
 
       try {
-        const apiUrl = "https://api.datajud.cnj.jus.br/api_publica_stf/_search";
         const body = JSON.stringify({
           query: { multi_match: { query: q, fields: ["ementa", "assuntos.descricao", "classe.descricao"] } },
           size: 10,
           sort: [{ dataJulgamento: { order: "desc" } }],
         });
 
-        const data = await withRetry(() =>
-          fetchJson<{ hits?: { hits?: Array<{ _source?: { numeroProcesso?: string; classe?: { descricao?: string }; assuntos?: { descricao?: string }[]; orgaoJulgador?: { nome?: string } } }> } }>(apiUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": DATAJUD_AUTH,
-            },
-            body,
-            timeoutMs: 15000,
-          })
-        );
+        const data = await queryDataJudShared("api_publica_stf", body, log);
 
         for (const hit of data?.hits?.hits || []) {
           const src = hit._source;

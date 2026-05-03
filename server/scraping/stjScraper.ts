@@ -1,41 +1,23 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import type { JurisprudenciaItem, ProcessoScrapeData, ScrapingResult } from "./types";
-import { DATAJUD_AUTH } from "./types";
-import { fetchJson, makeLogger, withRetry, randomDelay } from "./utils";
+import { makeLogger, randomDelay } from "./utils";
 import { CrawlerManager } from "./crawlerManager";
 import { toMarkdown } from "./firecrawl";
+import { queryDataJudShared, type DataJudHit } from "./datajudClient";
 
-interface DataJudProcesso {
-  _source?: {
-    numeroProcesso?: string;
-    classe?: { descricao?: string };
-    assuntos?: { descricao?: string }[];
-    tribunal?: string;
-    orgaoJulgador?: { nome?: string };
-    partes?: { nome?: string; tipo?: string }[];
-    movimentos?: { dataHora?: string; nome?: string; complementosTabelados?: { descricao?: string }[] }[];
-    dataAjuizamento?: string;
-  };
-}
-
+/**
+ * Busca processo STJ via cliente DataJud compartilhado (pacing, cache, auth-first).
+ */
 async function buscarProcessoStjDataJud(
   numero: string,
   log: (l: "info" | "warn" | "error", m: string) => void
 ): Promise<ProcessoScrapeData | null> {
-  const url = `https://api.datajud.cnj.jus.br/api_publica_stj/_search`;
-  log("info", `Consultando DataJud STJ para processo ${numero}`);
+  log("info", `Consultando DataJud STJ para processo ${numero} (cliente compartilhado)`);
   const body = JSON.stringify({ query: { match: { numeroProcesso: numero } }, size: 1 });
   try {
-    const data = await withRetry(() =>
-      fetchJson<{ hits?: { hits?: DataJudProcesso[] } }>(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
-        body,
-        timeoutMs: 15000,
-      })
-    );
-    const hit = data?.hits?.hits?.[0]?._source;
+    const data = await queryDataJudShared("api_publica_stj", body, log);
+    const hit: DataJudHit["_source"] = data?.hits?.hits?.[0]?._source;
     if (!hit) return null;
     return {
       numero: hit.numeroProcesso || numero,
@@ -150,26 +132,31 @@ export async function buscarProcessoStj(numero: string): Promise<ScrapingResult<
   const { logs, log } = makeLogger();
   log("info", `Iniciando busca processo STJ: ${numero}`);
 
-  // Tentativa 1: Portal direto (scraping agressivo)
-  let processo = await buscarProcessoStjPortal(numero, log);
-  let sourceLabel = "STJ — Portal Processual (scraping direto)";
+  // Tentativa 1: DataJud (cliente compartilhado — pacing, cache, auth-first).
+  // DataJud tem cobertura garantida para todos os CNJ e é o ponto de partida obrigatório.
+  let processo = await buscarProcessoStjDataJud(numero, log);
+  let sourceLabel = "STJ — DataJud";
+  let actualSource: "datajud" | "stj" = "datajud";
 
-  // Tentativa 2: DataJud como fallback/enriquecimento
   if (!processo) {
-    log("info", `Portal STJ sem resultado — tentando DataJud como fallback`);
-    processo = await buscarProcessoStjDataJud(numero, log);
-    sourceLabel = "STJ — DataJud (fallback)";
-  } else {
-    // Enriquecer com DataJud se portal encontrou mas sem classe/assunto
-    if (!processo.classe || !processo.assunto) {
-      const datajudData = await buscarProcessoStjDataJud(numero, log);
-      if (datajudData) {
-        processo.classe = processo.classe || datajudData.classe;
-        processo.assunto = processo.assunto || datajudData.assunto;
-        if (processo.movimentacoes.length === 0) {
-          processo.movimentacoes = datajudData.movimentacoes;
+    // Tentativa 2: Portal direto como fallback quando DataJud sem resultado
+    log("info", `DataJud STJ sem resultado — tentando portal processual como fallback`);
+    processo = await buscarProcessoStjPortal(numero, log);
+    if (processo) {
+      sourceLabel = "STJ — Portal Processual (scraping direto)";
+      actualSource = "stj";
+
+      // Enriquecer com DataJud se portal encontrou mas sem classe/assunto
+      if (!processo.classe || !processo.assunto) {
+        const datajudData = await buscarProcessoStjDataJud(numero, log);
+        if (datajudData) {
+          processo.classe = processo.classe || datajudData.classe;
+          processo.assunto = processo.assunto || datajudData.assunto;
+          if (processo.movimentacoes.length === 0) {
+            processo.movimentacoes = datajudData.movimentacoes;
+          }
+          log("info", `DataJud STJ: dados de enriquecimento mesclados ao portal`);
         }
-        log("info", `DataJud STJ: dados de enriquecimento mesclados`);
       }
     }
   }
@@ -178,6 +165,7 @@ export async function buscarProcessoStj(numero: string): Promise<ScrapingResult<
   if (processo) {
     md = [
       `# Processo STJ — ${processo.numero}`,
+      `**Fonte:** ${sourceLabel}`,
       processo.classe ? `**Classe:** ${processo.classe}` : "",
       processo.assunto ? `**Assunto:** ${processo.assunto}` : "",
       processo.vara ? `**Órgão Julgador:** ${processo.vara}` : "",
@@ -191,11 +179,11 @@ export async function buscarProcessoStj(numero: string): Promise<ScrapingResult<
       ).join("\n"),
       processo.urlPortal ? `\n[Ver no portal STJ](${processo.urlPortal})` : "",
     ].filter(l => l.trim()).join("\n");
-    log("info", `Processo STJ encontrado: ${processo.numero}`);
+    log("info", `Processo STJ encontrado via ${sourceLabel}: ${processo.numero}`);
   }
 
   return {
-    source: "stj",
+    source: actualSource,
     sourceLabel,
     data: processo,
     markdownContent: md,
@@ -257,32 +245,12 @@ export async function buscarJurisprudenciaStj(q: string): Promise<ScrapingResult
     log("warn", `SCON STJ falhou: ${err}. Tentando DataJud...`);
 
     try {
-      const apiUrl = "https://api.datajud.cnj.jus.br/api_publica_stj/_search";
       const body = JSON.stringify({
         query: { multi_match: { query: q, fields: ["ementa", "assuntos.descricao", "classe.descricao"] } },
         size: 10,
         sort: [{ dataJulgamento: { order: "desc" } }],
       });
-      const data = await withRetry(() =>
-        fetchJson<{
-          hits?: {
-            hits?: Array<{
-              _source?: {
-                numeroProcesso?: string;
-                classe?: { descricao?: string };
-                assuntos?: { descricao?: string }[];
-                orgaoJulgador?: { nome?: string };
-                dataJulgamento?: string;
-              };
-            }>;
-          };
-        }>(apiUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": DATAJUD_AUTH },
-          body,
-          timeoutMs: 15000,
-        })
-      );
+      const data = await queryDataJudShared("api_publica_stj", body, log);
       for (const hit of data?.hits?.hits || []) {
         const src = hit._source;
         if (!src) continue;
