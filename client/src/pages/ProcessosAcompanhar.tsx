@@ -95,7 +95,7 @@ function FonteBadge({ fonte }: { fonte?: string | null }) {
       : fonte === "tecjustica"
       ? { label: "TecJustiça MCP", icon: Zap, cls: "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20" }
       : fonte === "pje_autenticado"
-      ? { label: "PJe Auth", icon: Fingerprint, cls: "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20" }
+      ? { label: "PJe Auth", icon: Fingerprint, cls: "bg-primary/10 text-primary dark:text-primary border-primary/30/20" }
       : { label: "Portal", icon: Globe, cls: "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20" };
   const Icon = config.icon;
   return (

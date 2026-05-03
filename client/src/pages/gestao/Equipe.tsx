@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import type { Equipe } from "@shared/schema";
 
-const coresEquipe = ["#8b5cf6", "#ec4899", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+const coresEquipe = ["hsl(var(--chart-1))", "#ec4899", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
 export default function EquipePage() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -76,7 +76,7 @@ export default function EquipePage() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Com OAB</p>
-            <p className="text-3xl font-bold text-purple-600">
+            <p className="text-3xl font-bold text-primary">
               {equipe.filter((m) => m.oab).length}
             </p>
           </CardContent>

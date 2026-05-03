@@ -95,7 +95,7 @@ export default function ConfiguracaoDNA() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
-          <Sliders className="w-7 h-7 text-indigo-600" />
+          <Sliders className="w-7 h-7 text-primary" />
           <h1 className="text-2xl font-semibold">Configuracao DNA</h1>
         </div>
         <p className="text-muted-foreground">
@@ -109,7 +109,7 @@ export default function ConfiguracaoDNA() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Brain className="w-5 h-5 text-purple-600" />
+                <Brain className="w-5 h-5 text-primary" />
                 Pesos do Conselho
               </CardTitle>
               <Badge
@@ -246,7 +246,7 @@ export default function ConfiguracaoDNA() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
-            <Shield className="w-5 h-5 text-indigo-600" />
+            <Shield className="w-5 h-5 text-primary" />
             Integracoes
           </CardTitle>
         </CardHeader>
@@ -256,7 +256,7 @@ export default function ConfiguracaoDNA() {
             <div className="space-y-3 p-4 bg-card rounded-lg border">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Key className="w-5 h-5 text-indigo-600" />
+                  <Key className="w-5 h-5 text-primary" />
                   <h3 className="font-medium">MCP TecJustica</h3>
                 </div>
                 {apiKeySalva ? (

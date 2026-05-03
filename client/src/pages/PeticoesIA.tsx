@@ -462,15 +462,15 @@ export default function PeticoesIA() {
           <Card className="border-primary/40 bg-primary/5">
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-purple-600" />
+                <Shield className="w-5 h-5 text-primary" />
                 <CardTitle className="text-base">Memorando Estrategico (Resumo)</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-start gap-2">
-                <Scale className="w-4 h-4 text-purple-600 mt-0.5 shrink-0" />
+                <Scale className="w-4 h-4 text-primary mt-0.5 shrink-0" />
                 <div>
-                  <span className="text-xs font-semibold text-purple-700">Tese:</span>
+                  <span className="text-xs font-semibold text-primary">Tese:</span>
                   <p className="text-sm">
                     Inconstitucionalidade por violacao a vedacao ao retrocesso social e dignidade da pessoa humana.
                   </p>

@@ -213,7 +213,7 @@ export default function TodosDocumentos() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: "Total", value: documentos.length, color: "text-foreground" },
-          { label: "Petições", value: documentos.filter((d) => d.tipo === "Petição").length, color: "text-purple-600" },
+          { label: "Petições", value: documentos.filter((d) => d.tipo === "Petição").length, color: "text-primary" },
           { label: "Contratos", value: documentos.filter((d) => d.tipo === "Contrato").length, color: "text-blue-600" },
           { label: "MD Extraído", value: extracaoOk, color: "text-green-600" },
           { label: "Pendentes", value: extracaoPendente, color: "text-yellow-600" },

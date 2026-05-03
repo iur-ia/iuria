@@ -34,7 +34,7 @@ const CATEGORIA_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   gerada: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  enviada: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  enviada: "bg-primary/15 text-primary dark:bg-primary/20 dark:text-primary",
   respondida: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   arquivada: "bg-muted text-muted-foreground",
 };

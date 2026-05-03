@@ -96,7 +96,7 @@ export default function RelatoriosAtividades() {
                   <span className="text-sm font-semibold">28 (47%)</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
-                  <div className="bg-purple-600 h-2 rounded-full" style={{ width: "47%" }} />
+                  <div className="bg-primary h-2 rounded-full" style={{ width: "47%" }} />
                 </div>
               </div>
               <div>
@@ -138,7 +138,7 @@ export default function RelatoriosAtividades() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-semibold">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
                     TG
                   </div>
                   <div>

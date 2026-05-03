@@ -15,10 +15,10 @@ const mockProcesses: ProcessCardData[] = [
     status: ["incompleto", "movimentado"],
     marcadores: [
       { nome: "Urgente", cor: "#ef4444" },
-      { nome: "Cliente Premium", cor: "#8b5cf6" },
+      { nome: "Cliente Premium", cor: "hsl(var(--chart-1))" },
     ],
     responsaveis: [
-      { iniciais: "TG", nome: "Thiago Gomes", cor: "#8b5cf6" },
+      { iniciais: "TG", nome: "Thiago Gomes", cor: "hsl(var(--chart-1))" },
       { iniciais: "MC", nome: "Maria Costa", cor: "#ec4899" },
     ],
   },
@@ -38,7 +38,7 @@ const mockProcesses: ProcessCardData[] = [
       { nome: "Alto Valor", cor: "#10b981" },
     ],
     responsaveis: [
-      { iniciais: "TG", nome: "Thiago Gomes", cor: "#8b5cf6" },
+      { iniciais: "TG", nome: "Thiago Gomes", cor: "hsl(var(--chart-1))" },
     ],
   },
 ];

@@ -93,7 +93,7 @@ export default function Clientes() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Pessoa Jurídica</p>
-            <p className="text-3xl font-bold text-purple-600">
+            <p className="text-3xl font-bold text-primary">
               {clientes.filter((c) => c.tipo === "Pessoa Jurídica").length}
             </p>
           </CardContent>

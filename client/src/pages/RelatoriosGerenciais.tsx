@@ -16,7 +16,7 @@ export default function RelatoriosGerenciais() {
           { label: "Novos (mês)", value: "8", icon: Briefcase, color: "text-green-600", trend: "+3", up: true },
           { label: "Encerrados (mês)", value: "5", icon: Briefcase, color: "text-muted-foreground", trend: "-2", up: false },
           { label: "Taxa de Êxito", value: "78,3%", icon: TrendingUp, color: "text-emerald-600", trend: "+2,1%", up: true },
-          { label: "Horas Faturadas", value: "342h", icon: Clock, color: "text-purple-600", trend: "+18h", up: true },
+          { label: "Horas Faturadas", value: "342h", icon: Clock, color: "text-primary", trend: "+18h", up: true },
           { label: "Clientes Ativos", value: "45", icon: Users, color: "text-orange-600", trend: "+2", up: true },
         ].map((kpi, i) => (
           <Card key={i} className="border-0 shadow-sm bg-card">
@@ -42,7 +42,7 @@ export default function RelatoriosGerenciais() {
             <div className="space-y-3">
               {[
                 { area: "Recuperação Judicial", qtd: 52, pct: 35, color: "bg-blue-500/100" },
-                { area: "Empresarial", qtd: 41, pct: 28, color: "bg-purple-500" },
+                { area: "Empresarial", qtd: 41, pct: 28, color: "bg-primary" },
                 { area: "Eleitoral", qtd: 22, pct: 15, color: "bg-emerald-500/100" },
                 { area: "Civil", qtd: 18, pct: 12, color: "bg-orange-500" },
                 { area: "Outros", qtd: 14, pct: 10, color: "bg-gray-400" },

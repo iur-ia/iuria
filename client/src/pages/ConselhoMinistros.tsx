@@ -94,7 +94,7 @@ export default function ConselhoMinistros() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-1">
-          <Brain className="w-7 h-7 text-purple-600" />
+          <Brain className="w-7 h-7 text-primary" />
           <h1 className="text-2xl font-semibold">Conselho de Ministros IA</h1>
         </div>
         <p className="text-muted-foreground">
@@ -164,7 +164,7 @@ export default function ConselhoMinistros() {
           <Card className="border-primary/40 bg-primary/5">
             <CardHeader>
               <div className="flex items-center gap-3">
-                <Shield className="w-6 h-6 text-purple-600" />
+                <Shield className="w-6 h-6 text-primary" />
                 <CardTitle className="text-xl">Memorando Estrategico</CardTitle>
               </div>
             </CardHeader>
@@ -172,7 +172,7 @@ export default function ConselhoMinistros() {
               {/* Tese Principal */}
               <div>
                 <h3 className="font-semibold text-base flex items-center gap-2 mb-2">
-                  <Scale className="w-4 h-4 text-purple-600" />
+                  <Scale className="w-4 h-4 text-primary" />
                   Tese Principal
                 </h3>
                 <p className="text-sm bg-card p-4 rounded-lg border">{SEED_MEMORANDO.tesePrincipal}</p>

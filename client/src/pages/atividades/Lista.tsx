@@ -238,7 +238,7 @@ export default function ListaAtividades() {
   };
 
   const tipoColors: Record<string, string> = {
-    Tarefa: "bg-primary/15 text-primary dark:bg-purple-900/30 dark:text-purple-300",
+    Tarefa: "bg-primary/15 text-primary dark:bg-primary/20 dark:text-primary",
     Intimação: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300 dark:bg-orange-900/30 dark:text-orange-300",
     Audiência: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300 dark:bg-green-900/30 dark:text-green-300",
     Compromisso: "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
@@ -292,7 +292,7 @@ export default function ListaAtividades() {
         <Card className="border-0 shadow-sm">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground mb-1">Tarefas</p>
-            <p className="text-3xl font-bold text-purple-600">
+            <p className="text-3xl font-bold text-primary">
               {atividades.filter((a) => a.tipo === "Tarefa").length}
             </p>
           </CardContent>

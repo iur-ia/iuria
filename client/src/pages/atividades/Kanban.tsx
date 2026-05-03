@@ -47,7 +47,7 @@ type KanbanStatus = "pendente" | "em-andamento" | "revisao" | "concluida";
 const STATUS_COLUMNS: { id: KanbanStatus; titulo: string; color: string }[] = [
   { id: "pendente", titulo: "A Fazer", color: "bg-slate-600" },
   { id: "em-andamento", titulo: "Em Andamento", color: "bg-blue-600" },
-  { id: "revisao", titulo: "Em Revisão", color: "bg-purple-600" },
+  { id: "revisao", titulo: "Em Revisão", color: "bg-primary" },
   { id: "concluida", titulo: "Concluído", color: "bg-green-600" },
 ];
 

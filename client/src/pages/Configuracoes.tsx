@@ -561,12 +561,12 @@ export default function Configuracoes() {
           ) : statusPje?.autenticado ? (
             <div className={`flex items-start justify-between gap-4 p-4 rounded-md ${
               statusPje.valido
-                ? "bg-purple-500/10 border border-purple-500/20"
+                ? "bg-primary/10 border border-primary/30/20"
                 : "bg-yellow-500/10 border border-yellow-500/20"
             }`} data-testid="status-pje-conectado">
               <div className="flex items-start gap-3">
                 {statusPje.valido ? (
-                  <CheckCircle className="h-5 w-5 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+                  <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                 ) : (
                   <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
                 )}
@@ -1014,10 +1014,10 @@ export default function Configuracoes() {
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-3 rounded-md bg-purple-500/5 border border-purple-500/20">
-              <Fingerprint className="h-4 w-4 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-3 p-3 rounded-md bg-primary/5 border border-primary/30/20">
+              <Fingerprint className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
               <div>
-                <p className="font-medium text-purple-700 dark:text-purple-300">Com Certificado A3 — Acesso completo</p>
+                <p className="font-medium text-primary dark:text-primary">Com Certificado A3 — Acesso completo</p>
                 <p className="text-muted-foreground text-xs mt-0.5">
                   Processos sigilosos, intimações pessoais, PJe autenticado, CNJ Painel do Advogado.
                   Requer certificado digital ICP-Brasil A3 em nuvem.

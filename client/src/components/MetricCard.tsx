@@ -29,7 +29,7 @@ const dotColors = {
   yellow: "bg-yellow-500",
   green: "bg-green-500",
   blue: "bg-blue-500",
-  purple: "bg-purple-500",
+  purple: "bg-primary",
   gray: "bg-gray-400",
 };
 

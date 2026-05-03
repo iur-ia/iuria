@@ -99,13 +99,13 @@ interface EmpresaData {
 
 const SOURCE_COLORS: Record<string, string> = {
   datajud: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  esaj: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  esaj: "bg-primary/15 text-primary dark:bg-primary/20 dark:text-primary",
   stj: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   stf: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   trf: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   brasilapi: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
   receita_federal: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
-  cnj_biblioteca: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+  cnj_biblioteca: "bg-primary/15 text-primary dark:bg-primary/20 dark:text-primary",
   senado: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
 };
 

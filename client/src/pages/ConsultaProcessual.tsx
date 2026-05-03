@@ -521,9 +521,9 @@ export default function ConsultaProcessual() {
       </div>
 
       {certStatus?.configurado && (
-        <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-md text-sm" data-testid="banner-cert-configurado">
-          <Fingerprint className="h-4 w-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-          <span className="text-purple-700 dark:text-purple-300">
+        <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/30/20 rounded-md text-sm" data-testid="banner-cert-configurado">
+          <Fingerprint className="h-4 w-4 text-primary flex-shrink-0" />
+          <span className="text-primary dark:text-primary">
             Certificado digital conectado{certStatus.nome_titular ? ` — ${certStatus.nome_titular}` : ""}.
             Processos sigilosos e intimações pessoais serão acessíveis.
           </span>
@@ -641,7 +641,7 @@ export default function ConsultaProcessual() {
                       : resultado.fonte === "tecjustica"
                       ? "bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20"
                       : resultado.fonte === "pje_autenticado"
-                      ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20"
+                      ? "bg-primary/10 text-primary dark:text-primary border-primary/30/20"
                       : "bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20"
                   }
                   data-testid="badge-fonte-dados"
@@ -673,7 +673,7 @@ export default function ConsultaProcessual() {
               {pjeStatus?.autenticado && pjeStatus?.valido && (
                 <Badge
                   variant="secondary"
-                  className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20"
+                  className="bg-primary/10 text-primary dark:text-primary border-primary/30/20"
                   data-testid="badge-pje-autenticado"
                 >
                   <Fingerprint className="h-3 w-3 mr-1" />

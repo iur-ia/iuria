@@ -49,7 +49,7 @@ const statusLabels = {
 
 const instanciaColors = {
   "1ª": "bg-blue-500 text-white",
-  "2ª": "bg-purple-500 text-white",
+  "2ª": "bg-primary text-white",
   "TS": "bg-red-500 text-white",
 };
 
