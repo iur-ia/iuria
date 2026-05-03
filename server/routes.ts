@@ -1024,7 +1024,7 @@ td, th { border: 1px solid #444; padding: 4px 8px; }
 
       if (format === "docx") {
         const htmlToDocx = (await import("html-to-docx")).default;
-        const buffer: any = await htmlToDocx(fullHtml, undefined, {
+        const buffer = await htmlToDocx(fullHtml, undefined, {
           orientation: "portrait",
           margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
         });
@@ -1034,7 +1034,7 @@ td, th { border: 1px solid #444; padding: 4px 8px; }
       }
 
       if (format === "pdf") {
-        const htmlPdf: any = (await import("html-pdf-node")).default;
+        const htmlPdf = (await import("html-pdf-node")).default;
         const file = { content: fullHtml };
         const buffer = await htmlPdf.generatePdf(file, { format: "A4", margin: { top: "2.5cm", bottom: "2.5cm", left: "3cm", right: "2cm" } });
         res.setHeader("Content-Type", "application/pdf");

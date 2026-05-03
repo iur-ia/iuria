@@ -49,6 +49,7 @@ import {
   Pencil,
   Copy,
 } from "@phosphor-icons/react";
+import type { IconWeight } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -227,10 +228,11 @@ export default function PeticoesIA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templatesPadrao.length, editor]);
 
-  // Header do documento (fallback escritorio config)
+  // Header do documento: precedência template > escritório > vazio
+  const [activeHeaderHtml, setActiveHeaderHtml] = useState<string>("");
   const headerHtml = useMemo(() => {
-    return escritorio?.cabecalhoHtml || "";
-  }, [escritorio]);
+    return activeHeaderHtml || escritorio?.cabecalhoHtml || "";
+  }, [activeHeaderHtml, escritorio]);
 
   // Chat
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -349,6 +351,7 @@ export default function PeticoesIA() {
     editor.commands.setContent(html);
     setTitulo(t.nome);
     setRascunhoId(null);
+    setActiveHeaderHtml(t.headerHtml || "");
     setDirty(false);
     apiRequest("POST", `/api/templates/${t.id}/uso`, {}).catch(() => {
       apiRequest("PATCH", `/api/templates/${t.id}`, { usos: (t.usos || 0) + 1 }).catch(() => {});
@@ -989,7 +992,7 @@ function EditorToolbar({ editor }: { editor: Editor }) {
   }: {
     onClick: () => void;
     active?: boolean;
-    icon: React.ComponentType<{ weight?: any; className?: string }>;
+    icon: React.ComponentType<{ weight?: IconWeight; className?: string }>;
     label: string;
     testId: string;
   }) => (
@@ -1068,12 +1071,8 @@ function EditorToolbar({ editor }: { editor: Editor }) {
       <Select
         value={(editor.getAttributes("textStyle").fontSize as string) || ""}
         onValueChange={(v) => {
-          const cmd = editor.chain().focus() as ReturnType<typeof editor.chain> & {
-            setFontSize?: (s: string) => typeof cmd;
-            unsetFontSize?: () => typeof cmd;
-          };
-          if (v === "__default__") cmd.unsetFontSize?.().run();
-          else cmd.setFontSize?.(v).run();
+          if (v === "__default__") editor.chain().focus().unsetFontSize().run();
+          else editor.chain().focus().setFontSize(v).run();
         }}
       >
         <SelectTrigger className="h-8 w-[80px] text-xs" data-testid="toolbar-fontsize">
