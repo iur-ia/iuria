@@ -12,7 +12,10 @@ from typing import Optional, Dict, List
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from base_scraper import ProcessoInfo, Movimentacao, ResultadoBusca
 
-DATAJUD_API_KEY = "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=="
+DATAJUD_API_KEY = os.environ.get(
+    "DATAJUD_API_KEY",
+    "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==",
+)
 DATAJUD_BASE_URL = "https://api-publica.datajud.cnj.jus.br"
 
 TRIBUNAL_INDICES = {

@@ -777,6 +777,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const result = JSON.parse(stdout);
           res.json(result);
         } catch (e) {
+          console.error("[PROMETHEUS][F-006] JSON parse error in detect-tribunal:", e);
           res.status(500).json({ error: "Erro ao processar resposta" });
         }
       });
@@ -844,6 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           res.status(500).json({ error: "Erro ao processar resposta do TecJustiça MCP" });
         } catch (e) {
+          console.error("[PROMETHEUS][F-006] JSON parse error in tecjustica-mcp:", e);
           res.status(500).json({ error: "Erro ao processar resposta do TecJustiça MCP" });
         }
       });
@@ -883,6 +885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           res.status(500).json({ error: "Erro ao processar resposta do DataJud" });
         } catch (e) {
+          console.error("[PROMETHEUS][F-006] JSON parse error in datajud-direct:", e);
           res.status(500).json({ error: "Erro ao processar resposta do DataJud" });
         }
       });
@@ -894,7 +897,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== CONSULTA PROCESSUAL ====================
   app.get("/api/consultas-processuais", async (req, res) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 50;
+      const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 50), 500);
       const consultas = await storage.getConsultasProcessuais(limit);
       res.json(consultas);
     } catch (error) {
@@ -2722,7 +2725,7 @@ except Exception as e:
   // Painel de prazos críticos (próximas 72h)
   app.get("/api/prazos-criticos", async (req, res) => {
     try {
-      const horas = parseInt(req.query.horas as string) || 72;
+      const horas = Math.min(Math.max(1, parseInt(req.query.horas as string) || 72), 8760);
       const tarefas = await storage.getAtividadesPrazosCriticos(horas);
       res.json(tarefas);
     } catch (error) {
