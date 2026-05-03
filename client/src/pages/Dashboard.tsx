@@ -18,11 +18,13 @@ import {
   PieChart, Pie, Legend, AreaChart, Area, CartesianGrid,
 } from "recharts";
 import {
-  Briefcase, AlertCircle, Clock, DollarSign, TrendingDown,
-  Bell, Eye, RefreshCw, AlertTriangle, CheckCircle2,
-  ChevronRight, Activity, Zap, Printer, Download, Users, TrendingUp,
-  FileSpreadsheet,
+  RefreshCw, CheckCircle2, ChevronRight, Zap, Printer, Download, Users,
+  TrendingUp, FileSpreadsheet,
 } from "lucide-react";
+import {
+  Briefcase, WarningCircle as AlertCircle, Clock, CurrencyDollar as DollarSign,
+  TrendDown as TrendingDown, Bell, Eye, Warning as AlertTriangle, Pulse as Activity,
+} from "@phosphor-icons/react";
 import * as XLSX from "xlsx";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -256,11 +258,41 @@ function ScoreDot({ score }: { score: number }) {
   );
 }
 
+type Tone = "primary" | "emerald" | "amber" | "orange" | "rose" | "slate" | "muted";
+
+const TONE_BG: Record<Tone, string> = {
+  primary: "bg-primary/12",
+  emerald: "bg-emerald-500/15",
+  amber:   "bg-amber-500/15",
+  orange:  "bg-orange-500/15",
+  rose:    "bg-rose-500/15",
+  slate:   "bg-slate-500/15",
+  muted:   "bg-muted-foreground/12",
+};
+const TONE_RING: Record<Tone, string> = {
+  primary: "ring-primary/25",
+  emerald: "ring-emerald-500/25",
+  amber:   "ring-amber-500/25",
+  orange:  "ring-orange-500/25",
+  rose:    "ring-rose-500/25",
+  slate:   "ring-slate-500/25",
+  muted:   "ring-border",
+};
+const TONE_FG: Record<Tone, string> = {
+  primary: "text-primary",
+  emerald: "text-emerald-500",
+  amber:   "text-amber-500",
+  orange:  "text-orange-500",
+  rose:    "text-rose-500",
+  slate:   "text-slate-400",
+  muted:   "text-muted-foreground",
+};
+
 function KpiCard({
-  label, value, sub, icon: Icon, iconColor, badgeColor, href, loading, drillFilter, onNavigate,
+  label, value, sub, icon: Icon, tone = "primary", badgeColor, href, loading, drillFilter, onNavigate,
 }: {
   label: string; value: string | number; sub?: string;
-  icon: typeof Briefcase; iconColor: string; badgeColor?: string;
+  icon: any; tone?: Tone; badgeColor?: string;
   href?: string; loading?: boolean; drillFilter?: string;
   onNavigate?: (href: string, drillFilter?: string) => void;
 }) {
@@ -270,15 +302,15 @@ function KpiCard({
   };
   return (
     <Card
-      className={`border-0 shadow-sm ${href ? "cursor-pointer hover-elevate" : ""}`}
+      className={`surface-elevated ${href ? "cursor-pointer hover-elevate" : ""}`}
       onClick={href ? handleClick : undefined}
       data-testid={`kpi-card-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm text-muted-foreground leading-tight">{label}</p>
-          <div className={`p-2 rounded-md ${iconColor} shrink-0`}>
-            <Icon className="w-4 h-4 text-white" />
+          <div className={`p-2 rounded-md ring-1 shrink-0 ${TONE_BG[tone]} ${TONE_RING[tone]}`}>
+            <Icon className={`w-4 h-4 ${TONE_FG[tone]}`} weight="duotone" />
           </div>
         </div>
         {loading ? (
@@ -522,31 +554,31 @@ export default function Dashboard() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Operacional</p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 print:grid-cols-3">
             <KpiCard label="Processos Ativos" value={isLoading ? "…" : (data?.processos.ativos ?? 0)}
-              sub={`de ${data?.processos.total ?? 0} no total`} icon={Briefcase} iconColor="bg-primary"
+              sub={`de ${data?.processos.total ?? 0} no total`} icon={Briefcase} tone="primary"
               href="/processos" drillFilter="Ativo" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Tarefas Atrasadas" value={isLoading ? "…" : (data?.atividades.atrasadas ?? 0)}
               sub={data?.atividades.atrasadas ? "Requer atenção imediata" : "Tudo em dia"}
               icon={AlertCircle}
-              iconColor={data?.atividades.atrasadas ? "bg-red-500" : "bg-green-500"}
+              tone={data?.atividades.atrasadas ? "rose" : "emerald"}
               badgeColor={data?.atividades.atrasadas ? "text-red-600" : "text-green-600"}
               href="/atividades" drillFilter="Atrasado" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Prazos em 7 dias" value={isLoading ? "…" : (data?.atividades.vencendo7d ?? 0)}
               sub={`${data?.atividades.vencendoPeriodo ?? 0} em ${periodoLbl}`}
-              icon={Clock} iconColor="bg-amber-500" href="/atividades" drillFilter="Vencendo7d" loading={isLoading} onNavigate={handleNavigate} />
+              icon={Clock} tone="amber" href="/atividades" drillFilter="Vencendo7d" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Sem Movimentação" value={isLoading ? "…" : (data?.processos.semMovimentacao30d ?? 0)}
-              sub="Processos parados +30 dias" icon={Activity} iconColor="bg-slate-500"
+              sub="Processos parados +30 dias" icon={Activity} tone="slate"
               href="/processos/parados" drillFilter="Parado" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard
               label="Risco Crítico/Alto"
               value={isLoading ? "…" : ((data?.atividades.porRisco.CRITICO ?? 0) + (data?.atividades.porRisco.ALTO ?? 0))}
               sub={`${data?.atividades.porRisco.CRITICO ?? 0} crítico · ${data?.atividades.porRisco.ALTO ?? 0} alto`}
-              icon={AlertTriangle} iconColor="bg-orange-500"
+              icon={AlertTriangle} tone="orange"
               badgeColor={((data?.atividades.porRisco.CRITICO ?? 0) + (data?.atividades.porRisco.ALTO ?? 0)) > 0 ? "text-orange-600" : "text-muted-foreground"}
               href="/atividades/prazos-criticos" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Acompanhados" value={isLoading ? "…" : (data?.acompanhados.total ?? 0)}
               sub={data?.acompanhados.comNovosAndamentos ? `${data.acompanhados.comNovosAndamentos} com novos andamentos` : "Nenhum alerta pendente"}
               icon={Bell}
-              iconColor={data?.acompanhados.comNovosAndamentos ? "bg-red-500" : "bg-muted-foreground"}
+              tone={data?.acompanhados.comNovosAndamentos ? "rose" : "muted"}
               badgeColor={data?.acompanhados.comNovosAndamentos ? "text-red-600" : "text-muted-foreground"}
               href="/acompanhamentos" loading={isLoading} onNavigate={handleNavigate} />
           </div>
@@ -560,17 +592,17 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:grid-cols-4">
             <KpiCard label="A Receber" value={isLoading ? "…" : fmt(data?.financeiro.totalReceber ?? 0)}
               sub={`${data?.financeiro.honorariosPendentes ?? 0} cobranças pendentes`}
-              icon={DollarSign} iconColor="bg-primary" href="/financeiro/receber" loading={isLoading} onNavigate={handleNavigate} />
+              icon={DollarSign} tone="primary" href="/financeiro/receber" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label={`Recebido (${periodoLbl})`} value={isLoading ? "…" : fmt(data?.financeiro.totalRecebidoPeriodo ?? 0)}
               sub={`Honorários pagos nos últimos ${periodoLbl}`}
-              icon={DollarSign} iconColor="bg-emerald-500" badgeColor="text-emerald-600"
+              icon={DollarSign} tone="emerald" badgeColor="text-emerald-600"
               href="/financeiro/receber" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label={`A Pagar (${periodoLbl})`} value={isLoading ? "…" : fmt(data?.financeiro.totalPagarPeriodo ?? 0)}
               sub={`Vencendo nos próximos ${periodoLbl}`}
-              icon={TrendingDown} iconColor="bg-orange-500" href="/financeiro/pagar" loading={isLoading} onNavigate={handleNavigate} />
+              icon={TrendingDown} tone="orange" href="/financeiro/pagar" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Honorários em Aberto" value={isLoading ? "…" : (data?.financeiro.honorariosPendentes ?? 0)}
               sub={isLoading ? "" : `Pendente: ${fmt(data?.financeiro.honorariosPorStatus?.["Pendente"] ?? 0)}`}
-              icon={Eye} iconColor="bg-muted-foreground" href="/financeiro/honorarios" loading={isLoading} onNavigate={handleNavigate} />
+              icon={Eye} tone="muted" href="/financeiro/honorarios" loading={isLoading} onNavigate={handleNavigate} />
           </div>
         </div>
 
