@@ -64,7 +64,7 @@ export default function Contratos() {
 
   const tipoColors = {
     Honorários: "bg-primary/15 text-primary",
-    "Prestação de Serviços": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    "Prestação de Serviços": "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
     Social: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300",
     Outro: "bg-muted text-foreground",
   };

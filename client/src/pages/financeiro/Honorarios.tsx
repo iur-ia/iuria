@@ -86,7 +86,7 @@ export default function Honorarios() {
   };
 
   const tipoColors = {
-    Fixo: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Fixo: "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
     Êxito: "bg-primary/15 text-primary",
     Hora: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300",
     Misto: "bg-pink-500/15 text-pink-400",

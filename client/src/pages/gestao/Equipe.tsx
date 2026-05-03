@@ -25,8 +25,8 @@ export default function EquipePage() {
 
   const roleColors: Record<string, string> = {
     "Advogado Sênior": "bg-primary/15 text-primary",
-    "Advogada": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
-    "Advogado": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    "Advogada": "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
+    "Advogado": "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
     "Assistente": "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
     "Estagiário": "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
     "Sócio": "bg-primary/15 text-primary",

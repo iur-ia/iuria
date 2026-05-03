@@ -73,7 +73,7 @@ export default function Processos() {
 
   const statusColors: Record<string, string> = {
     Ativo: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
-    Movimentado: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Movimentado: "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
     Parado: "bg-muted text-foreground",
     Arquivado: "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
   };

@@ -241,12 +241,12 @@ export default function ListaAtividades() {
     Tarefa: "bg-primary/15 text-primary dark:bg-purple-900/30 dark:text-purple-300",
     Intimação: "bg-orange-500/15 text-orange-400 dark:bg-orange-500/15 dark:text-orange-300 dark:bg-orange-900/30 dark:text-orange-300",
     Audiência: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300 dark:bg-green-900/30 dark:text-green-300",
-    Compromisso: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300 dark:bg-blue-900/30 dark:text-blue-300",
+    Compromisso: "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
   };
 
   const statusColors: Record<string, string> = {
     Pendente: "bg-muted text-foreground",
-    "Em Andamento": "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300 dark:bg-blue-900/30 dark:text-blue-300",
+    "Em Andamento": "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
     Concluído: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300 dark:bg-green-900/30 dark:text-green-300",
     Atrasado: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300 dark:bg-red-900/30 dark:text-red-300",
   };

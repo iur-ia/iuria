@@ -51,7 +51,7 @@ export default function ContasReceberPage() {
     Pago: "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300",
     Pendente: "bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300",
     Atrasado: "bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300",
-    Parcial: "bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300",
+    Parcial: "bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300",
   };
 
   const totalReceber = contas

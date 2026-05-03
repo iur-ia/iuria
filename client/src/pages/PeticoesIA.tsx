@@ -590,7 +590,7 @@ export default function PeticoesIA() {
                       Combativo
                     </Badge>
                   ) : (
-                    <Badge className="bg-blue-500/100/15 text-blue-400 dark:bg-blue-500/100/15 dark:text-blue-300">
+                    <Badge className="bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300">
                       <BookOpen className="w-3 h-3 mr-1" />
                       Reflexivo
                     </Badge>
