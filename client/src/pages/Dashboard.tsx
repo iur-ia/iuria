@@ -302,29 +302,32 @@ function KpiCard({
   };
   return (
     <Card
-      className={`surface-elevated ${href ? "cursor-pointer hover-elevate" : ""}`}
+      className={`surface-elevated relative overflow-hidden ${href ? "cursor-pointer hover-elevate group" : ""}`}
       onClick={href ? handleClick : undefined}
       data-testid={`kpi-card-${label.toLowerCase().replace(/\s+/g, "-")}`}
     >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm text-muted-foreground leading-tight">{label}</p>
-          <div className={`p-2 rounded-md ring-1 shrink-0 ${TONE_BG[tone]} ${TONE_RING[tone]}`}>
-            <Icon className={`w-4 h-4 ${TONE_FG[tone]}`} weight="duotone" />
-          </div>
+      {/* hairline tonal accent at top — single sliver, not a box */}
+      <div className={`absolute inset-x-0 top-0 h-px ${TONE_FG[tone]} opacity-60`}
+           style={{ background: "currentColor" }} />
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-2 mb-4">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground leading-tight">
+            {label}
+          </p>
+          <Icon className={`w-3.5 h-3.5 shrink-0 ${TONE_FG[tone]} opacity-70`} weight="duotone" />
         </div>
         {loading ? (
-          <Skeleton className="h-8 w-20 mb-1" />
+          <Skeleton className="h-9 w-24 mb-2" />
         ) : (
-          <p className="text-3xl font-bold text-foreground mb-1 tabular-nums"
+          <p className="font-display text-4xl font-medium text-foreground mb-2 tabular-nums tracking-tight leading-none"
              data-testid={`kpi-value-${label.toLowerCase().replace(/\s+/g, "-")}`}>
             {value}
           </p>
         )}
-        {sub && <p className={`text-xs ${badgeColor ?? "text-muted-foreground"}`}>{sub}</p>}
+        {sub && <p className={`text-xs ${badgeColor ?? "text-muted-foreground"} leading-snug`}>{sub}</p>}
         {href && (
-          <div className="flex items-center gap-1 mt-2 text-xs text-primary">
-            <span>Ver detalhes</span>
+          <div className="flex items-center gap-1 mt-3 text-[11px] text-muted-foreground/70 group-hover:text-primary transition-colors">
+            <span className="uppercase tracking-wider">Detalhes</span>
             <ChevronRight className="w-3 h-3" />
           </div>
         )}
