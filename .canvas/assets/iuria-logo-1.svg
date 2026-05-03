@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" fill="none">
+  <rect width="800" height="400" fill="#0A0A0B"/>
+  <g transform="translate(110,260)">
+    <text font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="150" fill="#FAFAFA" letter-spacing="-8">iuria</text>
+    <circle cx="490" cy="-12" r="13" fill="#7C5CFF"/>
+    <text x="510" y="0" font-family="Inter,system-ui,sans-serif" font-weight="400" font-size="80" fill="#737373" letter-spacing="-3">os</text>
+  </g>
+</svg>
