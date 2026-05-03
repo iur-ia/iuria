@@ -1,45 +1,143 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Filter, Mail, Phone, Building } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Search, Filter, Mail, Phone, Building, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { insertClienteSchema } from "@shared/schema";
 import type { Cliente } from "@shared/schema";
+import { z } from "zod";
+
+const formSchema = insertClienteSchema.extend({
+  nome: z.string().min(1, "Nome obrigatório"),
+  tipo: z.string().min(1, "Tipo obrigatório"),
+  status: z.string().min(1, "Status obrigatório"),
+});
+type FormValues = z.infer<typeof formSchema>;
+
+const TIPOS = ["Pessoa Física", "Pessoa Jurídica"];
+const STATUS = ["Ativo", "Inativo"];
 
 export default function Clientes() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("todos");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Cliente | null>(null);
+  const { toast } = useToast();
 
   const { data: clientes = [], isLoading } = useQuery<Cliente[]>({
     queryKey: ["/api/clientes"],
   });
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      nome: "", tipo: "Pessoa Física", cpfCnpj: "", email: "", telefone: "",
+      endereco: "", cidade: "", estado: "", cep: "", observacoes: "", status: "Ativo",
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: FormValues) => (await apiRequest("POST", "/api/clientes", data)).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      toast({ title: "Cliente criado com sucesso!" });
+      setDialogOpen(false); form.reset();
+    },
+    onError: () => toast({ title: "Erro ao criar cliente", variant: "destructive" }),
+  });
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<FormValues> }) =>
+      (await apiRequest("PATCH", `/api/clientes/${id}`, data)).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      toast({ title: "Cliente atualizado!" });
+      setDialogOpen(false); setEditing(null); form.reset();
+    },
+    onError: () => toast({ title: "Erro ao atualizar cliente", variant: "destructive" }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/clientes/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clientes"] });
+      toast({ title: "Cliente excluído" });
+    },
+    onError: () => toast({ title: "Erro ao excluir cliente", variant: "destructive" }),
+  });
+
+  const openCreate = () => {
+    setEditing(null);
+    form.reset({
+      nome: "", tipo: "Pessoa Física", cpfCnpj: "", email: "", telefone: "",
+      endereco: "", cidade: "", estado: "", cep: "", observacoes: "", status: "Ativo",
+    });
+    setDialogOpen(true);
+  };
+  const openEdit = (c: Cliente) => {
+    setEditing(c);
+    form.reset({
+      nome: c.nome,
+      tipo: c.tipo,
+      cpfCnpj: c.cpfCnpj || "",
+      email: c.email || "",
+      telefone: c.telefone || "",
+      endereco: c.endereco || "",
+      cidade: c.cidade || "",
+      estado: c.estado || "",
+      cep: c.cep || "",
+      observacoes: c.observacoes || "",
+      status: c.status,
+    });
+    setDialogOpen(true);
+  };
+  const handleDelete = (c: Cliente) => {
+    if (window.confirm(`Excluir cliente "${c.nome}"?`)) deleteMutation.mutate(c.id);
+  };
+  const onSubmit = (values: FormValues) => {
+    const payload = {
+      ...values,
+      cpfCnpj: values.cpfCnpj || null,
+      email: values.email || null,
+      telefone: values.telefone || null,
+      endereco: values.endereco || null,
+      cidade: values.cidade || null,
+      estado: values.estado || null,
+      cep: values.cep || null,
+      observacoes: values.observacoes || null,
+    };
+    if (editing) updateMutation.mutate({ id: editing.id, data: payload });
+    else createMutation.mutate(payload);
+  };
 
   const filteredClientes = clientes.filter((cliente) => {
     const matchesSearch =
       cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       cliente.cpfCnpj?.includes(searchTerm) ||
       cliente.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTipo =
-      tipoFilter === "todos" || cliente.tipo === tipoFilter;
+    const matchesTipo = tipoFilter === "todos" || cliente.tipo === tipoFilter;
     return matchesSearch && matchesTipo;
   });
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   if (isLoading) {
     return (
@@ -54,14 +152,9 @@ export default function Clientes() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground mb-1">Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            Gerencie os clientes do escritório
-          </p>
+          <p className="text-sm text-muted-foreground">Gerencie os clientes do escritório</p>
         </div>
-        <Button
-          className="bg-legal-status-active hover:bg-legal-status-active/90"
-          data-testid="button-new-client"
-        >
+        <Button onClick={openCreate} data-testid="button-new-client">
           <Plus className="w-4 h-4 mr-2" />
           Novo Cliente
         </Button>
@@ -139,7 +232,7 @@ export default function Clientes() {
                 <TableHead>Contato</TableHead>
                 <TableHead>Cidade</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Ações</TableHead>
+                <TableHead className="w-32">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -149,12 +242,7 @@ export default function Clientes() {
                     <div className="flex items-center gap-3">
                       <Avatar className="w-8 h-8">
                         <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                          {cliente.nome
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")
-                            .substring(0, 2)
-                            .toUpperCase()}
+                          {cliente.nome.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <p className="font-medium">{cliente.nome}</p>
@@ -202,9 +290,24 @@ export default function Clientes() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" data-testid={`button-view-client-${cliente.id}`}>
-                      Ver Detalhes
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(cliente)}
+                        data-testid={`button-edit-client-${cliente.id}`}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(cliente)}
+                        data-testid={`button-delete-client-${cliente.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -218,6 +321,113 @@ export default function Clientes() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Editar cliente" : "Novo cliente"}</DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <FormField control={form.control} name="nome" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nome *</FormLabel>
+                  <FormControl><Input {...field} data-testid="input-client-nome" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="tipo" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo *</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger data-testid="select-client-tipo"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>{TIPOS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="cpfCnpj" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CPF / CNPJ</FormLabel>
+                    <FormControl><Input {...field} value={field.value || ""} data-testid="input-client-cpfcnpj" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>E-mail</FormLabel>
+                    <FormControl><Input type="email" {...field} value={field.value || ""} data-testid="input-client-email" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="telefone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone</FormLabel>
+                    <FormControl><Input {...field} value={field.value || ""} data-testid="input-client-telefone" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="endereco" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Endereço</FormLabel>
+                  <FormControl><Input {...field} value={field.value || ""} data-testid="input-client-endereco" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <div className="grid grid-cols-3 gap-4">
+                <FormField control={form.control} name="cidade" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cidade</FormLabel>
+                    <FormControl><Input {...field} value={field.value || ""} data-testid="input-client-cidade" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="estado" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>UF</FormLabel>
+                    <FormControl><Input maxLength={2} {...field} value={field.value || ""} data-testid="input-client-estado" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="cep" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CEP</FormLabel>
+                    <FormControl><Input {...field} value={field.value || ""} data-testid="input-client-cep" /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="status" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger data-testid="select-client-status"><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>{STATUS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="observacoes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Observações</FormLabel>
+                  <FormControl><Textarea rows={3} {...field} value={field.value || ""} data-testid="textarea-client-observacoes" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} data-testid="button-cancel-client">Cancelar</Button>
+                <Button type="submit" disabled={isPending} data-testid="button-save-client">
+                  {isPending ? "Salvando..." : editing ? "Atualizar" : "Criar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
