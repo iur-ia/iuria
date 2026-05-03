@@ -437,6 +437,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         extracaoStatus: true,
       }).parse({ ...userPayload, caminho: caminhoConfiavel });
 
+      // headerHtml pode conter HTML rico (cabeçalho/rodapé das petições);
+      // sanitiza no mesmo padrão dos demais endpoints para evitar XSS armazenado.
+      if (typeof data.headerHtml === "string") {
+        data.headerHtml = sanitizeLegalHtml(data.headerHtml);
+      }
+
       const documento = await storage.createDocumento(data);
       res.status(201).json(documento);
 
@@ -532,7 +538,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/documentos/:id", async (req, res) => {
     try {
-      const documento = await storage.updateDocumento(req.params.id, req.body);
+      const patch = { ...req.body };
+      if (typeof patch.headerHtml === "string") {
+        patch.headerHtml = sanitizeLegalHtml(patch.headerHtml);
+      }
+      const documento = await storage.updateDocumento(req.params.id, patch);
       if (!documento) {
         return res.status(404).json({ error: "Documento não encontrado" });
       }
