@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Plus, Search, FileText, Eye, Printer, Trash2, Edit, Send,
-  CheckCircle, Clock, Archive, Mail, Hash,
+  CheckCircle, Clock, Archive, Mail, Hash, Copy, Download,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -250,94 +250,161 @@ function GerarComunicacaoDialog({
   );
 }
 
-function NovoTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function TemplateFormDialog({
+  template,
+  onClose,
+  onSaved,
+}: {
+  template?: CommunicationTemplate | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const { toast } = useToast();
+  const isEdit = !!template;
+
+  const parseCampos = (raw: string | null | undefined) => {
+    try { return raw ? JSON.parse(raw).join(", ") : ""; } catch { return ""; }
+  };
+
   const [form, setForm] = useState({
-    nome: "", categoria: "oficio", descricao: "", corpo: "", camposObrigatorios: "",
+    nome: template?.nome ?? "",
+    categoria: template?.categoria ?? "oficio",
+    descricao: template?.descricao ?? "",
+    corpo: template?.corpo ?? "",
+    camposObrigatorios: parseCampos(template?.camposObrigatorios),
   });
+  const [livePreview, setLivePreview] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const camposArr = form.camposObrigatorios
         ? form.camposObrigatorios.split(",").map((s) => s.trim()).filter(Boolean)
         : [];
-      const res = await apiRequest("POST", "/api/communication-templates", {
+      const payload = {
         ...form,
         camposObrigatorios: JSON.stringify(camposArr),
         ativo: true,
         preConfigurada: false,
-      });
-      return res.json();
+      };
+      if (isEdit) {
+        const res = await apiRequest("PATCH", `/api/communication-templates/${template!.id}`, payload);
+        return res.json();
+      } else {
+        const res = await apiRequest("POST", "/api/communication-templates", payload);
+        return res.json();
+      }
     },
     onSuccess: () => {
-      toast({ title: "Template criado com sucesso" });
-      onCreated();
+      toast({ title: isEdit ? "Template atualizado" : "Template criado" });
+      onSaved();
       onClose();
     },
-    onError: () => toast({ title: "Erro ao criar template", variant: "destructive" }),
+    onError: () => toast({ title: "Erro ao salvar template", variant: "destructive" }),
   });
+
+  // Substitute a few demo values for live preview
+  const previewHtml = form.corpo
+    .replace(/\{\{#if\s+[^}]+\}\}([\s\S]*?)\{\{\/if\}\}/g, "$1")
+    .replace(/\{\{([^}]+)\}\}/g, (_, k) => {
+      const demos: Record<string, string> = {
+        "escritorio.nome": "Alves & Associados Advogados",
+        "escritorio.oab": "SP 123456",
+        "escritorio.endereco": "Av. Paulista, 1000, São Paulo – SP",
+        "escritorio.telefone": "(11) 3000-0000",
+        "escritorio.email": "contato@escritorio.adv.br",
+        "escritorio.website": "escritorio.adv.br",
+        "advogado.nome": "Dra. Ana Lima",
+        "advogado.oab": "SP 98765",
+        "processo.numero": "0000001-00.2024.8.19.0001",
+        "cliente.nome": "João da Silva",
+        "destinatario": "MM. Juízo da 1ª Vara Cível",
+        "data_atual": new Date().toLocaleDateString("pt-BR"),
+        "data_extenso": new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
+      };
+      return demos[k.trim()] ?? `[${k.trim()}]`;
+    });
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Novo Template de Comunicação</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-4">
+      <DialogContent className="max-w-5xl max-h-[92vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Editar Template" : "Novo Template de Comunicação"}</DialogTitle>
+        </DialogHeader>
+        <div className={`grid gap-4 py-2 ${livePreview ? "grid-cols-2" : "grid-cols-1"}`}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Nome *</Label>
+                <Input
+                  data-testid="input-template-nome"
+                  value={form.nome}
+                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                  placeholder="Ex: Ofício ao Banco"
+                />
+              </div>
+              <div>
+                <Label>Categoria</Label>
+                <Select value={form.categoria} onValueChange={(v) => setForm({ ...form, categoria: v })}>
+                  <SelectTrigger data-testid="select-categoria"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(CATEGORIA_LABELS).map(([v, l]) => (
+                      <SelectItem key={v} value={v}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div>
-              <Label>Nome *</Label>
+              <Label>Descrição</Label>
               <Input
-                data-testid="input-template-nome"
-                value={form.nome}
-                onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                placeholder="Ex: Ofício ao Banco"
+                data-testid="input-template-descricao"
+                value={form.descricao}
+                onChange={(e) => setForm({ ...form, descricao: e.target.value })}
+                placeholder="Breve descrição do template"
               />
             </div>
             <div>
-              <Label>Categoria</Label>
-              <Select value={form.categoria} onValueChange={(v) => setForm({ ...form, categoria: v })}>
-                <SelectTrigger data-testid="select-categoria">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CATEGORIA_LABELS).map(([v, l]) => (
-                    <SelectItem key={v} value={v}>{l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Campos Personalizados <span className="text-xs text-muted-foreground">(separados por vírgula)</span></Label>
+              <Input
+                data-testid="input-template-campos"
+                value={form.camposObrigatorios}
+                onChange={(e) => setForm({ ...form, camposObrigatorios: e.target.value })}
+                placeholder="Ex: vara, cidade_escritorio, motivo"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Placeholders: <code>{"{{escritorio.nome}}"}</code>, <code>{"{{processo.numero}}"}</code>, <code>{"{{cliente.nome}}"}</code>, <code>{"{{advogado.nome}}"}</code>, <code>{"{{data_atual}}"}</code>
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <Label>Corpo (HTML) *</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setLivePreview(!livePreview)}
+                  data-testid="button-toggle-preview"
+                >
+                  <Eye className="h-3.5 w-3.5 mr-1" />
+                  {livePreview ? "Ocultar Prévia" : "Mostrar Prévia"}
+                </Button>
+              </div>
+              <Textarea
+                data-testid="textarea-template-corpo"
+                value={form.corpo}
+                onChange={(e) => setForm({ ...form, corpo: e.target.value })}
+                placeholder={'<div style="font-family: Arial; padding: 40px;">\n  <p>{{destinatario}},</p>\n  <p>{{corpo}}</p>\n</div>'}
+                className="font-mono text-xs resize-y"
+                rows={14}
+              />
             </div>
           </div>
-          <div>
-            <Label>Descrição</Label>
-            <Input
-              data-testid="input-template-descricao"
-              value={form.descricao}
-              onChange={(e) => setForm({ ...form, descricao: e.target.value })}
-              placeholder="Breve descrição do template"
-            />
-          </div>
-          <div>
-            <Label>Campos Personalizados <span className="text-xs text-muted-foreground">(separados por vírgula)</span></Label>
-            <Input
-              data-testid="input-template-campos"
-              value={form.camposObrigatorios}
-              onChange={(e) => setForm({ ...form, camposObrigatorios: e.target.value })}
-              placeholder="Ex: vara, cidade_escritorio, motivo"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Use {"{{nome_do_campo}}"} no corpo para referenciar esses campos.
-            </p>
-          </div>
-          <div>
-            <Label>Corpo do Documento (HTML) *</Label>
-            <Textarea
-              data-testid="textarea-template-corpo"
-              value={form.corpo}
-              onChange={(e) => setForm({ ...form, corpo: e.target.value })}
-              placeholder={'<div style="font-family: Arial; padding: 40px;">\n  <p>{{destinatario}},</p>\n  <p>{{corpo}}</p>\n</div>'}
-              className="font-mono text-xs resize-y"
-              rows={10}
-            />
-          </div>
+          {livePreview && (
+            <div className="border rounded-md overflow-auto bg-white p-2" style={{ maxHeight: "580px" }}>
+              <p className="text-xs text-muted-foreground mb-2 text-center">Prévia (dados de exemplo)</p>
+              <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
@@ -346,12 +413,16 @@ function NovoTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCre
             disabled={!form.nome || !form.corpo || mutation.isPending}
             data-testid="button-salvar-template"
           >
-            Salvar Template
+            {isEdit ? "Salvar Alterações" : "Criar Template"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function NovoTemplateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  return <TemplateFormDialog onClose={onClose} onSaved={onCreated} />;
 }
 
 function ProtocoloDialog({ comm, onClose }: { comm: EnrichedComm; onClose: () => void }) {
@@ -418,6 +489,7 @@ export default function Oficios() {
   const [templateParaGerar, setTemplateParaGerar] = useState<CommunicationTemplate | null>(null);
   const [templateParaEditar, setTemplateParaEditar] = useState<CommunicationTemplate | null>(null);
   const [showNovoTemplate, setShowNovoTemplate] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState<string | null>(null);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [commParaProtocolo, setCommParaProtocolo] = useState<EnrichedComm | null>(null);
 
@@ -451,6 +523,49 @@ export default function Oficios() {
     onError: () => toast({ title: "Erro ao remover", variant: "destructive" }),
   });
 
+  const cloneTemplateMutation = useMutation({
+    mutationFn: async (t: CommunicationTemplate) => {
+      const res = await apiRequest("POST", "/api/communication-templates", {
+        nome: `${t.nome} (cópia)`,
+        categoria: t.categoria,
+        descricao: t.descricao,
+        corpo: t.corpo,
+        camposObrigatorios: t.camposObrigatorios,
+        ativo: true,
+        preConfigurada: false,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communication-templates"] });
+      toast({ title: "Template clonado com sucesso" });
+    },
+    onError: () => toast({ title: "Erro ao clonar", variant: "destructive" }),
+  });
+
+  const handleDownloadPdf = async (commId: string) => {
+    setDownloadingPdf(commId);
+    try {
+      const res = await fetch(`/api/communications/${commId}/pdf`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Falha ao gerar PDF" }));
+        toast({ title: err.error ?? "Falha ao gerar PDF", variant: "destructive" });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `comunicacao-${commId.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Erro ao baixar PDF", variant: "destructive" });
+    } finally {
+      setDownloadingPdf(null);
+    }
+  };
+
   const templatesFiltrados = templates.filter((t) => {
     const buscaOk = !busca || t.nome.toLowerCase().includes(busca.toLowerCase()) ||
       (t.descricao ?? "").toLowerCase().includes(busca.toLowerCase());
@@ -478,6 +593,13 @@ export default function Oficios() {
         <NovoTemplateDialog
           onClose={() => setShowNovoTemplate(false)}
           onCreated={() => queryClient.invalidateQueries({ queryKey: ["/api/communication-templates"] })}
+        />
+      )}
+      {templateParaEditar && (
+        <TemplateFormDialog
+          template={templateParaEditar}
+          onClose={() => setTemplateParaEditar(null)}
+          onSaved={() => queryClient.invalidateQueries({ queryKey: ["/api/communication-templates"] })}
         />
       )}
       {commParaProtocolo && (
@@ -578,6 +700,24 @@ export default function Oficios() {
                         >
                           <Send className="h-4 w-4" />
                         </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setTemplateParaEditar(t)}
+                          data-testid={`button-editar-template-${t.id}`}
+                          title="Editar template"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => cloneTemplateMutation.mutate(t)}
+                          data-testid={`button-clonar-template-${t.id}`}
+                          title="Clonar template"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
                         {!t.preConfigurada && (
                           <Button
                             size="icon"
@@ -586,7 +726,7 @@ export default function Oficios() {
                             data-testid={`button-excluir-template-${t.id}`}
                             title="Excluir"
                           >
-                            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         )}
                       </div>
@@ -663,6 +803,16 @@ export default function Oficios() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          onClick={() => handleDownloadPdf(c.id)}
+                          disabled={downloadingPdf === c.id}
+                          data-testid={`button-pdf-comm-${c.id}`}
+                          title="Baixar PDF"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           onClick={() => setCommParaProtocolo(c)}
                           data-testid={`button-protocolo-comm-${c.id}`}
                           title="Protocolo / Status"
@@ -676,7 +826,7 @@ export default function Oficios() {
                           data-testid={`button-excluir-comm-${c.id}`}
                           title="Excluir"
                         >
-                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
                         </Button>
                       </div>
                     </div>

@@ -3036,10 +3036,18 @@ except Exception as e:
   // ==================== COMUNICAÇÕES — PLACEHOLDER ENGINE ====================
 
   function resolverPlaceholders(corpo: string, ctx: Record<string, string>): string {
-    return corpo.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+    // 1) Resolve {{#if key}}...{{/if}} blocks — keep block if value is truthy, else remove
+    let result = corpo.replace(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_, key, content) => {
       const k = key.trim();
-      return ctx[k] ?? `{{${k}}}`;
+      const val = ctx[k] ?? "";
+      return val ? content : "";
     });
+    // 2) Resolve simple {{key}} placeholders
+    result = result.replace(/\{\{([^#/][^}]*)\}\}/g, (_, key) => {
+      const k = key.trim();
+      return ctx[k] ?? "";  // return empty string (not raw token) for missing keys
+    });
+    return result;
   }
 
   function buildContexto(
@@ -3145,6 +3153,7 @@ except Exception as e:
     };
 
     let processoCtx: Record<string, string> = {};
+    let clienteCtxRender: Record<string, string> = {};
     if (acervoId) {
       const proc = await storage.getAcervoProcesso(acervoId);
       if (proc) {
@@ -3155,6 +3164,20 @@ except Exception as e:
           assunto: proc.assunto ?? "",
           fase: proc.fase ?? "",
         };
+        if (proc.partes) {
+          try {
+            const partes = JSON.parse(proc.partes);
+            const autor = Array.isArray(partes) ? partes.find((p: any) => p.polo === "ativo" || p.tipo === "autor") : null;
+            const reu = Array.isArray(partes) ? partes.find((p: any) => p.polo === "passivo" || p.tipo === "reu") : null;
+            if (autor) processoCtx["parte_ativa.nome"] = autor.nome ?? "";
+            if (reu) processoCtx["parte_passiva.nome"] = reu.nome ?? "";
+            if (reu) processoCtx["parte_contraria.qualificacao"] = [reu.qualificacao, reu.cpfCnpj].filter(Boolean).join(", ");
+          } catch { /* ignore */ }
+        }
+        if (proc.clienteId) {
+          const cli = await storage.getCliente(proc.clienteId);
+          if (cli) clienteCtxRender = { nome: cli.nome ?? "", cpfCnpj: cli.cpfCnpj ?? "", email: cli.email ?? "", telefone: cli.telefone ?? "" };
+        }
       }
     }
 
@@ -3178,8 +3201,14 @@ except Exception as e:
       if (membro) advogadoCtx = { nome: membro.nome ?? "", oab: membro.oab ?? "" };
     }
 
-    const ctx = buildContexto(dados, escritorioCtx, processoCtx, {}, advogadoCtx);
-    const html = resolverPlaceholders(tmpl.corpo, ctx);
+    const ctx = buildContexto(dados, escritorioCtx, processoCtx, clienteCtxRender, advogadoCtx);
+    const rawHtml = resolverPlaceholders(tmpl.corpo, ctx);
+    const sanitizeHtml = (await import("sanitize-html")).default;
+    const html = sanitizeHtml(rawHtml, {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(["style", "img"]),
+      allowedAttributes: { "*": ["style", "class", "id", "align", "width", "height", "src", "alt"] },
+      allowedSchemes: ["https", "http", "data"],
+    });
     res.json({ html, ctx });
   });
 
@@ -3222,6 +3251,7 @@ except Exception as e:
       if (!tmpl) return res.status(404).json({ error: "Template não encontrado" });
 
       let processoCtx: Record<string, string> = {};
+      let clienteCtx: Record<string, string> = {};
       let acervoNumero: string | undefined;
       if (acervoId) {
         const proc = await storage.getAcervoProcesso(acervoId);
@@ -3234,6 +3264,29 @@ except Exception as e:
             assunto: proc.assunto ?? "",
             fase: proc.fase ?? "",
           };
+          // Enrich with partes data (JSON array stored as text)
+          if (proc.partes) {
+            try {
+              const partes = JSON.parse(proc.partes);
+              const autor = Array.isArray(partes) ? partes.find((p: any) => p.polo === "ativo" || p.tipo === "autor") : null;
+              const reu = Array.isArray(partes) ? partes.find((p: any) => p.polo === "passivo" || p.tipo === "reu") : null;
+              if (autor) processoCtx["parte_ativa.nome"] = autor.nome ?? "";
+              if (reu) processoCtx["parte_passiva.nome"] = reu.nome ?? "";
+              if (reu) processoCtx["parte_contraria.qualificacao"] = [reu.qualificacao, reu.cpfCnpj].filter(Boolean).join(", ");
+            } catch { /* ignore parse errors */ }
+          }
+          // Lookup client from acervo's clienteId
+          if (proc.clienteId) {
+            const cli = await storage.getCliente(proc.clienteId);
+            if (cli) {
+              clienteCtx = {
+                nome: cli.nome ?? "",
+                cpfCnpj: cli.cpfCnpj ?? "",
+                email: cli.email ?? "",
+                telefone: cli.telefone ?? "",
+              };
+            }
+          }
         }
       }
 
@@ -3258,8 +3311,15 @@ except Exception as e:
       }
 
       const dadosFull = { ...dados, destinatario, assunto: assunto ?? "" };
-      const ctx = buildContexto(dadosFull, escritorioCtx, processoCtx, {}, advogadoCtx);
-      const htmlGerado = resolverPlaceholders(tmpl.corpo, ctx);
+      const ctx = buildContexto(dadosFull, escritorioCtx, processoCtx, clienteCtx, advogadoCtx);
+      const rawHtml = resolverPlaceholders(tmpl.corpo, ctx);
+      // Sanitize HTML to prevent stored XSS (allow safe formatting tags but strip scripts/events)
+      const sanitizeHtml = (await import("sanitize-html")).default;
+      const htmlGerado = sanitizeHtml(rawHtml, {
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(["style", "img"]),
+        allowedAttributes: { "*": ["style", "class", "id", "align", "width", "height", "src", "alt"] },
+        allowedSchemes: ["https", "http", "data"],
+      });
 
       await storage.updateCommunicationTemplate(templateId, { usos: (tmpl.usos ?? 0) + 1 });
 
@@ -3292,6 +3352,49 @@ except Exception as e:
     const ok = await storage.deleteCommunication(req.params.id);
     if (!ok) return res.status(404).json({ error: "Comunicação não encontrada" });
     res.json({ ok: true });
+  });
+
+  // ==================== PDF GENERATION ====================
+  app.get("/api/communications/:id/pdf", async (req, res) => {
+    try {
+      const comm = await storage.getCommunication(req.params.id);
+      if (!comm) return res.status(404).json({ error: "Comunicação não encontrada" });
+      if (!comm.htmlGerado) return res.status(400).json({ error: "Comunicação sem conteúdo HTML" });
+
+      // Full HTML page for PDF rendering
+      const fullHtml = `<!DOCTYPE html><html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${comm.assunto ?? "Comunicação"}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 12pt; background: #fff; color: #000; }
+    @page { size: A4; margin: 20mm 25mm; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>${comm.htmlGerado}</body></html>`;
+
+      const htmlPdf = (await import("html-pdf-node")).default;
+      const options = {
+        format: "A4",
+        printBackground: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      };
+      const file = { content: fullHtml };
+      const pdfBuffer = await htmlPdf.generatePdf(file, options);
+
+      res.set({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="comunicacao-${comm.id.slice(0, 8)}.pdf"`,
+        "Content-Length": pdfBuffer.length,
+      });
+      res.end(pdfBuffer);
+    } catch (e: any) {
+      console.error("[PDF] Error generating PDF:", e.message);
+      res.status(500).json({ error: "Falha ao gerar PDF: " + e.message });
+    }
   });
 
   const httpServer = createServer(app);
