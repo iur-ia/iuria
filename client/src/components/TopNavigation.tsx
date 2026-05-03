@@ -179,7 +179,7 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
           className="hidden md:flex items-center gap-2 h-9 w-72 rounded-md border border-border bg-card px-3 text-left text-[13px] text-muted-foreground hover:text-foreground hover-elevate"
           data-testid="button-open-palette"
         >
-          <MagnifyingGlass className="w-4 h-4 shrink-0" weight="regular" />
+          <MagnifyingGlass className="w-4 h-4 shrink-0" weight="duotone" />
           <span className="flex-1 truncate">Pesquisar páginas, ações...</span>
           <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono">
             <Command className="w-2.5 h-2.5" weight="bold" />K
@@ -196,7 +196,7 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
           className="relative"
           data-testid="button-notifications"
         >
-          <Bell className="w-4 h-4" weight="regular" />
+          <Bell className="w-4 h-4" weight="duotone" />
           <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] bg-primary text-primary-foreground border-0 rounded-full pointer-events-none">
             7
           </Badge>
@@ -226,19 +226,19 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="menu-profile">
-              <User className="mr-2 h-3.5 w-3.5" weight="regular" />
+              <User className="mr-2 h-3.5 w-3.5" weight="duotone" />
               <span className="text-[13px]">Meus Dados</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setLocation("/configuracoes")}
               data-testid="menu-settings"
             >
-              <Gear className="mr-2 h-3.5 w-3.5" weight="regular" />
+              <Gear className="mr-2 h-3.5 w-3.5" weight="duotone" />
               <span className="text-[13px]">Configurações</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="menu-logout">
-              <SignOut className="mr-2 h-3.5 w-3.5" weight="regular" />
+              <SignOut className="mr-2 h-3.5 w-3.5" weight="duotone" />
               <span className="text-[13px]">Sair</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

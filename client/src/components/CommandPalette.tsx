@@ -137,17 +137,17 @@ export function CommandPalette({ open, onOpenChange, onToggleTheme }: Props) {
             }}
             data-testid="cmdk-toggle-theme"
           >
-            <Sun className="mr-2 h-4 w-4" weight="regular" />
+            <Sun className="mr-2 h-4 w-4" weight="duotone" />
             <span>Alternar tema (claro / escuro)</span>
             <CommandShortcut>⌘ J</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => go("/")} data-testid="cmdk-go-home">
-            <SquaresFour className="mr-2 h-4 w-4" weight="regular" />
+            <SquaresFour className="mr-2 h-4 w-4" weight="duotone" />
             <span>Ir ao Painel</span>
             <CommandShortcut>G H</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => go("/consulta-processual")} data-testid="cmdk-consulta">
-            <MagnifyingGlass className="mr-2 h-4 w-4" weight="regular" />
+            <MagnifyingGlass className="mr-2 h-4 w-4" weight="duotone" />
             <span>Nova consulta processual</span>
           </CommandItem>
         </CommandGroup>
@@ -162,7 +162,7 @@ export function CommandPalette({ open, onOpenChange, onToggleTheme }: Props) {
                 onSelect={() => go(it.href)}
                 data-testid={`cmdk-${it.href.replace(/\W+/g, "-")}`}
               >
-                <it.icon className="mr-2 h-4 w-4 opacity-70" weight="regular" />
+                <it.icon className="mr-2 h-4 w-4 opacity-70" weight="duotone" />
                 <span>{it.label}</span>
                 <span className="ml-auto text-[11px] font-mono text-muted-foreground/60">{it.href}</span>
               </CommandItem>

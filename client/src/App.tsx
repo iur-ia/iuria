@@ -1,6 +1,7 @@
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { IconContext } from "@phosphor-icons/react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TopNavigation } from "@/components/TopNavigation";
@@ -112,10 +113,12 @@ function Shell() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Shell />
-        <Toaster />
-      </TooltipProvider>
+      <IconContext.Provider value={{ weight: "duotone", size: 18, mirrored: false }}>
+        <TooltipProvider>
+          <Shell />
+          <Toaster />
+        </TooltipProvider>
+      </IconContext.Provider>
     </QueryClientProvider>
   );
 }
