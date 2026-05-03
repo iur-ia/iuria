@@ -3210,9 +3210,10 @@ except Exception as e:
     const rawHtml = resolverPlaceholders(tmpl.corpo, ctx);
     const sanitizeHtml = (await import("sanitize-html")).default;
     const html = sanitizeHtml(rawHtml, {
-      allowedTags: sanitizeHtml.defaults.allowedTags.concat(["style", "img"]),
-      allowedAttributes: { "*": ["style", "class", "id", "align", "width", "height", "src", "alt"] },
-      allowedSchemes: ["https", "http", "data"],
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
+      allowedAttributes: { "*": ["style", "class", "id", "align", "width", "height", "alt"], "img": ["src", "alt", "width", "height"] },
+      allowedSchemes: ["data"],
+      allowVulnerableTags: false,
     });
     res.json({ html, ctx });
   });
@@ -3318,12 +3319,13 @@ except Exception as e:
       const dadosFull = { ...dados, destinatario, assunto: assunto ?? "" };
       const ctx = buildContexto(dadosFull, escritorioCtx, processoCtx, clienteCtx, advogadoCtx);
       const rawHtml = resolverPlaceholders(tmpl.corpo, ctx);
-      // Sanitize HTML to prevent stored XSS (allow safe formatting tags but strip scripts/events)
+      // Sanitize HTML — only data: URIs allowed for img.src to prevent SSRF during PDF render
       const sanitizeHtml = (await import("sanitize-html")).default;
       const htmlGerado = sanitizeHtml(rawHtml, {
-        allowedTags: sanitizeHtml.defaults.allowedTags.concat(["style", "img"]),
-        allowedAttributes: { "*": ["style", "class", "id", "align", "width", "height", "src", "alt"] },
-        allowedSchemes: ["https", "http", "data"],
+        allowedTags: sanitizeHtml.defaults.allowedTags.concat(["img"]),
+        allowedAttributes: { "*": ["style", "class", "id", "align", "width", "height", "alt"], "img": ["src", "alt", "width", "height"] },
+        allowedSchemes: ["data"],
+        allowVulnerableTags: false,
       });
 
       await storage.updateCommunicationTemplate(templateId, { usos: (tmpl.usos ?? 0) + 1 });
@@ -3432,21 +3434,62 @@ except Exception as e:
 </head>
 <body>${headerHtml}${comm.htmlGerado}${footerHtml}</body></html>`;
 
-      const htmlPdf = (await import("html-pdf-node")).default;
-      const options = {
-        format: "A4",
-        printBackground: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-      };
-      const file = { content: fullHtml };
-      const pdfBuffer = await htmlPdf.generatePdf(file, options);
-
-      // Persist the timestamp of the last PDF generation
-      await storage.updateCommunication(comm.id, { pdfGeradoEm: new Date() });
-
       const filename = comm.numeroOficio
         ? `oficio-${comm.numeroOficio.replace(/\//g, "-")}.pdf`
         : `comunicacao-${comm.id.slice(0, 8)}.pdf`;
+
+      // Serve from persisted PDF if already generated (avoids re-render)
+      const storedComm = await storage.getCommunication(comm.id);
+      if (storedComm?.pdfConteudo) {
+        const pdfBuf = Buffer.from(storedComm.pdfConteudo, "base64");
+        res.set({
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Content-Length": pdfBuf.length,
+        });
+        return res.end(pdfBuf);
+      }
+
+      // Use playwright chromium (system-compatible, has all required shared libs)
+      const { chromium } = await import("playwright");
+      const browser = await chromium.launch({
+        executablePath: (() => {
+          // Prefer the playwright-managed chromium that has correct system libs
+          const candidates = [
+            "/home/runner/workspace/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome",
+            "/home/runner/workspace/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome",
+            "/home/runner/workspace/.cache/ms-playwright/chromium-1208/chrome-linux/chrome",
+            "/home/runner/workspace/.cache/ms-playwright/chromium-1200/chrome-linux/chrome",
+            "/home/runner/workspace/.cache/ms-playwright/chromium-1169/chrome-linux/chrome",
+          ];
+          return candidates.find((p) => fs.existsSync(p)) ?? undefined;
+        })(),
+        args: [
+          "--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage",
+          "--disable-gpu", "--disable-extensions",
+        ],
+      });
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      // Block all network requests (prevent SSRF from PDF renderer)
+      await page.route("**/*", (route) => {
+        const url = route.request().url();
+        if (url.startsWith("data:") || url === "about:blank") {
+          route.continue();
+        } else {
+          route.abort();
+        }
+      });
+      await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+      const pdfBuffer = await page.pdf({ format: "A4", printBackground: true, margin: { top: "20mm", bottom: "20mm", left: "25mm", right: "25mm" } });
+      await browser.close();
+
+      // Persist PDF as base64 and record generation timestamp
+      const pdfBase64 = Buffer.from(pdfBuffer).toString("base64");
+      await storage.updateCommunication(comm.id, {
+        pdfGeradoEm: new Date(),
+        pdfConteudo: pdfBase64,
+      });
 
       res.set({
         "Content-Type": "application/pdf",

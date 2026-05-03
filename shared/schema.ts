@@ -551,6 +551,7 @@ export const communications = pgTable("communications", {
   numeroOficio: text("numero_oficio"), // numeração sequencial ex: 0001/2026
   enviadoEm: timestamp("enviado_em"), // quando o status mudou para "enviada"
   pdfGeradoEm: timestamp("pdf_gerado_em"), // quando um PDF server-side foi gerado
+  pdfConteudo: text("pdf_conteudo"), // PDF gerado persistido como base64
   responsavelId: varchar("responsavel_id").references(() => equipe.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
