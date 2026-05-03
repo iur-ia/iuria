@@ -29,6 +29,13 @@
       "when": 1746230400000,
       "tag": "0003_acompanhamentos_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1746316800000,
+      "tag": "0004_timesheet_entries",
+      "breakpoints": true
     }
   ]
 }

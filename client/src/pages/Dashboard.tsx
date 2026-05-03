@@ -247,9 +247,15 @@ export default function Dashboard() {
     return `/api/dashboard/kpis?${params}`;
   }, [periodo, area, resp, cliente]);
 
-  const { data, isLoading, dataUpdatedAt, refetch, isFetching } = useQuery<DashboardKPI>({
+  const { data, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useQuery<DashboardKPI>({
     queryKey: ["/api/dashboard/kpis", periodo, area, resp, cliente],
-    queryFn: () => fetch(buildUrl()).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch(buildUrl());
+      if (!r.ok) throw new Error(`Erro ao carregar KPIs: ${r.status}`);
+      const json = await r.json();
+      if (json.error) throw new Error(json.error);
+      return json as DashboardKPI;
+    },
     refetchInterval: 5 * 60 * 1000,
   });
 
@@ -280,6 +286,26 @@ export default function Dashboard() {
   const receitaMeta = data?.financeiro.receitaMesAtual ?? 0;
   const meta = data?.financeiro.metaReceitaMensal ?? 0;
   const receitaPct = meta > 0 ? Math.min(Math.round((receitaMeta / meta) * 100), 200) : 0;
+
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <Card className="border-0 shadow-sm max-w-md w-full mx-4">
+          <CardContent className="p-8 text-center space-y-4">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto" />
+            <div>
+              <p className="font-semibold text-foreground">Erro ao carregar o painel</p>
+              <p className="text-sm text-muted-foreground mt-1">Não foi possível carregar os dados de KPI. Verifique a conexão e tente novamente.</p>
+            </div>
+            <Button variant="outline" onClick={() => refetch()} data-testid="button-retry-dashboard">
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Tentar novamente
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-muted/30 print:bg-white">
@@ -396,7 +422,7 @@ export default function Dashboard() {
               href="/atividades" drillFilter="Atrasado" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Prazos em 7 dias" value={isLoading ? "…" : (data?.atividades.vencendo7d ?? 0)}
               sub={`${data?.atividades.vencendoPeriodo ?? 0} em ${periodoLbl}`}
-              icon={Clock} iconColor="bg-amber-500" href="/atividades" loading={isLoading} onNavigate={handleNavigate} />
+              icon={Clock} iconColor="bg-amber-500" href="/atividades" drillFilter="Vencendo7d" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Sem Movimentação" value={isLoading ? "…" : (data?.processos.semMovimentacao30d ?? 0)}
               sub="Processos parados +30 dias" icon={Activity} iconColor="bg-slate-500"
               href="/processos/parados" drillFilter="Parado" loading={isLoading} onNavigate={handleNavigate} />

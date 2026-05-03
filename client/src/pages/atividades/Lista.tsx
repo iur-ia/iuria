@@ -218,10 +218,15 @@ export default function ListaAtividades() {
       getProcessoNumero(atividade.processoId)?.includes(searchTerm) ||
       getResponsavelNome(atividade.responsavelId).toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTipo = tipoFilter === "todas" || atividade.tipo === tipoFilter;
-    // statusFiltro: "todas" = all, "Atrasado" = vencidas e não concluídas, or exact status match
+    // statusFiltro: "todas" = all, "Atrasado" = vencidas e não concluídas, "Vencendo7d" = vencendo nos próximos 7 dias, or exact status match
     const hoje = new Date().toISOString().split("T")[0];
+    const em7d = new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0];
     const matchesStatus = statusFiltro === "todas" ||
-      (statusFiltro === "Atrasado" ? (atividade.status !== "Concluído" && atividade.status !== "Cancelado" && atividade.data < hoje) : atividade.status === statusFiltro);
+      (statusFiltro === "Atrasado"
+        ? (atividade.status !== "Concluído" && atividade.status !== "Cancelado" && atividade.data < hoje)
+        : statusFiltro === "Vencendo7d"
+          ? (atividade.status !== "Concluído" && atividade.status !== "Cancelado" && atividade.data >= hoje && atividade.data <= em7d)
+          : atividade.status === statusFiltro);
     return matchesSearch && matchesTipo && matchesStatus;
   });
 
