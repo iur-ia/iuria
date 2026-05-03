@@ -126,7 +126,9 @@ app.use("/api/pesquisa/", scrapingLimiter);
 ### Verificação Pós-Apply
 
 - `npm run check`: ✅ 0 erros TypeScript  
-- Comportamento: Zero mudanças funcionais — todos os fixes são observabilidade + defesa
+- F-001: Mudança de configuração — comportamento idêntico (fallback mantém a mesma chave pública)
+- F-006: Mudança de observabilidade — comportamento HTTP idêntico, apenas logging adicionado
+- F-007: Hardening comportamental intencional — clamp em parâmetros de query limita resource consumption (limit: 1-500, horas: 1-8760); clientes que enviavam valores >500 ou >8760 agora recebem o valor máximo em vez de consultas sem limite
 
 ---
 
