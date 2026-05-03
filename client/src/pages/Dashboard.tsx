@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -20,7 +21,9 @@ import {
   Briefcase, AlertCircle, Clock, DollarSign, TrendingDown,
   Bell, Eye, RefreshCw, AlertTriangle, CheckCircle2,
   ChevronRight, Activity, Zap, Printer, Download, Users, TrendingUp,
+  FileSpreadsheet,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -81,12 +84,13 @@ interface DashboardKPI {
   geradoEm: string;
 }
 
-type Periodo = "semana" | "mes" | "trimestre";
+type Periodo = "semana" | "mes" | "trimestre" | "personalizado";
 
 const PERIODO_LABELS: Record<Periodo, string> = {
   semana: "7 dias",
   mes: "30 dias",
   trimestre: "90 dias",
+  personalizado: "Personalizado",
 };
 
 const AREA_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f97316", "#ec4899", "#f59e0b"];
@@ -104,6 +108,70 @@ function fmt(v: number): string {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000)     return `R$ ${(v / 1_000).toFixed(1)}k`;
   return `R$ ${v.toFixed(0)}`;
+}
+
+function exportXLSX(data: DashboardKPI) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1 — KPIs Operacionais
+  const kpiRows = [
+    ["Métrica", "Valor"],
+    ["Processos Ativos", data.processos.ativos],
+    ["Total Processos", data.processos.total],
+    ["Tarefas Atrasadas", data.atividades.atrasadas],
+    ["Prazos 7 dias", data.atividades.vencendo7d],
+    ["Processos sem movimentação +30d", data.processos.semMovimentacao30d],
+    ["A Receber (total)", data.financeiro.totalReceber],
+    [`Recebido (${data.periodoLabel})`, data.financeiro.totalRecebidoPeriodo],
+    [`A Pagar (${data.periodoLabel})`, data.financeiro.totalPagarPeriodo],
+    ["Honorários Pendentes (qtd)", data.financeiro.honorariosPendentes],
+    ["Receita Mês Atual", data.financeiro.receitaMesAtual],
+    ["Meta Receita Mensal", data.financeiro.metaReceitaMensal],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(kpiRows), "KPIs");
+
+  // Sheet 2 — Honorários por Status
+  const honStatusRows: (string | number)[][] = [
+    ["Status", "Valor (R$)"],
+    ...Object.entries(data.financeiro.honorariosPorStatus).map(([s, v]) => [s, v]),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(honStatusRows), "Honorários por Status");
+
+  // Sheet 3 — Honorários por Cliente
+  const honCliRows: (string | number)[][] = [
+    ["Cliente", "Total Contratado (R$)", "Recebido (R$)", "Pendente (R$)"],
+    ...data.financeiro.honorariosPorCliente.map((c) => [c.nome, c.total, c.recebido, c.pendente]),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(honCliRows), "Honorários por Cliente");
+
+  // Sheet 4 — Timesheet
+  const tsRows: (string | number)[][] = [
+    ["Colaborador", "Total Horas", "Horas Faturáveis", "% Faturável"],
+    ...data.timesheet.horasPorColaborador.map((c) => [
+      c.nome, c.totalHoras, c.horasFaturaveis,
+      c.totalHoras > 0 ? Math.round((c.horasFaturaveis / c.totalHoras) * 100) : 0,
+    ]),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tsRows), "Timesheet");
+
+  // Sheet 5 — Mapa de Risco
+  const riscoRows: (string | number)[][] = [
+    ["Título", "Risco", "Score", "Tipo", "Data", "Processo", "Área", "Dias Atraso", "Responsável"],
+    ...data.mapaRisco.map((r) => [
+      r.titulo, r.risco ?? "", r.score, r.tipo, r.data,
+      r.processoNumero ?? "", r.area ?? "", r.diasAtraso, r.responsavel ?? "",
+    ]),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(riscoRows), "Mapa de Risco");
+
+  // Sheet 6 — Tendência Financeira
+  const trendRows: (string | number)[][] = [
+    ["Mês", "Recebido (R$)", "Pago (R$)", "A Vencer (R$)"],
+    ...data.trendFinanceiro.map((t) => [t.label, t.recebido, t.pago, t.aVencer]),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(trendRows), "Tendência Financeira");
+
+  XLSX.writeFile(wb, `dashboard-kpis-${new Date().toISOString().split("T")[0]}.xlsx`);
 }
 
 function exportCSV(data: DashboardKPI) {
@@ -233,22 +301,31 @@ export default function Dashboard() {
   const [area, setArea]       = useState(() => sessionStorage.getItem("dashboard_area") || "");
   const [resp, setResp]       = useState(() => sessionStorage.getItem("dashboard_resp") || "");
   const [cliente, setCliente] = useState(() => sessionStorage.getItem("dashboard_cliente") || "");
+  const today = new Date().toISOString().split("T")[0];
+  const [dataInicio, setDataInicio] = useState(() => sessionStorage.getItem("dashboard_dataInicio") || today);
+  const [dataFim, setDataFim]       = useState(() => sessionStorage.getItem("dashboard_dataFim")    || today);
 
-  useEffect(() => { sessionStorage.setItem("dashboard_periodo", periodo); }, [periodo]);
-  useEffect(() => { sessionStorage.setItem("dashboard_area",    area);    }, [area]);
-  useEffect(() => { sessionStorage.setItem("dashboard_resp",    resp);    }, [resp]);
-  useEffect(() => { sessionStorage.setItem("dashboard_cliente", cliente); }, [cliente]);
+  useEffect(() => { sessionStorage.setItem("dashboard_periodo",    periodo);    }, [periodo]);
+  useEffect(() => { sessionStorage.setItem("dashboard_area",       area);       }, [area]);
+  useEffect(() => { sessionStorage.setItem("dashboard_resp",       resp);       }, [resp]);
+  useEffect(() => { sessionStorage.setItem("dashboard_cliente",    cliente);    }, [cliente]);
+  useEffect(() => { sessionStorage.setItem("dashboard_dataInicio", dataInicio); }, [dataInicio]);
+  useEffect(() => { sessionStorage.setItem("dashboard_dataFim",    dataFim);    }, [dataFim]);
 
   const buildUrl = useCallback(() => {
     const params = new URLSearchParams({ periodo });
     if (area)    params.set("area", area);
     if (resp)    params.set("responsavel", resp);
     if (cliente) params.set("cliente", cliente);
+    if (periodo === "personalizado") {
+      params.set("dataInicio", dataInicio);
+      params.set("dataFim", dataFim);
+    }
     return `/api/dashboard/kpis?${params}`;
-  }, [periodo, area, resp, cliente]);
+  }, [periodo, area, resp, cliente, dataInicio, dataFim]);
 
   const { data, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useQuery<DashboardKPI>({
-    queryKey: ["/api/dashboard/kpis", periodo, area, resp, cliente],
+    queryKey: ["/api/dashboard/kpis", periodo, area, resp, cliente, dataInicio, dataFim],
     queryFn: async () => {
       const r = await fetch(buildUrl());
       if (!r.ok) throw new Error(`Erro ao carregar KPIs: ${r.status}`);
@@ -269,7 +346,9 @@ export default function Dashboard() {
   const geradoEm = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     : null;
-  const periodoLbl = PERIODO_LABELS[periodo];
+  const periodoLbl = periodo === "personalizado"
+    ? (dataInicio === dataFim ? dataInicio : `${dataInicio} – ${dataFim}`)
+    : PERIODO_LABELS[periodo];
 
   const riscoData = data
     ? [
@@ -325,7 +404,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 flex-wrap">
             {/* Period filter */}
             <div className="flex items-center rounded-md border bg-background overflow-hidden" data-testid="filtro-periodo">
-              {(["semana", "mes", "trimestre"] as Periodo[]).map((p) => (
+              {(["semana", "mes", "trimestre", "personalizado"] as Periodo[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setPeriodo(p)}
@@ -338,6 +417,26 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
+            {/* Custom date range pickers — only shown when "personalizado" */}
+            {periodo === "personalizado" && (
+              <div className="flex items-center gap-1" data-testid="filtro-periodo-personalizado">
+                <Input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="w-36 text-sm"
+                  data-testid="input-data-inicio"
+                />
+                <span className="text-muted-foreground text-sm">–</span>
+                <Input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="w-36 text-sm"
+                  data-testid="input-data-fim"
+                />
+              </div>
+            )}
 
             {/* Area filter */}
             <Select value={area || "todos"} onValueChange={(v) => setArea(v === "todos" ? "" : v)}>
@@ -384,6 +483,10 @@ export default function Dashboard() {
               </Button>
             )}
 
+            <Button variant="outline" size="sm" onClick={() => data && exportXLSX(data)} disabled={isLoading} data-testid="button-exportar-xlsx">
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Excel
+            </Button>
             <Button variant="outline" size="sm" onClick={() => data && exportCSV(data)} disabled={isLoading} data-testid="button-exportar-csv">
               <Download className="w-4 h-4 mr-2" />
               CSV
@@ -463,6 +566,44 @@ export default function Dashboard() {
               icon={Eye} iconColor="bg-purple-500" href="/financeiro/honorarios" loading={isLoading} onNavigate={handleNavigate} />
           </div>
         </div>
+
+        {/* ── Honorários por Status ── */}
+        <Card className="border-0 shadow-sm" data-testid="card-honorarios-por-status">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-violet-500" />
+              Honorários por Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex gap-4">
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 flex-1" />)}
+              </div>
+            ) : Object.keys(data?.financeiro.honorariosPorStatus ?? {}).length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhum honorário registrado</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {Object.entries(data?.financeiro.honorariosPorStatus ?? {}).map(([status, valor]) => {
+                  const colorMap: Record<string, string> = {
+                    Pendente: "text-amber-600 bg-amber-50 dark:bg-amber-950",
+                    Pago: "text-emerald-600 bg-emerald-50 dark:bg-emerald-950",
+                    Cancelado: "text-red-600 bg-red-50 dark:bg-red-950",
+                    Parcial: "text-blue-600 bg-blue-50 dark:bg-blue-950",
+                    Vencido: "text-orange-600 bg-orange-50 dark:bg-orange-950",
+                  };
+                  const cls = colorMap[status] ?? "text-muted-foreground bg-muted";
+                  return (
+                    <div key={status} className={`rounded-md p-3 ${cls}`} data-testid={`honorario-status-${status.toLowerCase()}`}>
+                      <p className="text-xs font-medium opacity-80 mb-1">{status}</p>
+                      <p className="text-lg font-bold tabular-nums">{fmt(valor)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* ── Receita vs Meta + Honorários por Cliente ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

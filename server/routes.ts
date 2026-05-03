@@ -2749,15 +2749,26 @@ except Exception as e:
       const areaFiltro = (req.query.area as string) || "";
       const responsavelFiltro = (req.query.responsavel as string) || "";
       const clienteFiltro = (req.query.cliente as string) || "";
-      const periodoDias = periodo === "semana" ? 7 : periodo === "trimestre" ? 90 : 30;
-      const periodoLabel = periodo === "semana" ? "7 dias" : periodo === "trimestre" ? "90 dias" : "30 dias";
 
       const hoje = new Date();
       const hojeStr = hoje.toISOString().split("T")[0];
       const em7d = new Date(hoje.getTime() + 7 * 86400000).toISOString().split("T")[0];
-      const emPeriodo = new Date(hoje.getTime() + periodoDias * 86400000).toISOString().split("T")[0];
-      const haPeriodo = new Date(hoje.getTime() - periodoDias * 86400000).toISOString().split("T")[0];
       const ha30dDate = new Date(hoje.getTime() - 30 * 86400000).toISOString().split("T")[0];
+
+      // Período personalizado: accept dataInicio / dataFim; fall back to predefined ranges
+      let haPeriodo: string;
+      let emPeriodo: string;
+      let periodoLabel: string;
+      if (periodo === "personalizado") {
+        haPeriodo = (req.query.dataInicio as string) || ha30dDate;
+        emPeriodo = (req.query.dataFim as string) || hojeStr;
+        periodoLabel = `${haPeriodo} → ${emPeriodo}`;
+      } else {
+        const periodoDias = periodo === "semana" ? 7 : periodo === "trimestre" ? 90 : 30;
+        periodoLabel = periodo === "semana" ? "7 dias" : periodo === "trimestre" ? "90 dias" : "30 dias";
+        haPeriodo = new Date(hoje.getTime() - periodoDias * 86400000).toISOString().split("T")[0];
+        emPeriodo = new Date(hoje.getTime() + periodoDias * 86400000).toISOString().split("T")[0];
+      }
 
       // ---- Build lookup maps (needed before filtering) ----
       const processoMap = new Map(proc.map((p) => [p.id, p]));
