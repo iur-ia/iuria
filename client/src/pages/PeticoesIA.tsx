@@ -306,9 +306,20 @@ export default function PeticoesIA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, templates.length]);
 
-  // Header do documento: precedência template > escritório > vazio
-  const headerHtml = useMemo(() => {
-    return activeHeaderHtml || escritorio?.cabecalhoHtml || "";
+  // Header/footer: precedência template > escritório > vazio.
+  // Quando o cabeçalho carregado contém o marcador <hr data-iuria-footer="1"/>
+  // (vindo da importação de .docx com rodapé), separamos em duas zonas.
+  const { headerHtml, footerHtml } = useMemo(() => {
+    const raw = activeHeaderHtml || escritorio?.cabecalhoHtml || "";
+    const re = /<hr[^>]*data-iuria-footer=["']1["'][^>]*\/?>/i;
+    const m = raw.match(re);
+    if (m && m.index !== undefined) {
+      return {
+        headerHtml: raw.slice(0, m.index),
+        footerHtml: raw.slice(m.index + m[0].length),
+      };
+    }
+    return { headerHtml: raw, footerHtml: "" };
   }, [activeHeaderHtml, escritorio]);
 
   // Chat
@@ -531,7 +542,12 @@ export default function PeticoesIA() {
     if (!editor) return;
     setExporting(format);
     try {
-      const fullHtml = headerHtml ? `${headerHtml}<hr/>${editor.getHTML()}` : editor.getHTML();
+      const bodyHtml = editor.getHTML();
+      const parts: string[] = [];
+      if (headerHtml) parts.push(headerHtml, "<hr/>");
+      parts.push(bodyHtml);
+      if (footerHtml) parts.push("<hr/>", footerHtml);
+      const fullHtml = parts.join("");
       const res = await fetch("/api/peticoes-ia/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -856,7 +872,14 @@ export default function PeticoesIA() {
                 />
               )}
               <EditorContent editor={editor} />
-              {escritorio?.nome && !headerHtml && (
+              {footerHtml && (
+                <div
+                  className="text-xs text-zinc-700 mt-12 pt-3 border-t border-zinc-300 [&>*]:!my-0"
+                  dangerouslySetInnerHTML={{ __html: footerHtml }}
+                  data-testid="editor-footer"
+                />
+              )}
+              {escritorio?.nome && !headerHtml && !footerHtml && (
                 <div className="mt-12 pt-4 border-t border-zinc-300 text-[10px] text-zinc-500 text-center">
                   {escritorio.nome}
                   {escritorio.oab ? ` — OAB ${escritorio.oab}` : ""}

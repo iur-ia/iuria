@@ -1,8 +1,8 @@
-// @ts-ignore - adm-zip não tem types instalados
 import AdmZip from "adm-zip";
 import { DOMParser } from "@xmldom/xmldom";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const ELEMENT_NODE = 1;
 
 function escapeHtml(s: string): string {
   return s
@@ -12,19 +12,25 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+function asElement(node: Node): Element | null {
+  return node.nodeType === ELEMENT_NODE ? (node as Element) : null;
+}
+
 function getChildren(el: Element, localName: string): Element[] {
   const out: Element[] = [];
-  for (let i = 0; i < el.childNodes.length; i++) {
-    const c = el.childNodes[i] as any;
-    if (c.nodeType === 1 && c.localName === localName) out.push(c as Element);
+  const nodes = el.childNodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const child = asElement(nodes[i]);
+    if (child && child.localName === localName) out.push(child);
   }
   return out;
 }
 
 function firstChild(el: Element, localName: string): Element | null {
-  for (let i = 0; i < el.childNodes.length; i++) {
-    const c = el.childNodes[i] as any;
-    if (c.nodeType === 1 && c.localName === localName) return c as Element;
+  const nodes = el.childNodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const child = asElement(nodes[i]);
+    if (child && child.localName === localName) return child;
   }
   return null;
 }
@@ -123,17 +129,18 @@ function runToHtml(r: Element): string {
   const rPr = firstChild(r, "rPr");
   const { open, close, styleAttr } = runStyles(rPr);
   let inner = "";
-  for (let i = 0; i < r.childNodes.length; i++) {
-    const c = r.childNodes[i] as any;
-    if (c.nodeType !== 1) continue;
-    const ln = c.localName;
-    if (ln === "t") inner += escapeHtml(c.textContent || "");
+  const nodes = r.childNodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const child = asElement(nodes[i]);
+    if (!child) continue;
+    const ln = child.localName;
+    if (ln === "t") inner += escapeHtml(child.textContent || "");
     else if (ln === "tab") inner += "&emsp;";
     else if (ln === "br") inner += "<br/>";
     else if (ln === "noBreakHyphen") inner += "-";
     else if (ln === "sym") {
-      const ch = attrW(c, "char");
-      if (ch) try { inner += `&#x${ch};`; } catch {}
+      const ch = attrW(child, "char");
+      if (ch && /^[0-9a-fA-F]+$/.test(ch)) inner += `&#x${ch};`;
     }
   }
   if (!inner) return "";
@@ -154,15 +161,14 @@ function paragraphToHtml(p: Element): string {
   const styleAttr = styles.length ? ` style="${styles.join("; ")}"` : "";
 
   let inner = "";
-  for (let i = 0; i < p.childNodes.length; i++) {
-    const c = p.childNodes[i] as any;
-    if (c.nodeType !== 1) continue;
-    if (c.localName === "r") inner += runToHtml(c);
-    else if (c.localName === "hyperlink") {
-      let txt = "";
-      const runs = getChildren(c, "r");
-      for (const r of runs) txt += runToHtml(r);
-      inner += txt;
+  const nodes = p.childNodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const child = asElement(nodes[i]);
+    if (!child) continue;
+    if (child.localName === "r") inner += runToHtml(child);
+    else if (child.localName === "hyperlink") {
+      const runs = getChildren(child, "r");
+      for (const r of runs) inner += runToHtml(r);
     }
   }
 
@@ -178,11 +184,12 @@ function tableToHtml(tbl: Element): string {
     const cells = getChildren(tr, "tc");
     for (const tc of cells) {
       let cellHtml = "";
-      for (let i = 0; i < tc.childNodes.length; i++) {
-        const c = tc.childNodes[i] as any;
-        if (c.nodeType !== 1) continue;
-        if (c.localName === "p") cellHtml += paragraphToHtml(c);
-        else if (c.localName === "tbl") cellHtml += tableToHtml(c);
+      const nodes = tc.childNodes;
+      for (let i = 0; i < nodes.length; i++) {
+        const child = asElement(nodes[i]);
+        if (!child) continue;
+        if (child.localName === "p") cellHtml += paragraphToHtml(child);
+        else if (child.localName === "tbl") cellHtml += tableToHtml(child);
       }
       html += `<td style="border: 1px solid #ccc; padding: 4px; vertical-align: top">${cellHtml}</td>`;
     }
@@ -194,20 +201,24 @@ function tableToHtml(tbl: Element): string {
 
 function bodyOrRootToHtml(root: Element): string {
   let html = "";
-  for (let i = 0; i < root.childNodes.length; i++) {
-    const c = root.childNodes[i] as any;
-    if (c.nodeType !== 1) continue;
-    if (c.localName === "p") html += paragraphToHtml(c);
-    else if (c.localName === "tbl") html += tableToHtml(c);
+  const nodes = root.childNodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const child = asElement(nodes[i]);
+    if (!child) continue;
+    if (child.localName === "p") html += paragraphToHtml(child);
+    else if (child.localName === "tbl") html += tableToHtml(child);
   }
   return html;
 }
 
 function xmlToHtml(xml: string): string {
-  const doc = new DOMParser({ errorHandler: { warning: () => {}, error: () => {}, fatalError: () => {} } as any }).parseFromString(xml, "text/xml");
-  // For document.xml, the meaningful content is inside <w:body>; for header/footer it's the root <w:hdr>/<w:ftr>.
+  const parser = new DOMParser({
+    errorHandler: { warning: () => {}, error: () => {}, fatalError: () => {} },
+  });
+  const doc = parser.parseFromString(xml, "text/xml");
   const docEl = doc.documentElement;
   if (!docEl) return "";
+  // For document.xml the meaningful content is inside <w:body>; for header/footer it's the root <w:hdr>/<w:ftr>.
   const body = firstChild(docEl, "body");
   return bodyOrRootToHtml(body || docEl);
 }
@@ -240,7 +251,7 @@ export function importDocxFile(filePath: string): DocxImportResult {
     }
   }
 
-  // Use the first non-empty header/footer (geralmente o "default")
+  // Use the first non-empty header/footer (geralmente o "default").
   for (const xml of headerXmls) {
     const h = xmlToHtml(xml).trim();
     if (h && h.replace(/<[^>]+>/g, "").trim()) { headerHtml = h; break; }
