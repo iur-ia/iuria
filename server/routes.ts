@@ -1115,7 +1115,11 @@ td, th { border: 1px solid #444; padding: 4px 8px; }`;
         const FLD_PAGE = `</t></r><fldSimple xmlns:w="${W_NS}" w:instr=" PAGE "><r><t>1</t></r></fldSimple><r><t xml:space="preserve">`;
         const FLD_NUMPAGES = `</t></r><fldSimple xmlns:w="${W_NS}" w:instr=" NUMPAGES "><r><t>1</t></r></fldSimple><r><t xml:space="preserve">`;
         for (const entry of zip.getEntries()) {
-          if (!/^word\/(header\d*|footer\d*|document)\.xml$/.test(entry.entryName)) continue;
+          // Restringe ao header/footer: o corpo (document.xml) usa o prefixo
+          // `w:` no html-to-docx atual, então a substituição sem prefixo
+          // poderia produzir XML inválido. Campos PAGE/NUMPAGES no corpo são
+          // raros — por ora ficam como literal "1" no .docx.
+          if (!/^word\/(header\d*|footer\d*)\.xml$/.test(entry.entryName)) continue;
           let xml = entry.getData().toString("utf-8");
           if (!xml.includes(PAGE_TOKEN) && !xml.includes(NUMPAGES_TOKEN)) continue;
           xml = xml.split(PAGE_TOKEN).join(FLD_PAGE).split(NUMPAGES_TOKEN).join(FLD_NUMPAGES);
