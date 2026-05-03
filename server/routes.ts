@@ -747,7 +747,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/templates", async (req, res) => {
     try {
       const data = insertTemplateSchema.parse(req.body);
-      const template = await storage.createTemplate(data);
+      const sanitized = {
+        ...data,
+        conteudoHtml: data.conteudoHtml ? sanitizeLegalHtml(data.conteudoHtml) : data.conteudoHtml,
+        headerHtml: data.headerHtml ? sanitizeLegalHtml(data.headerHtml) : data.headerHtml,
+      };
+      const template = await storage.createTemplate(sanitized);
       res.status(201).json(template);
     } catch (error) {
       res.status(400).json({ error: "Dados inválidos" });
@@ -756,7 +761,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/templates/:id", async (req, res) => {
     try {
-      const template = await storage.updateTemplate(req.params.id, req.body);
+      const body = { ...req.body };
+      if (typeof body.conteudoHtml === "string") body.conteudoHtml = sanitizeLegalHtml(body.conteudoHtml);
+      if (typeof body.headerHtml === "string") body.headerHtml = sanitizeLegalHtml(body.headerHtml);
+      const template = await storage.updateTemplate(req.params.id, body);
       if (!template) {
         return res.status(404).json({ error: "Template não encontrado" });
       }
@@ -866,14 +874,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/peticao-rascunhos", async (req, res) => {
     try {
       const data = insertPeticaoRascunhoSchema.parse(req.body);
-      const r = await storage.createPeticaoRascunho(data);
+      const sanitized = { ...data, conteudoHtml: sanitizeLegalHtml(data.conteudoHtml || "") };
+      const r = await storage.createPeticaoRascunho(sanitized);
       res.status(201).json(r);
     } catch (e: any) { res.status(400).json({ error: e?.message || "Dados inválidos" }); }
   });
 
   app.patch("/api/peticao-rascunhos/:id", async (req, res) => {
     try {
-      const r = await storage.updatePeticaoRascunho(req.params.id, req.body);
+      const body = { ...req.body };
+      if (typeof body.conteudoHtml === "string") body.conteudoHtml = sanitizeLegalHtml(body.conteudoHtml);
+      const r = await storage.updatePeticaoRascunho(req.params.id, body);
       if (!r) return res.status(404).json({ error: "Rascunho não encontrado" });
       res.json(r);
     } catch { res.status(500).json({ error: "Erro" }); }

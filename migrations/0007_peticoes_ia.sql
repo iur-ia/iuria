@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS "peticao_rascunhos" (
   "titulo" text NOT NULL,
   "conteudo_html" text NOT NULL,
   "processo_id" varchar REFERENCES "processos"("id") ON DELETE SET NULL,
+  "cliente_id" varchar,
   "template_id" varchar REFERENCES "templates"("id") ON DELETE SET NULL,
   "created_at" timestamp DEFAULT now() NOT NULL,
   "updated_at" timestamp DEFAULT now() NOT NULL
