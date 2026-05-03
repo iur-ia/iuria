@@ -325,6 +325,14 @@
     vertical-align: top;
   }
   .iuria-paper .iuria-paper-content a { color: #0a58ca; text-decoration: underline; }
+  /* Campo dinâmico (PAGE/NUMPAGES) — leve sublinhado tracejado para o
+     usuário identificar; o número "1" é apenas placeholder no preview e
+     será substituído pelo contador real no export PDF. */
+  .iuria-paper .iuria-field {
+    border-bottom: 1px dotted #b8b8b8;
+    background-color: rgba(0, 0, 0, 0.025);
+    padding: 0 1px;
+  }
   /* Placeholder do TipTap mantido legível */
   .iuria-paper .iuria-paper-content p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);

@@ -271,6 +271,42 @@ function paragraphHeadingTagFromStyleId(styleId: string | null | undefined): str
   return null;
 }
 
+/**
+ * Detecta o tipo do campo Word a partir da instrução textual.
+ * Suporta PAGE e NUMPAGES (com ou sem switches `\* MERGEFORMAT`).
+ * Outros campos retornam null e caem no resultado em cache do .docx.
+ */
+function fieldFromInstr(instr: string): "PAGE" | "NUMPAGES" | null {
+  const trimmed = instr.trim().toUpperCase();
+  if (/^NUMPAGES(\s|$)/.test(trimmed)) return "NUMPAGES";
+  if (/^PAGE(\s|$)/.test(trimmed) && !trimmed.startsWith("PAGEREF")) return "PAGE";
+  return null;
+}
+
+/**
+ * HTML emitido para um campo dinâmico. Conteúdo "1" serve como fallback
+ * legível no preview do editor e no export DOCX. O export PDF reescreve
+ * para vazio e usa CSS `counter(page)` / `counter(pages)`.
+ */
+function fieldMarkerHtml(field: "PAGE" | "NUMPAGES"): string {
+  return `<span class="iuria-field" data-field="${field}">1</span>`;
+}
+
+function runFldCharType(r: Element): string | null {
+  const c = firstChild(r, "fldChar");
+  return c ? attrW(c, "fldCharType") : null;
+}
+
+function runInstrText(r: Element): string {
+  let out = "";
+  const nodes = r.childNodes;
+  for (let i = 0; i < nodes.length; i++) {
+    const child = asElement(nodes[i]);
+    if (child && child.localName === "instrText") out += child.textContent || "";
+  }
+  return out;
+}
+
 function runToHtml(r: Element, inheritedRun: RunProps): string {
   const explicit = parseRPr(firstChild(r, "rPr"));
   const merged = mergeRun(inheritedRun, explicit);
@@ -323,13 +359,64 @@ function paragraphToHtml(p: Element, st: StylesIndex): string {
   const tag = headingTag || "p";
   const styleAttr = paraPropsToStyleAttr(finalPara);
 
+  // Estado de campo Word (begin/instrText/separate/result/end).
+  // Quando estamos no meio de um campo conhecido (PAGE/NUMPAGES) o resultado
+  // em cache é descartado e substituído por um marcador <span class="iuria-field">.
   let inner = "";
+  let fieldState: "idle" | "instr" | "result" = "idle";
+  let instrBuf = "";
+  let pendingResult = "";
+
   const nodes = p.childNodes;
   for (let i = 0; i < nodes.length; i++) {
     const child = asElement(nodes[i]);
     if (!child) continue;
-    if (child.localName === "r") inner += runToHtml(child, inheritedRunForChildren);
-    else if (child.localName === "hyperlink") {
+
+    if (child.localName === "fldSimple") {
+      const instr = attrW(child, "instr") || "";
+      const field = fieldFromInstr(instr);
+      if (field) {
+        inner += fieldMarkerHtml(field);
+      } else {
+        const runs = getChildren(child, "r");
+        for (const r of runs) inner += runToHtml(r, inheritedRunForChildren);
+      }
+      continue;
+    }
+
+    if (child.localName === "r") {
+      const fc = runFldCharType(child);
+      if (fc === "begin") {
+        fieldState = "instr";
+        instrBuf = "";
+        pendingResult = "";
+        continue;
+      }
+      if (fc === "separate") {
+        fieldState = "result";
+        continue;
+      }
+      if (fc === "end") {
+        const field = fieldFromInstr(instrBuf);
+        inner += field ? fieldMarkerHtml(field) : pendingResult;
+        fieldState = "idle";
+        instrBuf = "";
+        pendingResult = "";
+        continue;
+      }
+      if (fieldState === "instr") {
+        instrBuf += runInstrText(child);
+        continue;
+      }
+      if (fieldState === "result") {
+        pendingResult += runToHtml(child, inheritedRunForChildren);
+        continue;
+      }
+      inner += runToHtml(child, inheritedRunForChildren);
+      continue;
+    }
+
+    if (child.localName === "hyperlink") {
       const runs = getChildren(child, "r");
       for (const r of runs) inner += runToHtml(r, inheritedRunForChildren);
     }

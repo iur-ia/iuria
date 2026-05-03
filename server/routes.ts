@@ -1038,8 +1038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const safeTitle = (titulo || "peticao").replace(/[^a-zA-Z0-9._-]/g, "_");
       const safeHtml = sanitizeLegalHtml(html);
 
-      const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
-<style>
+      const baseStyle = `
 body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #000; }
 h1 { font-size: 16pt; text-align: center; margin: 1em 0; }
 h2 { font-size: 14pt; margin: 1em 0 0.5em; }
@@ -1047,10 +1046,13 @@ h3 { font-size: 12pt; margin: 0.8em 0 0.4em; }
 p { text-align: justify; margin: 0.5em 0; text-indent: 2em; }
 blockquote { margin: 0.5em 2em; font-style: italic; }
 table { border-collapse: collapse; width: 100%; }
-td, th { border: 1px solid #444; padding: 4px 8px; }
-</style></head><body>${safeHtml}</body></html>`;
+td, th { border: 1px solid #444; padding: 4px 8px; }`;
 
       if (format === "docx") {
+        // Para DOCX o conteúdo "1" dentro do span já serve de fallback
+        // legível (html-to-docx não renderiza counter() do CSS).
+        const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+<style>${baseStyle}</style></head><body>${safeHtml}</body></html>`;
         const htmlToDocx = (await import("html-to-docx")).default;
         const buffer = await htmlToDocx(fullHtml, undefined, {
           orientation: "portrait",
@@ -1062,6 +1064,18 @@ td, th { border: 1px solid #444; padding: 4px 8px; }
       }
 
       if (format === "pdf") {
+        // Esvazia o conteúdo dos spans iuria-field para que o CSS possa
+        // injetar counter(page) / counter(pages) sem o "1" literal duplicar.
+        const pdfHtml = safeHtml.replace(
+          /(<span\b[^>]*\bclass="[^"]*\biuria-field\b[^"]*"[^>]*>)[^<]*(<\/span>)/gi,
+          "$1$2",
+        );
+        const fieldCss = `
+.iuria-field { display: inline; }
+.iuria-field[data-field="PAGE"]::before { content: counter(page); }
+.iuria-field[data-field="NUMPAGES"]::before { content: counter(pages); }`;
+        const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+<style>${baseStyle}${fieldCss}</style></head><body>${pdfHtml}</body></html>`;
         const htmlPdf = (await import("html-pdf-node")).default;
         const file = { content: fullHtml };
         const buffer = await htmlPdf.generatePdf(file, { format: "A4", margin: { top: "2.5cm", bottom: "2.5cm", left: "3cm", right: "2cm" } });
