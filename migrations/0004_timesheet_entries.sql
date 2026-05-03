@@ -4,9 +4,9 @@ CREATE TABLE IF NOT EXISTS "timesheet_entries" (
 	"processo_id" varchar,
 	"cliente_id" varchar,
 	"data" date NOT NULL,
-	"horas" numeric(6, 2) NOT NULL,
-	"descricao" text NOT NULL,
-	"categoria" text DEFAULT 'Geral' NOT NULL,
+	"horas" numeric(5, 2) NOT NULL,
+	"descricao" text,
+	"categoria" text DEFAULT 'Tarefa' NOT NULL,
 	"faturavel" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp DEFAULT now()
 );

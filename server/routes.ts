@@ -2836,13 +2836,14 @@ except Exception as e:
         return deadlinePts + valorPts + movPts;
       };
 
+      // Include all risk levels (CRITICO/ALTO/MEDIO/BAIXO) ordered by composite score
       const riscoWindow = naoConc.filter((a) => a.data <= emPeriodo);
       const seenIds = new Set<string>();
       const mapaRisco = [...atrasadas, ...riscoWindow]
         .filter((a) => {
           if (seenIds.has(a.id)) return false;
           seenIds.add(a.id);
-          return a.risco === "CRITICO" || a.risco === "ALTO";
+          return true;
         })
         .map((a) => {
           const score = computeRiscoScore(a);
@@ -2961,7 +2962,7 @@ except Exception as e:
       const comNovos = acomp.filter((a) => (a.novosAndamentos ?? 0) > 0).length;
 
       // ---- Filter options for UI ----
-      const areas = [...new Set(proc.map((p) => p.area))].filter(Boolean).sort();
+      const areas = Array.from(new Set(proc.map((p) => p.area))).filter(Boolean).sort() as string[];
       const equipeParaFiltro = eq.map((m) => ({ id: m.id, nome: m.nome }));
       const clientesParaFiltro = cli.map((c) => ({ id: c.id, nome: c.nome }));
 
