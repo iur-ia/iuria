@@ -542,15 +542,13 @@ export default function PeticoesIA() {
     setExporting(format);
     try {
       const bodyHtml = editor.getHTML();
-      const parts: string[] = [];
-      if (headerHtml) parts.push(headerHtml, "<hr/>");
-      parts.push(bodyHtml);
-      if (footerHtml) parts.push("<hr/>", footerHtml);
-      const fullHtml = parts.join("");
+      // Envia header e footer separados para que o servidor possa renderizá-los
+      // como cabeçalho/rodapé de página real (Puppeteer headerTemplate / Word
+      // footer XML), permitindo que campos PAGE/NUMPAGES sejam resolvidos.
       const res = await fetch("/api/peticoes-ia/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: fullHtml, format, titulo }),
+        body: JSON.stringify({ bodyHtml, headerHtml, footerHtml, format, titulo }),
         credentials: "include",
       });
       if (!res.ok) {

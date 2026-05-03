@@ -1033,13 +1033,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ==================== PETIÇÕES IA — EXPORT ====================
   app.post("/api/peticoes-ia/export", async (req, res) => {
     try {
-      const { html, format, titulo } = req.body as { html: string; format: "docx" | "pdf"; titulo?: string };
-      if (!html) return res.status(400).json({ error: "HTML é obrigatório" });
+      const body = req.body as {
+        html?: string;
+        bodyHtml?: string;
+        headerHtml?: string;
+        footerHtml?: string;
+        format: "docx" | "pdf";
+        titulo?: string;
+      };
+      const { format, titulo } = body;
+      // Backward-compat: cliente antigo enviava apenas `html`.
+      const rawBody = body.bodyHtml ?? body.html ?? "";
+      const rawHeader = body.headerHtml ?? "";
+      const rawFooter = body.footerHtml ?? "";
+      if (!rawBody) return res.status(400).json({ error: "HTML é obrigatório" });
+
       const safeTitle = (titulo || "peticao").replace(/[^a-zA-Z0-9._-]/g, "_");
-      const safeHtml = sanitizeLegalHtml(html);
+      const safeBody = sanitizeLegalHtml(rawBody);
+      const safeHeader = rawHeader ? sanitizeLegalHtml(rawHeader) : "";
+      const safeFooter = rawFooter ? sanitizeLegalHtml(rawFooter) : "";
 
       const baseStyle = `
-body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #000; }
+body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #000; margin: 0; }
 h1 { font-size: 16pt; text-align: center; margin: 1em 0; }
 h2 { font-size: 14pt; margin: 1em 0 0.5em; }
 h3 { font-size: 12pt; margin: 0.8em 0 0.4em; }
@@ -1049,36 +1064,122 @@ table { border-collapse: collapse; width: 100%; }
 td, th { border: 1px solid #444; padding: 4px 8px; }`;
 
       if (format === "docx") {
-        // Para DOCX o conteúdo "1" dentro do span já serve de fallback
-        // legível (html-to-docx não renderiza counter() do CSS).
-        const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
-<style>${baseStyle}</style></head><body>${safeHtml}</body></html>`;
-        const htmlToDocx = (await import("html-to-docx")).default;
-        const buffer = await htmlToDocx(fullHtml, undefined, {
-          orientation: "portrait",
-          margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
-        });
+        // Para DOCX:
+        //  1. Header/footer são passados separadamente para html-to-docx,
+        //     que os transforma em word/header1.xml e word/footer1.xml.
+        //  2. Substituímos cada <span class="iuria-field" data-field="PAGE">
+        //     por um marcador único de texto.
+        //  3. Após gerar o .docx pós-processamos o zip e trocamos os
+        //     marcadores pelos elementos <w:fldSimple w:instr=" PAGE "/>
+        //     reais — assim o Word recalcula a numeração ao abrir.
+        const PAGE_TOKEN = "\u0001IURIAFLDPAGE\u0001";
+        const NUMPAGES_TOKEN = "\u0001IURIAFLDNUMPAGES\u0001";
+        const tokenize = (h: string) =>
+          h
+            .replace(/<span\b[^>]*\bdata-field="PAGE"[^>]*>[^<]*<\/span>/gi, PAGE_TOKEN)
+            .replace(/<span\b[^>]*\bdata-field="NUMPAGES"[^>]*>[^<]*<\/span>/gi, NUMPAGES_TOKEN);
+        const wrapHtml = (inner: string) =>
+          `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+<style>${baseStyle}</style></head><body>${inner}</body></html>`;
+
+        const docBody = wrapHtml(tokenize(safeBody));
+        const docHeader = safeHeader ? wrapHtml(tokenize(safeHeader)) : undefined;
+        const docFooter = safeFooter ? wrapHtml(tokenize(safeFooter)) : undefined;
+
+        const htmlToDocx = (await import("html-to-docx")).default as (
+          html: string,
+          headerHTMLString?: string,
+          options?: Record<string, unknown>,
+          footerHTMLString?: string,
+        ) => Promise<Buffer>;
+        const buffer = await htmlToDocx(
+          docBody,
+          docHeader,
+          {
+            orientation: "portrait",
+            margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+            header: !!docHeader,
+            footer: !!docFooter,
+          },
+          docFooter,
+        );
+
+        // Pós-processa o .docx: troca os marcadores de texto por <w:fldSimple>.
+        const AdmZipMod = (await import("adm-zip")).default;
+        const zip = new AdmZipMod(Buffer.from(buffer));
+        // O html-to-docx emite os elementos sem o prefixo `w:` (usa apenas o
+        // namespace default herdado de <ftr xmlns="…">), então injetamos os
+        // fragmentos no mesmo estilo. Declaramos `xmlns:w` localmente apenas
+        // para validar o atributo `w:instr` que é obrigatório no schema.
+        const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        const FLD_PAGE = `</t></r><fldSimple xmlns:w="${W_NS}" w:instr=" PAGE "><r><t>1</t></r></fldSimple><r><t xml:space="preserve">`;
+        const FLD_NUMPAGES = `</t></r><fldSimple xmlns:w="${W_NS}" w:instr=" NUMPAGES "><r><t>1</t></r></fldSimple><r><t xml:space="preserve">`;
+        for (const entry of zip.getEntries()) {
+          if (!/^word\/(header\d*|footer\d*|document)\.xml$/.test(entry.entryName)) continue;
+          let xml = entry.getData().toString("utf-8");
+          if (!xml.includes(PAGE_TOKEN) && !xml.includes(NUMPAGES_TOKEN)) continue;
+          xml = xml.split(PAGE_TOKEN).join(FLD_PAGE).split(NUMPAGES_TOKEN).join(FLD_NUMPAGES);
+          zip.updateFile(entry.entryName, Buffer.from(xml, "utf-8"));
+        }
+        const finalBuffer = zip.toBuffer();
+
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.docx"`);
-        return res.send(buffer);
+        return res.send(finalBuffer);
       }
 
       if (format === "pdf") {
-        // Esvazia o conteúdo dos spans iuria-field para que o CSS possa
-        // injetar counter(page) / counter(pages) sem o "1" literal duplicar.
-        const pdfHtml = safeHtml.replace(
+        // Para PDF usamos os recursos nativos do Puppeteer:
+        //   displayHeaderFooter + headerTemplate + footerTemplate
+        // que são repetidos automaticamente em todas as páginas. Os campos
+        // PAGE/NUMPAGES são reescritos para os tokens nativos `pageNumber`
+        // e `totalPages` que o Chromium substitui pelo valor real por página.
+        const toPagedTemplate = (h: string): string => {
+          if (!h) return "";
+          return h
+            .replace(
+              /<span\b[^>]*\bdata-field="PAGE"[^>]*>[^<]*<\/span>/gi,
+              '<span class="pageNumber"></span>',
+            )
+            .replace(
+              /<span\b[^>]*\bdata-field="NUMPAGES"[^>]*>[^<]*<\/span>/gi,
+              '<span class="totalPages"></span>',
+            );
+        };
+        // Templates do Puppeteer rodam isolados — precisam de estilos inline.
+        const wrapTemplate = (inner: string): string =>
+          inner
+            ? `<div style="font-family:'Times New Roman',serif;font-size:10pt;color:#000;width:100%;padding:0 3cm 0 3cm;text-align:center;">${toPagedTemplate(
+                inner,
+              )}</div>`
+            : "<span></span>";
+
+        const headerTemplate = wrapTemplate(safeHeader);
+        const footerTemplate = wrapTemplate(safeFooter);
+        const displayHeaderFooter = !!(safeHeader || safeFooter);
+
+        // No corpo da página os spans iuria-field são esvaziados — caso
+        // apareçam fora do header/footer (raro), usamos counter() inline.
+        const pdfBody = safeBody.replace(
           /(<span\b[^>]*\bclass="[^"]*\biuria-field\b[^"]*"[^>]*>)[^<]*(<\/span>)/gi,
           "$1$2",
         );
         const fieldCss = `
-.iuria-field { display: inline; }
 .iuria-field[data-field="PAGE"]::before { content: counter(page); }
 .iuria-field[data-field="NUMPAGES"]::before { content: counter(pages); }`;
         const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
-<style>${baseStyle}${fieldCss}</style></head><body>${pdfHtml}</body></html>`;
+<style>${baseStyle}${fieldCss}</style></head><body>${pdfBody}</body></html>`;
+
         const htmlPdf = (await import("html-pdf-node")).default;
         const file = { content: fullHtml };
-        const buffer = await htmlPdf.generatePdf(file, { format: "A4", margin: { top: "2.5cm", bottom: "2.5cm", left: "3cm", right: "2cm" } });
+        const buffer = await htmlPdf.generatePdf(file, {
+          format: "A4",
+          margin: { top: "2.5cm", bottom: "2.5cm", left: "3cm", right: "2cm" },
+          displayHeaderFooter,
+          headerTemplate,
+          footerTemplate,
+          printBackground: true,
+        });
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
         return res.send(buffer);
