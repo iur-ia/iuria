@@ -2729,6 +2729,119 @@ except Exception as e:
     }
   });
 
+  // ==================== DASHBOARD KPIs ====================
+  app.get("/api/dashboard/kpis", async (req, res) => {
+    try {
+      const [proc, atv, cr, cp, acomp] = await Promise.all([
+        storage.getProcessos(),
+        storage.getAtividades(),
+        storage.getContasReceber(),
+        storage.getContasPagar(),
+        storage.getProcessosAcompanhados(),
+      ]);
+
+      // Period windows based on ?periodo= query param
+      const periodo = (req.query.periodo as string) || "mes";
+      const periodoDias = periodo === "semana" ? 7 : periodo === "trimestre" ? 90 : 30;
+      const periodoLabel = periodo === "semana" ? "Semana" : periodo === "trimestre" ? "Trimestre" : "Mês";
+
+      const hoje = new Date();
+      const hojeStr = hoje.toISOString().split("T")[0];
+      const em7d = new Date(hoje.getTime() + 7 * 86400000).toISOString().split("T")[0];
+      const emPeriodo = new Date(hoje.getTime() + periodoDias * 86400000).toISOString().split("T")[0];
+      const haPeriodo = new Date(hoje.getTime() - periodoDias * 86400000).toISOString().split("T")[0];
+      const ha30dDate = new Date(hoje.getTime() - 30 * 86400000).toISOString().split("T")[0];
+
+      // Processos
+      const processosAtivos = proc.filter((p) => p.status === "Ativo");
+      const porAreaMap: Record<string, number> = {};
+      for (const p of processosAtivos) {
+        porAreaMap[p.area] = (porAreaMap[p.area] || 0) + 1;
+      }
+      const semMovimentacao30d = proc.filter(
+        (p) => p.status === "Ativo" && p.dataAtualizacao && p.dataAtualizacao < ha30dDate
+      ).length;
+
+      // Atividades
+      const naoConc = atv.filter((a) => a.status !== "Concluído" && a.status !== "Cancelado");
+      const atrasadas = naoConc.filter((a) => a.data < hojeStr);
+      const vencendo7dList = naoConc.filter((a) => a.data >= hojeStr && a.data <= em7d);
+      const vencendoPeriodoList = naoConc.filter((a) => a.data >= hojeStr && a.data <= emPeriodo);
+      const porRisco = { CRITICO: 0, ALTO: 0, MEDIO: 0, BAIXO: 0 };
+      for (const a of naoConc) {
+        if (a.risco === "CRITICO") porRisco.CRITICO++;
+        else if (a.risco === "ALTO") porRisco.ALTO++;
+        else if (a.risco === "MEDIO") porRisco.MEDIO++;
+        else if (a.risco === "BAIXO") porRisco.BAIXO++;
+      }
+
+      // Mapa de risco: atividades CRITICO/ALTO deduplicadas, ordenadas por data
+      // Window expands with period: semana=+7d, mes=+30d, trimestre=+90d
+      const riscoWindow = naoConc.filter((a) => a.data <= emPeriodo);
+      const seenIds = new Set<string>();
+      const mapaRisco = [...atrasadas, ...riscoWindow]
+        .filter((a) => {
+          if (seenIds.has(a.id)) return false;
+          seenIds.add(a.id);
+          return a.risco === "CRITICO" || a.risco === "ALTO";
+        })
+        .sort((a, b) => a.data.localeCompare(b.data))
+        .slice(0, 12)
+        .map((a) => ({ id: a.id, titulo: a.titulo, risco: a.risco, data: a.data, tipo: a.tipo }));
+
+      // Financeiro — filtered by selected period
+      const totalReceber = cr
+        .filter((c) => c.status !== "Pago")
+        .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+      const totalRecebidoPeriodo = cr
+        .filter((c) => c.status === "Pago" && c.dataPagamento && c.dataPagamento >= haPeriodo)
+        .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+      const totalPagarPeriodo = cp
+        .filter((c) => c.status !== "Pago" && c.vencimento <= emPeriodo)
+        .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+
+      // Acompanhados
+      const comNovos = acomp.filter((a) => (a.novosAndamentos ?? 0) > 0).length;
+
+      res.json({
+        processos: {
+          total: proc.length,
+          ativos: processosAtivos.length,
+          porArea: Object.entries(porAreaMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+            .map(([area, total]) => ({ area, total })),
+          semMovimentacao30d,
+        },
+        atividades: {
+          total: atv.length,
+          atrasadas: atrasadas.length,
+          vencendo7d: vencendo7dList.length,
+          vencendoPeriodo: vencendoPeriodoList.length,
+          concluidas: atv.filter((a) => a.status === "Concluído").length,
+          porRisco,
+        },
+        financeiro: {
+          totalReceber,
+          totalPagarPeriodo,
+          totalRecebidoPeriodo,
+          honorariosPendentes: cr.filter((c) => c.status === "Pendente").length,
+        },
+        periodo,
+        periodoLabel,
+        mapaRisco,
+        acompanhados: {
+          total: acomp.length,
+          comNovosAndamentos: comNovos,
+        },
+        geradoEm: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("[dashboard/kpis]", error);
+      res.status(500).json({ error: "Erro ao gerar KPIs do dashboard" });
+    }
+  });
+
   // Inicializar seed de regras pré-configuradas e job de alertas
   seedRegrasPreconfigured().catch(console.error);
   iniciarJobAlertas();
