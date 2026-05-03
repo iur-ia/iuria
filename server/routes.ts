@@ -1,6 +1,7 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { pool } from "./db";
 
 // Augment Express Request to include session (added by express-session middleware)
 declare module "express-serve-static-core" {
@@ -3112,7 +3113,7 @@ except Exception as e:
   // ==================== ROTAS — COMMUNICATION TEMPLATES ====================
 
   app.get("/api/communication-templates", async (req, res) => {
-    const filters: any = {};
+    const filters: { categoria?: string; ativo?: boolean } = {};
     if (req.query.categoria) filters.categoria = req.query.categoria as string;
     if (req.query.ativo !== undefined) filters.ativo = req.query.ativo === "true";
     const templates = await storage.getCommunicationTemplates(filters);
@@ -3219,7 +3220,7 @@ except Exception as e:
   // ==================== ROTAS — COMMUNICATIONS ====================
 
   app.get("/api/communications", async (req, res) => {
-    const filters: any = {};
+    const filters: { acervoId?: string; status?: string } = {};
     if (req.query.acervoId) filters.acervoId = req.query.acervoId as string;
     if (req.query.status) filters.status = req.query.status as string;
     const comms = await storage.getCommunications(filters);
@@ -3327,19 +3328,15 @@ except Exception as e:
 
       await storage.updateCommunicationTemplate(templateId, { usos: (tmpl.usos ?? 0) + 1 });
 
-      // Auto-generate sequential office number for "oficio" and "notificacao" categories
+      // Auto-generate sequential office number using DB sequences (race-safe)
       let numeroOficio: string | null = null;
       if (tmpl.categoria === "oficio" || tmpl.categoria === "notificacao") {
         const anoAtual = new Date().getFullYear();
+        const seqName = tmpl.categoria === "notificacao" ? "notificacao_seq" : "oficio_seq";
         const prefixo = tmpl.categoria === "notificacao" ? "NOT" : "OFI";
-        const sufixoAno = `/${anoAtual}`;
-        // Count existing numbered comms with the same prefix and current year
-        const todas = await storage.getCommunications();
-        const doAnoComPrefixo = todas.filter(
-          (x) => x.numeroOficio && x.numeroOficio.startsWith(prefixo + "-") && x.numeroOficio.endsWith(sufixoAno)
-        );
-        const proximo = doAnoComPrefixo.length + 1;
-        numeroOficio = `${prefixo}-${String(proximo).padStart(4, "0")}${sufixoAno}`;
+        const seqResult = await pool.query(`SELECT nextval($1) AS n`, [seqName]);
+        const seqNum = Number((seqResult.rows[0] as { n: string }).n);
+        numeroOficio = `${prefixo}-${String(seqNum).padStart(4, "0")}/${anoAtual}`;
       }
 
       const comm = await storage.createCommunication({
@@ -3389,7 +3386,38 @@ except Exception as e:
       if (!comm) return res.status(404).json({ error: "Comunicação não encontrada" });
       if (!comm.htmlGerado) return res.status(400).json({ error: "Comunicação sem conteúdo HTML" });
 
-      // Full HTML page for PDF rendering
+      // Load escritório config for server-side header/footer (independent of template body)
+      const escConf = await storage.getEscritorioConfig();
+      const escritorioNome = escConf?.nome ?? "Escritório de Advocacia";
+      const escritorioOab = escConf?.oab ?? "";
+      const escritorioEnd = [escConf?.endereco, escConf?.complemento, escConf?.cidade, escConf?.estado]
+        .filter(Boolean).join(", ");
+      const escritorioTel = escConf?.telefone ?? "";
+      const escritorioEmail = escConf?.email ?? "";
+      const dataEmissao = new Date().toLocaleDateString("pt-BR");
+
+      const headerHtml = `
+        <div style="border-bottom:2px solid #333;padding-bottom:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:14pt;font-weight:bold;color:#1a1a1a;">${escritorioNome}</div>
+            ${escritorioOab ? `<div style="font-size:9pt;color:#555;">OAB: ${escritorioOab}</div>` : ""}
+            ${escritorioEnd ? `<div style="font-size:9pt;color:#555;">${escritorioEnd}</div>` : ""}
+          </div>
+          <div style="text-align:right;font-size:9pt;color:#555;">
+            ${escritorioTel ? `<div>${escritorioTel}</div>` : ""}
+            ${escritorioEmail ? `<div>${escritorioEmail}</div>` : ""}
+          </div>
+        </div>
+        ${comm.numeroOficio ? `<div style="font-size:9pt;font-weight:bold;margin-bottom:8px;color:#333;">${comm.numeroOficio}</div>` : ""}
+      `;
+      const footerHtml = `
+        <div style="border-top:1px solid #aaa;padding-top:6px;margin-top:20px;font-size:8pt;color:#777;display:flex;justify-content:space-between;">
+          <span>${escritorioNome}${escritorioOab ? ` — OAB: ${escritorioOab}` : ""}</span>
+          <span>Emitido em ${dataEmissao}</span>
+        </div>
+      `;
+
+      // Full HTML page for PDF rendering with server-side header/footer
       const fullHtml = `<!DOCTYPE html><html lang="pt-BR">
 <head>
   <meta charset="utf-8">
@@ -3402,7 +3430,7 @@ except Exception as e:
     @media print { body { margin: 0; } }
   </style>
 </head>
-<body>${comm.htmlGerado}</body></html>`;
+<body>${headerHtml}${comm.htmlGerado}${footerHtml}</body></html>`;
 
       const htmlPdf = (await import("html-pdf-node")).default;
       const options = {

@@ -17,7 +17,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { CommunicationTemplate, Communication } from "@shared/schema";
 
-type EnrichedComm = Communication & { templateNome?: string | null };
+type EnrichedComm = Communication & {
+  templateNome?: string | null;
+  numeroOficio?: string | null;
+  enviadoEm?: string | Date | null;
+  pdfGeradoEm?: string | Date | null;
+};
 
 const CATEGORIA_LABELS: Record<string, string> = {
   oficio: "Ofício",
@@ -772,9 +777,9 @@ export default function Oficios() {
                           {c.templateNome && (
                             <Badge variant="outline" className="text-xs">{c.templateNome}</Badge>
                           )}
-                          {(c as any).numeroOficio && (
+                          {c.numeroOficio && (
                             <Badge variant="secondary" className="text-xs font-mono">
-                              {(c as any).numeroOficio}
+                              {c.numeroOficio}
                             </Badge>
                           )}
                           {c.protocolo && (
@@ -783,7 +788,7 @@ export default function Oficios() {
                               {c.protocolo}
                             </Badge>
                           )}
-                          {(c as any).pdfGeradoEm && (
+                          {c.pdfGeradoEm && (
                             <Badge variant="outline" className="text-xs flex items-center gap-1 text-green-600 border-green-400">
                               <Download className="h-3 w-3" />
                               PDF
@@ -797,9 +802,9 @@ export default function Oficios() {
                         )}
                         <p className="text-xs text-muted-foreground mt-1">
                           {c.createdAt ? new Date(c.createdAt).toLocaleString("pt-BR") : ""}
-                          {(c as any).enviadoEm && (
+                          {c.enviadoEm && (
                             <span className="ml-2 text-blue-600">
-                              · Enviada em {new Date((c as any).enviadoEm).toLocaleDateString("pt-BR")}
+                              · Enviada em {new Date(c.enviadoEm).toLocaleDateString("pt-BR")}
                             </span>
                           )}
                         </p>

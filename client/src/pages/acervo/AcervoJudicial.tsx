@@ -17,7 +17,14 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { AcervoProcesso } from "@shared/schema";
+import type { AcervoProcesso, Communication } from "@shared/schema";
+
+type CommResponse = Communication & {
+  templateNome?: string | null;
+  numeroOficio?: string | null;
+  enviadoEm?: string | Date | null;
+  pdfGeradoEm?: string | Date | null;
+};
 
 const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   ativo: { label: "Ativo", variant: "default" },
@@ -359,7 +366,7 @@ function PrintPreviewDialog({ html, onClose }: { html: string; onClose: () => vo
   );
 }
 
-function ProtocoloCommDialog({ comm, onClose }: { comm: any; onClose: () => void }) {
+function ProtocoloCommDialog({ comm, onClose }: { comm: CommResponse; onClose: () => void }) {
   const { toast } = useToast();
   const [protocolo, setProtocolo] = useState(comm.protocolo ?? "");
   const [status, setStatus] = useState(comm.status);
@@ -432,7 +439,7 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
       });
       return res.json();
     },
-    onSuccess: async (comm: any) => {
+    onSuccess: async (comm: CommResponse) => {
       toast({ title: "Comunicação gerada — baixando PDF..." });
       // Trigger immediate PDF download after generation
       try {
@@ -536,9 +543,9 @@ function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoN
   const { toast } = useToast();
   const [showGerar, setShowGerar] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [commParaProtocolo, setCommParaProtocolo] = useState<any | null>(null);
+  const [commParaProtocolo, setCommParaProtocolo] = useState<CommResponse | null>(null);
 
-  const { data: comms = [], isLoading } = useQuery<any[]>({
+  const { data: comms = [], isLoading } = useQuery<CommResponse[]>({
     queryKey: ["/api/communications", acervoId],
     queryFn: async () => {
       const res = await fetch(`/api/communications?acervoId=${acervoId}`);
