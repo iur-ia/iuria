@@ -308,7 +308,7 @@ export default function PeticoesIA() {
   // Header/footer: precedência template > escritório > vazio.
   // Quando o cabeçalho carregado contém o marcador <hr data-iuria-footer="1"/>
   // (vindo da importação de .docx com rodapé), separamos em duas zonas.
-  const { headerHtml, footerHtml } = useMemo(() => {
+  const { headerHtml: headerHtmlRaw, footerHtml: footerHtmlRaw } = useMemo(() => {
     const raw = activeHeaderHtml || escritorio?.cabecalhoHtml || "";
     const re = /<hr[^>]*data-iuria-footer=["']1["'][^>]*\/?>/i;
     const m = raw.match(re);
@@ -320,6 +320,51 @@ export default function PeticoesIA() {
     }
     return { headerHtml: raw, footerHtml: "" };
   }, [activeHeaderHtml, escritorio]);
+
+  // ===== Estimativa de páginas (preview) =====
+  // O preview não é paginado de fato, mas dividimos a altura renderizada do
+  // corpo pela altura útil de uma A4 (≈ 935px @ 96dpi, com margens de 2,5cm)
+  // para aproximar o total. Com isso os campos NUMPAGES no preview mostram
+  // um valor coerente em vez do placeholder "1".
+  const [pageCount, setPageCount] = useState(1);
+  useEffect(() => {
+    if (!editor) return;
+    const A4_CONTENT_PX = 935;
+    const compute = () => {
+      const dom = editor.view.dom as HTMLElement;
+      const h = dom.scrollHeight || 0;
+      setPageCount(Math.max(1, Math.ceil(h / A4_CONTENT_PX)));
+    };
+    compute();
+    editor.on("update", compute);
+    const ro = new ResizeObserver(compute);
+    ro.observe(editor.view.dom as HTMLElement);
+    return () => {
+      editor.off("update", compute);
+      ro.disconnect();
+    };
+  }, [editor]);
+
+  // Resolve campos PAGE/NUMPAGES no HTML do header/footer renderizado.
+  // PAGE = 1 (preview mostra a primeira página); NUMPAGES = total estimado.
+  const resolveFields = (html: string, page: number, total: number) =>
+    html
+      .replace(
+        /(<span\b[^>]*\bdata-field="PAGE"[^>]*>)[^<]*(<\/span>)/gi,
+        `$1${page}$2`,
+      )
+      .replace(
+        /(<span\b[^>]*\bdata-field="NUMPAGES"[^>]*>)[^<]*(<\/span>)/gi,
+        `$1${total}$2`,
+      );
+  const headerHtml = useMemo(
+    () => resolveFields(headerHtmlRaw, 1, pageCount),
+    [headerHtmlRaw, pageCount],
+  );
+  const footerHtml = useMemo(
+    () => resolveFields(footerHtmlRaw, 1, pageCount),
+    [footerHtmlRaw, pageCount],
+  );
 
   // Chat
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -548,7 +593,16 @@ export default function PeticoesIA() {
       const res = await fetch("/api/peticoes-ia/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bodyHtml, headerHtml, footerHtml, format, titulo }),
+        body: JSON.stringify({
+          bodyHtml,
+          // Envia as versões cruas (com spans iuria-field intactos) — o
+          // servidor as transforma em headerTemplate/footerTemplate (PDF) ou
+          // <fldSimple> reais (DOCX).
+          headerHtml: headerHtmlRaw,
+          footerHtml: footerHtmlRaw,
+          format,
+          titulo,
+        }),
         credentials: "include",
       });
       if (!res.ok) {
