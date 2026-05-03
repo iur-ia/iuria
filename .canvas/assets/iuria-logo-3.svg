@@ -1,18 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" fill="none">
   <rect width="800" height="400" fill="#0A0A0B"/>
-  <!-- Square monogram: bracket + i -->
   <g transform="translate(110,90)">
     <rect x="0" y="0" width="220" height="220" rx="20" fill="#FAFAFA"/>
-    <!-- left bracket [ -->
     <path d="M55 60 L40 60 L40 160 L55 160" stroke="#0A0A0B" stroke-width="10" stroke-linecap="square" fill="none"/>
-    <!-- right bracket ] -->
     <path d="M165 60 L180 60 L180 160 L165 160" stroke="#0A0A0B" stroke-width="10" stroke-linecap="square" fill="none"/>
-    <!-- i bar -->
     <rect x="103" y="80" width="14" height="80" rx="2" fill="#0A0A0B"/>
-    <!-- i dot -->
     <circle cx="110" cy="62" r="8" fill="#7C5CFF"/>
   </g>
-  <!-- Wordmark -->
-  <text x="370" y="225" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="92" fill="#FAFAFA" letter-spacing="-4">iuria</text>
-  <text x="370" y="290" font-family="JetBrains Mono,monospace" font-weight="400" font-size="32" fill="#737373" letter-spacing="2">LEGAL OS</text>
+  <text x="370" y="240" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="110" fill="#FAFAFA" letter-spacing="-5">iuria</text>
 </svg>

@@ -1,11 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" fill="none">
   <rect width="800" height="400" fill="#0A0A0B"/>
-  <!-- Mark: stacked dots + bar = abstract "i" -->
-  <g transform="translate(120,90)">
+  <g transform="translate(140,90)">
     <circle cx="35" cy="35" r="14" fill="#7C5CFF"/>
     <circle cx="35" cy="80" r="14" fill="#FAFAFA"/>
     <rect x="21" y="115" width="28" height="125" rx="2" fill="#FAFAFA"/>
   </g>
-  <!-- Wordmark -->
-  <text x="240" y="248" font-family="Inter,system-ui,sans-serif" font-weight="500" font-size="120" fill="#FAFAFA" letter-spacing="-6">iuria.os</text>
+  <text x="260" y="248" font-family="Inter,system-ui,sans-serif" font-weight="500" font-size="130" fill="#FAFAFA" letter-spacing="-7">iuria</text>
 </svg>
