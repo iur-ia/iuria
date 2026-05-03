@@ -187,6 +187,7 @@ export interface IStorage {
 
   // Communications (generated docs)
   getCommunications(filters?: { acervoId?: string; status?: string }): Promise<Communication[]>;
+
   getCommunication(id: string): Promise<Communication | undefined>;
   createCommunication(c: InsertCommunication): Promise<Communication>;
   updateCommunication(id: string, c: Partial<InsertCommunication>): Promise<Communication | undefined>;
@@ -779,10 +780,13 @@ export class DatabaseStorage implements IStorage {
   // ==================== COMMUNICATIONS ====================
 
   async getCommunications(filters?: { acervoId?: string; status?: string }): Promise<Communication[]> {
-    let q = db.select().from(communications).$dynamic();
-    if (filters?.acervoId) q = q.where(eq(communications.acervoId, filters.acervoId));
-    if (filters?.status) q = q.where(eq(communications.status, filters.status));
-    return q.orderBy(desc(communications.createdAt));
+    const conditions: any[] = [];
+    if (filters?.acervoId) conditions.push(eq(communications.acervoId, filters.acervoId));
+    if (filters?.status) conditions.push(eq(communications.status, filters.status));
+    if (conditions.length > 0) {
+      return db.select().from(communications).where(and(...conditions)).orderBy(desc(communications.createdAt));
+    }
+    return db.select().from(communications).orderBy(desc(communications.createdAt));
   }
 
   async getCommunication(id: string): Promise<Communication | undefined> {

@@ -428,7 +428,7 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/communications/generate", {
         templateId, acervoId, destinatario, assunto: assunto || undefined,
-        dados: campos, responsavelId: responsavelId || undefined,
+        dados: campos, responsavelId: responsavelId !== "__none__" ? responsavelId || undefined : undefined,
       });
       return res.json();
     },
@@ -469,7 +469,7 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
             <Select value={responsavelId} onValueChange={setResponsavelId}>
               <SelectTrigger data-testid="select-resp-comm"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="__none__">Nenhum</SelectItem>
                 {equipe.map((m: any) => (
                   <SelectItem key={m.id} value={m.id}>{m.nome}{m.oab ? ` — OAB ${m.oab}` : ""}</SelectItem>
                 ))}

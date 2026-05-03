@@ -548,6 +548,9 @@ export const communications = pgTable("communications", {
   htmlGerado: text("html_gerado"), // HTML final renderizado
   status: text("status").notNull().default("gerada"), // gerada | enviada | respondida | arquivada
   protocolo: text("protocolo"), // número de protocolo / AR
+  numeroOficio: text("numero_oficio"), // numeração sequencial ex: 0001/2026
+  enviadoEm: timestamp("enviado_em"), // quando o status mudou para "enviada"
+  pdfGeradoEm: timestamp("pdf_gerado_em"), // quando um PDF server-side foi gerado
   responsavelId: varchar("responsavel_id").references(() => equipe.id),
   createdAt: timestamp("created_at").defaultNow(),
 });

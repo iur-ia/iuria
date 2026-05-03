@@ -3063,10 +3063,13 @@ except Exception as e:
     const dataExtenso = `${hoje.getDate()} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
 
     return {
+      // Spread ALL dynamic keys from processo (includes parte_ativa.nome, parte_passiva.nome, etc.)
+      ...processo,
+      // Standard prefixed keys (explicit keys always win over the spread)
       "escritorio.nome": escritorio.nome ?? "",
       "escritorio.oab": escritorio.oab ?? "",
       "escritorio.cnpj": escritorio.cnpj ?? "",
-      "escritorio.endereco": [escritorio.endereco, escritorio.complemento].filter(Boolean).join(", ") ?? "",
+      "escritorio.endereco": [escritorio.endereco, escritorio.complemento].filter(Boolean).join(", "),
       "escritorio.cidade": escritorio.cidade ?? "",
       "escritorio.estado": escritorio.estado ?? "",
       "escritorio.telefone": escritorio.telefone ?? "",
@@ -3085,6 +3088,7 @@ except Exception as e:
       "advogado.oab": advogado.oab ?? "",
       "data_atual": dataAtual,
       "data_extenso": dataExtenso,
+      // User-provided dados overrides everything (last wins)
       ...dados,
     };
   }
@@ -3323,6 +3327,21 @@ except Exception as e:
 
       await storage.updateCommunicationTemplate(templateId, { usos: (tmpl.usos ?? 0) + 1 });
 
+      // Auto-generate sequential office number for "oficio" and "notificacao" categories
+      let numeroOficio: string | null = null;
+      if (tmpl.categoria === "oficio" || tmpl.categoria === "notificacao") {
+        const anoAtual = new Date().getFullYear();
+        const prefixo = tmpl.categoria === "notificacao" ? "NOT" : "OFI";
+        const sufixoAno = `/${anoAtual}`;
+        // Count existing numbered comms with the same prefix and current year
+        const todas = await storage.getCommunications();
+        const doAnoComPrefixo = todas.filter(
+          (x) => x.numeroOficio && x.numeroOficio.startsWith(prefixo + "-") && x.numeroOficio.endsWith(sufixoAno)
+        );
+        const proximo = doAnoComPrefixo.length + 1;
+        numeroOficio = `${prefixo}-${String(proximo).padStart(4, "0")}${sufixoAno}`;
+      }
+
       const comm = await storage.createCommunication({
         templateId,
         acervoId: acervoId ?? null,
@@ -3333,6 +3352,7 @@ except Exception as e:
         htmlGerado,
         status: "gerada",
         protocolo: null,
+        numeroOficio,
         responsavelId: responsavelId ?? null,
       });
 
@@ -3343,7 +3363,15 @@ except Exception as e:
   });
 
   app.patch("/api/communications/:id", async (req, res) => {
-    const c = await storage.updateCommunication(req.params.id, req.body);
+    const updateData = { ...req.body };
+    // Auto-set enviadoEm when status transitions to "enviada"
+    if (updateData.status === "enviada") {
+      const existing = await storage.getCommunication(req.params.id);
+      if (existing && !existing.enviadoEm) {
+        updateData.enviadoEm = new Date();
+      }
+    }
+    const c = await storage.updateCommunication(req.params.id, updateData);
     if (!c) return res.status(404).json({ error: "Comunicação não encontrada" });
     res.json(c);
   });
@@ -3385,9 +3413,16 @@ except Exception as e:
       const file = { content: fullHtml };
       const pdfBuffer = await htmlPdf.generatePdf(file, options);
 
+      // Persist the timestamp of the last PDF generation
+      await storage.updateCommunication(comm.id, { pdfGeradoEm: new Date() });
+
+      const filename = comm.numeroOficio
+        ? `oficio-${comm.numeroOficio.replace(/\//g, "-")}.pdf`
+        : `comunicacao-${comm.id.slice(0, 8)}.pdf`;
+
       res.set({
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="comunicacao-${comm.id.slice(0, 8)}.pdf"`,
+        "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length": pdfBuffer.length,
       });
       res.end(pdfBuffer);

@@ -121,7 +121,7 @@ function GerarComunicacaoDialog({
         destinatario,
         assunto: assunto || undefined,
         dados: campos,
-        responsavelId: responsavelId || undefined,
+        responsavelId: responsavelId !== "__none__" ? responsavelId || undefined : undefined,
       });
       return res.json();
     },
@@ -190,7 +190,7 @@ function GerarComunicacaoDialog({
                 <SelectValue placeholder="Selecionar advogado..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="__none__">Nenhum</SelectItem>
                 {equipe.map((m: any) => (
                   <SelectItem key={m.id} value={m.id}>{m.nome} — OAB {m.oab}</SelectItem>
                 ))}
@@ -772,10 +772,21 @@ export default function Oficios() {
                           {c.templateNome && (
                             <Badge variant="outline" className="text-xs">{c.templateNome}</Badge>
                           )}
+                          {(c as any).numeroOficio && (
+                            <Badge variant="secondary" className="text-xs font-mono">
+                              {(c as any).numeroOficio}
+                            </Badge>
+                          )}
                           {c.protocolo && (
                             <Badge variant="secondary" className="text-xs flex items-center gap-1">
                               <Hash className="h-3 w-3" />
                               {c.protocolo}
+                            </Badge>
+                          )}
+                          {(c as any).pdfGeradoEm && (
+                            <Badge variant="outline" className="text-xs flex items-center gap-1 text-green-600 border-green-400">
+                              <Download className="h-3 w-3" />
+                              PDF
                             </Badge>
                           )}
                         </div>
@@ -786,6 +797,11 @@ export default function Oficios() {
                         )}
                         <p className="text-xs text-muted-foreground mt-1">
                           {c.createdAt ? new Date(c.createdAt).toLocaleString("pt-BR") : ""}
+                          {(c as any).enviadoEm && (
+                            <span className="ml-2 text-blue-600">
+                              · Enviada em {new Date((c as any).enviadoEm).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
