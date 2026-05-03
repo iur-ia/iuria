@@ -18,7 +18,7 @@ import {
   Loader2, Search, Scale, Building, Clock, FileText,
   Plus, Trash2, RefreshCw, Eye, Database, Globe, Zap,
   Fingerprint, AlertCircle, CheckCircle2, RotateCcw, StickyNote,
-  User, Briefcase, Hash,
+  User, Briefcase, Hash, Bell, BellOff, CheckCheck,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -248,6 +248,18 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
   const [editingAnotacao, setEditingAnotacao] = useState(false);
   const [anotacaoLocal, setAnotacaoLocal] = useState(item.anotacao || "");
 
+  const temNovos = (item.novosAndamentos ?? 0) > 0;
+
+  const marcarVistoMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/acompanhamentos/${item.id}/marcar-visto`, {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/acompanhamentos"] });
+    },
+  });
+
   const refreshMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PATCH", `/api/acompanhamentos/${item.id}`, { refresh: true });
@@ -291,9 +303,15 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
   });
 
   const updatedAt = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("pt-BR") : null;
+  const ultimaVerificacao = (item as any).ultimaVerificacao
+    ? new Date((item as any).ultimaVerificacao).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
-    <Card data-testid={`card-acompanhado-${item.id}`}>
+    <Card
+      data-testid={`card-acompanhado-${item.id}`}
+      className={temNovos ? "border-primary/40 bg-primary/5" : ""}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
@@ -304,6 +322,16 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
               </span>
               {item.classe && <Badge variant="default">{item.classe}</Badge>}
               <FonteBadge fonte={item.fonte} />
+              {temNovos && (
+                <Badge
+                  variant="destructive"
+                  data-testid={`badge-novos-andamentos-${item.id}`}
+                  className="gap-1"
+                >
+                  <Bell className="h-3 w-3" />
+                  {item.novosAndamentos} novo{(item.novosAndamentos ?? 0) > 1 ? "s" : ""}
+                </Badge>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
               <Building className="h-3 w-3 flex-shrink-0" />
@@ -311,6 +339,22 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {temNovos && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => marcarVistoMutation.mutate()}
+                disabled={marcarVistoMutation.isPending}
+                data-testid={`button-marcar-visto-${item.id}`}
+                title="Marcar como visto"
+              >
+                {marcarVistoMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCheck className="h-4 w-4 text-primary" />
+                )}
+              </Button>
+            )}
             <Button
               size="icon"
               variant="ghost"
@@ -351,8 +395,8 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
         )}
 
         {item.ultimoAndamento && (
-          <div className="flex items-start gap-1 p-2 bg-muted/40 rounded-md">
-            <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0 mt-0.5" />
+          <div className={`flex items-start gap-1 p-2 rounded-md ${temNovos ? "bg-primary/10 border border-primary/20" : "bg-muted/40"}`}>
+            <Clock className={`h-3 w-3 flex-shrink-0 mt-0.5 ${temNovos ? "text-primary" : "text-muted-foreground"}`} />
             <div className="flex-1 min-w-0">
               {item.dataUltimoAndamento && (
                 <span className="text-xs font-medium text-primary mr-2" data-testid={`text-data-andamento-${item.id}`}>
@@ -366,11 +410,16 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
           </div>
         )}
 
-        {updatedAt && (
-          <p className="text-xs text-muted-foreground">
-            Última atualização: {updatedAt}
-          </p>
-        )}
+        <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+          {updatedAt && (
+            <span>Atualizado: {updatedAt}</span>
+          )}
+          {ultimaVerificacao && (
+            <span data-testid={`text-ultima-verificacao-${item.id}`}>
+              Verificado: {ultimaVerificacao}
+            </span>
+          )}
+        </div>
 
         {editingAnotacao ? (
           <div className="space-y-2">
@@ -612,7 +661,7 @@ function SearchByParte({
             { value: "cnpj", label: "CNPJ/CPF", icon: Building },
             { value: "oab", label: "OAB", icon: Briefcase },
           ] as const).map(({ value, label, icon: Icon }) => (
-            <label key={value} className="flex items-center gap-2 cursor-pointer" data-testid={`radio-${value}`}>
+            <label key={value} className="flex items-center gap-2 cursor-pointer">
               <input
                 type="radio"
                 name="tipoBuscaParte"
@@ -738,6 +787,24 @@ export default function ProcessosAcompanhar() {
 
   const { data: acompanhados = [], isLoading: loadingAcompanhados } = useQuery<ProcessoAcompanhado[]>({
     queryKey: ["/api/acompanhamentos"],
+    refetchInterval: 60 * 1000, // poll a cada minuto para refletir o job de background
+  });
+
+  const totalNovosAndamentos = acompanhados.reduce((acc, i) => acc + (i.novosAndamentos ?? 0), 0);
+  const processosComNovos = acompanhados.filter((i) => (i.novosAndamentos ?? 0) > 0).length;
+
+  const marcarTodosVistosMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/acompanhamentos/marcar-todos-vistos", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/acompanhamentos"] });
+      toast({ title: "Todos os alertas foram marcados como vistos" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao marcar como vistos", variant: "destructive" });
+    },
   });
 
   const handleAtualizarTodos = async () => {
@@ -811,34 +878,64 @@ export default function ProcessosAcompanhar() {
       <div className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-lg font-semibold" data-testid="text-lista-titulo">
-              Processos Acompanhados
-            </h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg font-semibold" data-testid="text-lista-titulo">
+                Processos Acompanhados
+              </h2>
+              {totalNovosAndamentos > 0 && (
+                <Badge
+                  variant="destructive"
+                  data-testid="badge-total-novos"
+                  className="gap-1"
+                >
+                  <Bell className="h-3 w-3" />
+                  {totalNovosAndamentos} novo{totalNovosAndamentos > 1 ? "s" : ""} em {processosComNovos} processo{processosComNovos > 1 ? "s" : ""}
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">
               {acompanhados.length} processo(s) na lista de vigilância
             </p>
           </div>
-          {acompanhados.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAtualizarTodos}
-              disabled={atualizandoTodos}
-              data-testid="button-atualizar-todos"
-            >
-              {atualizandoTodos ? (
-                <>
+          <div className="flex items-center gap-2 flex-wrap">
+            {totalNovosAndamentos > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => marcarTodosVistosMutation.mutate()}
+                disabled={marcarTodosVistosMutation.isPending}
+                data-testid="button-marcar-todos-vistos"
+              >
+                {marcarTodosVistosMutation.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Atualizando {progressoAtualizacao}/{acompanhados.length}...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Atualizar Todos
-                </>
-              )}
-            </Button>
-          )}
+                ) : (
+                  <BellOff className="h-4 w-4 mr-2" />
+                )}
+                Marcar todos como vistos
+              </Button>
+            )}
+            {acompanhados.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAtualizarTodos}
+                disabled={atualizandoTodos}
+                data-testid="button-atualizar-todos"
+              >
+                {atualizandoTodos ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Atualizando {progressoAtualizacao}/{acompanhados.length}...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Atualizar Todos
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
         </div>
 
         {loadingAcompanhados ? (

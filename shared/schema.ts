@@ -333,6 +333,9 @@ export const processosAcompanhados = pgTable("processos_acompanhados", {
   dataUltimoAndamento: text("data_ultimo_andamento"),
   fonte: text("fonte"),
   anotacao: text("anotacao"),
+  // Campos de alerta de novos andamentos
+  novosAndamentos: integer("novos_andamentos").notNull().default(0),
+  ultimaVerificacao: timestamp("ultima_verificacao"),
   updatedAt: timestamp("updated_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });

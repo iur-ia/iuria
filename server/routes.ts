@@ -2040,6 +2040,49 @@ except Exception as e:
     }
   });
 
+  // Resumo de alertas: total de processos com novos andamentos não vistos
+  app.get("/api/acompanhamentos/alertas", async (req, res) => {
+    try {
+      const items = await storage.getProcessosAcompanhados();
+      const comNovos = items.filter((i) => (i.novosAndamentos ?? 0) > 0);
+      res.json({
+        totalNovos: comNovos.reduce((acc, i) => acc + (i.novosAndamentos ?? 0), 0),
+        processosComNovos: comNovos.map((i) => i.id),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao buscar alertas" });
+    }
+  });
+
+  // Marcar processo acompanhado como visto (zera contador)
+  app.post("/api/acompanhamentos/:id/marcar-visto", async (req, res) => {
+    try {
+      const existing = await storage.getProcessoAcompanhado(req.params.id);
+      if (!existing) return res.status(404).json({ error: "Não encontrado" });
+      const updated = await storage.updateProcessoAcompanhado(existing.id, {
+        novosAndamentos: 0,
+      });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro ao marcar como visto: " + error.message });
+    }
+  });
+
+  // Marcar todos como vistos
+  app.post("/api/acompanhamentos/marcar-todos-vistos", async (req, res) => {
+    try {
+      const items = await storage.getProcessosAcompanhados();
+      await Promise.all(
+        items
+          .filter((i) => (i.novosAndamentos ?? 0) > 0)
+          .map((i) => storage.updateProcessoAcompanhado(i.id, { novosAndamentos: 0 }))
+      );
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(500).json({ error: "Erro: " + error.message });
+    }
+  });
+
   app.post("/api/acompanhamentos", async (req, res) => {
     try {
       const body = req.body as Record<string, any>;
@@ -2689,7 +2732,70 @@ except Exception as e:
   // Inicializar seed de regras pré-configuradas e job de alertas
   seedRegrasPreconfigured().catch(console.error);
   iniciarJobAlertas();
+  iniciarJobVerificacaoAcompanhamentos();
 
   const httpServer = createServer(app);
   return httpServer;
+}
+
+// ==================== JOB: VERIFICAÇÃO PERIÓDICA DE ACOMPANHAMENTOS ====================
+// Roda a cada 2 horas, consulta cada processo acompanhado via orchestrator TypeScript
+// e incrementa novosAndamentos quando detecta um andamento diferente do armazenado.
+function iniciarJobVerificacaoAcompanhamentos() {
+  const INTERVALO_MS = 2 * 60 * 60 * 1000; // 2 horas
+
+  const verificar = async () => {
+    let items: import("@shared/schema").ProcessoAcompanhado[];
+    try {
+      items = await storage.getProcessosAcompanhados();
+    } catch {
+      return;
+    }
+    if (items.length === 0) return;
+
+    const { pesquisarProcesso } = await import("./scraping/orchestrator");
+
+    for (const item of items) {
+      try {
+        const resultado = await pesquisarProcesso(item.numeroProcesso);
+        const processo = resultado.data;
+        if (!processo) continue;
+
+        const movs: Array<{ data: string; descricao: string }> = (processo as any).movimentacoes ?? [];
+        const novoUltimoAndamento = movs[0]?.descricao ?? null;
+        const novaData = movs[0]?.data ?? null;
+
+        // Detecta mudança comparando o texto do último andamento
+        const mudou =
+          novoUltimoAndamento &&
+          novoUltimoAndamento !== item.ultimoAndamento;
+
+        const updateData: Record<string, any> = {
+          ultimaVerificacao: new Date(),
+          fonte: resultado.source ?? item.fonte,
+        };
+
+        if (mudou) {
+          updateData.ultimoAndamento = novoUltimoAndamento;
+          updateData.dataUltimoAndamento = novaData ?? item.dataUltimoAndamento;
+          updateData.novosAndamentos = (item.novosAndamentos ?? 0) + 1;
+          // Atualiza classe/assunto se o scraping trouxe
+          if ((processo as any).classe) updateData.classe = (processo as any).classe;
+          if ((processo as any).assunto) updateData.assunto = (processo as any).assunto;
+        }
+
+        await storage.updateProcessoAcompanhado(item.id, updateData as any);
+      } catch {
+        // Ignora falhas individuais — não interrompe o job
+      }
+      // Pausa entre consultas para não sobrecarregar os tribunais
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  };
+
+  // Aguarda 5 minutos antes da primeira execução (deixa o servidor estabilizar)
+  setTimeout(() => {
+    verificar().catch(console.error);
+    setInterval(() => verificar().catch(console.error), INTERVALO_MS);
+  }, 5 * 60 * 1000);
 }
