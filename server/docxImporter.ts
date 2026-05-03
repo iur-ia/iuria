@@ -44,90 +44,237 @@ function attrW(el: Element, name: string): string | null {
   );
 }
 
-function hasChild(el: Element, localName: string): boolean {
-  return firstChild(el, localName) !== null;
+function boolToggleVal(el: Element): boolean {
+  const v = attrW(el, "val");
+  return !(v === "0" || v === "false");
 }
 
-function runStyles(rPr: Element | null): { open: string; close: string; styleAttr: string } {
-  if (!rPr) return { open: "", close: "", styleAttr: "" };
-  const styles: string[] = [];
-  let open = "";
-  let close = "";
+type RunProps = {
+  fontFamily?: string;
+  fontSize?: string;
+  color?: string;
+  highlight?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  vertAlign?: "superscript" | "subscript";
+};
 
-  if (hasChild(rPr, "b")) { open += "<strong>"; close = "</strong>" + close; }
-  if (hasChild(rPr, "i")) { open += "<em>"; close = "</em>" + close; }
-  if (hasChild(rPr, "u")) { open += "<u>"; close = "</u>" + close; }
-  if (hasChild(rPr, "strike") || hasChild(rPr, "dstrike")) { open += "<s>"; close = "</s>" + close; }
+type ParaProps = {
+  align?: string;
+  firstLine?: string;
+  left?: string;
+  rPr?: RunProps;
+};
+
+function parseRPr(rPr: Element | null): RunProps {
+  const out: RunProps = {};
+  if (!rPr) return out;
+
+  const b = firstChild(rPr, "b");
+  if (b) out.bold = boolToggleVal(b);
+  const i = firstChild(rPr, "i");
+  if (i) out.italic = boolToggleVal(i);
+  const u = firstChild(rPr, "u");
+  if (u) {
+    const v = attrW(u, "val");
+    out.underline = !(v === "none" || v === "0" || v === "false");
+  }
+  const strike = firstChild(rPr, "strike") || firstChild(rPr, "dstrike");
+  if (strike) out.strike = boolToggleVal(strike);
   const vert = firstChild(rPr, "vertAlign");
   if (vert) {
     const v = attrW(vert, "val");
-    if (v === "superscript") { open += "<sup>"; close = "</sup>" + close; }
-    else if (v === "subscript") { open += "<sub>"; close = "</sub>" + close; }
+    if (v === "superscript" || v === "subscript") out.vertAlign = v;
   }
 
   const rFonts = firstChild(rPr, "rFonts");
   if (rFonts) {
-    const f = attrW(rFonts, "ascii") || attrW(rFonts, "hAnsi") || attrW(rFonts, "cs") || attrW(rFonts, "eastAsia");
-    if (f) styles.push(`font-family: '${f.replace(/'/g, "")}'`);
+    const f =
+      attrW(rFonts, "ascii") ||
+      attrW(rFonts, "hAnsi") ||
+      attrW(rFonts, "cs") ||
+      attrW(rFonts, "eastAsia");
+    if (f) out.fontFamily = f;
   }
   const sz = firstChild(rPr, "sz");
   if (sz) {
     const v = attrW(sz, "val");
-    if (v) styles.push(`font-size: ${parseInt(v, 10) / 2}pt`);
+    if (v) out.fontSize = `${parseInt(v, 10) / 2}pt`;
   }
   const color = firstChild(rPr, "color");
   if (color) {
     const v = attrW(color, "val");
-    if (v && v !== "auto" && /^[0-9a-fA-F]{6}$/.test(v)) styles.push(`color: #${v}`);
+    if (v && v !== "auto" && /^[0-9a-fA-F]{6}$/.test(v)) out.color = `#${v}`;
   }
   const high = firstChild(rPr, "highlight");
   if (high) {
     const v = attrW(high, "val");
-    if (v && v !== "none") styles.push(`background-color: ${v}`);
+    if (v && v !== "none") out.highlight = v;
   }
+  return out;
+}
+
+function parsePPr(pPr: Element | null): ParaProps {
+  const out: ParaProps = {};
+  if (!pPr) return out;
+  const jc = firstChild(pPr, "jc");
+  if (jc) {
+    const v = attrW(jc, "val");
+    if (v === "center") out.align = "center";
+    else if (v === "right" || v === "end") out.align = "right";
+    else if (v === "both" || v === "distribute") out.align = "justify";
+    else if (v === "left" || v === "start") out.align = "left";
+  }
+  const ind = firstChild(pPr, "ind");
+  if (ind) {
+    const fl = attrW(ind, "firstLine");
+    const left = attrW(ind, "left") || attrW(ind, "start");
+    if (fl) out.firstLine = fl;
+    if (left) out.left = left;
+  }
+  const innerRPr = firstChild(pPr, "rPr");
+  if (innerRPr) out.rPr = parseRPr(innerRPr);
+  return out;
+}
+
+function mergeRun(base: RunProps, top: RunProps): RunProps {
+  return { ...base, ...top };
+}
+
+function mergePara(base: ParaProps, top: ParaProps): ParaProps {
+  return {
+    align: top.align ?? base.align,
+    firstLine: top.firstLine ?? base.firstLine,
+    left: top.left ?? base.left,
+    rPr: mergeRun(base.rPr || {}, top.rPr || {}),
+  };
+}
+
+type StyleEntry = {
+  type: string;
+  basedOn?: string;
+  pPr: ParaProps;
+  rPr: RunProps;
+};
+
+interface StylesIndex {
+  defaultPara: ParaProps;
+  defaultRun: RunProps;
+  defaultParaStyleId?: string;
+  resolve(id: string): { pPr: ParaProps; rPr: RunProps };
+}
+
+const EMPTY_STYLES: StylesIndex = {
+  defaultPara: {},
+  defaultRun: {},
+  resolve: () => ({ pPr: {}, rPr: {} }),
+};
+
+function parseStylesXml(xml: string): StylesIndex {
+  const parser = new DOMParser({
+    errorHandler: { warning: () => {}, error: () => {}, fatalError: () => {} },
+  });
+  const doc = parser.parseFromString(xml, "text/xml");
+  const root = doc.documentElement;
+  if (!root) return EMPTY_STYLES;
+
+  let defaultPara: ParaProps = {};
+  let defaultRun: RunProps = {};
+  let defaultParaStyleId: string | undefined;
+  const styles = new Map<string, StyleEntry>();
+
+  const docDefaults = firstChild(root, "docDefaults");
+  if (docDefaults) {
+    const rPrDefault = firstChild(docDefaults, "rPrDefault");
+    if (rPrDefault) defaultRun = parseRPr(firstChild(rPrDefault, "rPr"));
+    const pPrDefault = firstChild(docDefaults, "pPrDefault");
+    if (pPrDefault) defaultPara = parsePPr(firstChild(pPrDefault, "pPr"));
+  }
+
+  for (const s of getChildren(root, "style")) {
+    const id = attrW(s, "styleId");
+    if (!id) continue;
+    const type = attrW(s, "type") || "";
+    const isDefault = attrW(s, "default") === "1";
+    const basedOnEl = firstChild(s, "basedOn");
+    const basedOn = basedOnEl ? attrW(basedOnEl, "val") || undefined : undefined;
+    const pPr = parsePPr(firstChild(s, "pPr"));
+    const rPr = parseRPr(firstChild(s, "rPr"));
+    styles.set(id, { type, basedOn, pPr, rPr });
+    if (type === "paragraph" && isDefault) defaultParaStyleId = id;
+  }
+
+  const cache = new Map<string, { pPr: ParaProps; rPr: RunProps }>();
+  const inFlight = new Set<string>();
+  function resolve(id: string): { pPr: ParaProps; rPr: RunProps } {
+    if (cache.has(id)) return cache.get(id)!;
+    if (inFlight.has(id)) return { pPr: {}, rPr: {} };
+    const entry = styles.get(id);
+    if (!entry) return { pPr: {}, rPr: {} };
+    inFlight.add(id);
+    let basePPr: ParaProps = {};
+    let baseRPr: RunProps = {};
+    if (entry.basedOn) {
+      const parent = resolve(entry.basedOn);
+      basePPr = parent.pPr;
+      baseRPr = parent.rPr;
+    }
+    const merged = {
+      pPr: mergePara(basePPr, entry.pPr),
+      rPr: mergeRun(baseRPr, entry.rPr),
+    };
+    inFlight.delete(id);
+    cache.set(id, merged);
+    return merged;
+  }
+
+  return { defaultPara, defaultRun, defaultParaStyleId, resolve };
+}
+
+function runPropsToCss(rp: RunProps): { open: string; close: string; styleAttr: string } {
+  const styles: string[] = [];
+  let open = "";
+  let close = "";
+
+  if (rp.bold) { open += "<strong>"; close = "</strong>" + close; }
+  if (rp.italic) { open += "<em>"; close = "</em>" + close; }
+  if (rp.underline) { open += "<u>"; close = "</u>" + close; }
+  if (rp.strike) { open += "<s>"; close = "</s>" + close; }
+  if (rp.vertAlign === "superscript") { open += "<sup>"; close = "</sup>" + close; }
+  else if (rp.vertAlign === "subscript") { open += "<sub>"; close = "</sub>" + close; }
+
+  if (rp.fontFamily) styles.push(`font-family: '${rp.fontFamily.replace(/'/g, "")}'`);
+  if (rp.fontSize) styles.push(`font-size: ${rp.fontSize}`);
+  if (rp.color) styles.push(`color: ${rp.color}`);
+  if (rp.highlight) styles.push(`background-color: ${rp.highlight}`);
 
   const styleAttr = styles.length ? ` style="${styles.join("; ")}"` : "";
   return { open, close, styleAttr };
 }
 
-function paragraphAlignStyle(pPr: Element | null): string {
-  if (!pPr) return "";
-  const jc = firstChild(pPr, "jc");
-  if (!jc) return "";
-  const v = attrW(jc, "val");
-  if (v === "center") return "text-align: center";
-  if (v === "right" || v === "end") return "text-align: right";
-  if (v === "both" || v === "distribute") return "text-align: justify";
-  if (v === "left" || v === "start") return "text-align: left";
-  return "";
-}
-
-function paragraphIndentStyle(pPr: Element | null): string {
-  if (!pPr) return "";
-  const ind = firstChild(pPr, "ind");
-  if (!ind) return "";
-  const firstLine = attrW(ind, "firstLine");
-  const left = attrW(ind, "left") || attrW(ind, "start");
+function paraPropsToStyleAttr(p: ParaProps): string {
   const styles: string[] = [];
-  if (firstLine) styles.push(`text-indent: ${(parseInt(firstLine, 10) / 1440).toFixed(2)}in`);
-  if (left) styles.push(`margin-left: ${(parseInt(left, 10) / 1440).toFixed(2)}in`);
-  return styles.join("; ");
+  if (p.align) styles.push(`text-align: ${p.align}`);
+  if (p.firstLine) styles.push(`text-indent: ${(parseInt(p.firstLine, 10) / 1440).toFixed(2)}in`);
+  if (p.left) styles.push(`margin-left: ${(parseInt(p.left, 10) / 1440).toFixed(2)}in`);
+  return styles.length ? ` style="${styles.join("; ")}"` : "";
 }
 
-function paragraphHeadingTag(pPr: Element | null): string | null {
-  if (!pPr) return null;
-  const ps = firstChild(pPr, "pStyle");
-  if (!ps) return null;
-  const v = (attrW(ps, "val") || "").toLowerCase();
+function paragraphHeadingTagFromStyleId(styleId: string | null | undefined): string | null {
+  if (!styleId) return null;
+  const v = styleId.toLowerCase();
   const m = v.match(/^heading(\d)$/) || v.match(/^t[íi]tulo\s*(\d)$/);
   if (m) return `h${Math.min(6, Math.max(1, parseInt(m[1], 10)))}`;
   if (v === "title") return "h1";
   return null;
 }
 
-function runToHtml(r: Element): string {
-  const rPr = firstChild(r, "rPr");
-  const { open, close, styleAttr } = runStyles(rPr);
+function runToHtml(r: Element, inheritedRun: RunProps): string {
+  const explicit = parseRPr(firstChild(r, "rPr"));
+  const merged = mergeRun(inheritedRun, explicit);
+  const { open, close, styleAttr } = runPropsToCss(merged);
   let inner = "";
   const nodes = r.childNodes;
   for (let i = 0; i < nodes.length; i++) {
@@ -148,27 +295,43 @@ function runToHtml(r: Element): string {
   return `${open}${inner}${close}`;
 }
 
-function paragraphToHtml(p: Element): string {
+function paragraphToHtml(p: Element, st: StylesIndex): string {
   const pPr = firstChild(p, "pPr");
-  const headingTag = paragraphHeadingTag(pPr);
-  const tag = headingTag || "p";
+  const explicitPara = parsePPr(pPr);
 
-  const styles: string[] = [];
-  const align = paragraphAlignStyle(pPr);
-  if (align) styles.push(align);
-  const ind = paragraphIndentStyle(pPr);
-  if (ind) styles.push(ind);
-  const styleAttr = styles.length ? ` style="${styles.join("; ")}"` : "";
+  const psEl = pPr ? firstChild(pPr, "pStyle") : null;
+  const pStyleId = psEl ? attrW(psEl, "val") : null;
+  const effectiveStyleId = pStyleId || st.defaultParaStyleId || null;
+
+  let inheritedPara: ParaProps = {
+    align: st.defaultPara.align,
+    firstLine: st.defaultPara.firstLine,
+    left: st.defaultPara.left,
+    rPr: mergeRun(st.defaultRun, st.defaultPara.rPr || {}),
+  };
+
+  if (effectiveStyleId) {
+    const resolved = st.resolve(effectiveStyleId);
+    inheritedPara = mergePara(inheritedPara, resolved.pPr);
+    inheritedPara.rPr = mergeRun(inheritedPara.rPr || {}, resolved.rPr);
+  }
+
+  const finalPara = mergePara(inheritedPara, explicitPara);
+  const inheritedRunForChildren: RunProps = finalPara.rPr || {};
+
+  const headingTag = paragraphHeadingTagFromStyleId(pStyleId);
+  const tag = headingTag || "p";
+  const styleAttr = paraPropsToStyleAttr(finalPara);
 
   let inner = "";
   const nodes = p.childNodes;
   for (let i = 0; i < nodes.length; i++) {
     const child = asElement(nodes[i]);
     if (!child) continue;
-    if (child.localName === "r") inner += runToHtml(child);
+    if (child.localName === "r") inner += runToHtml(child, inheritedRunForChildren);
     else if (child.localName === "hyperlink") {
       const runs = getChildren(child, "r");
-      for (const r of runs) inner += runToHtml(r);
+      for (const r of runs) inner += runToHtml(r, inheritedRunForChildren);
     }
   }
 
@@ -176,7 +339,7 @@ function paragraphToHtml(p: Element): string {
   return `<${tag}${styleAttr}>${inner}</${tag}>`;
 }
 
-function tableToHtml(tbl: Element): string {
+function tableToHtml(tbl: Element, st: StylesIndex): string {
   let html = `<table style="border-collapse: collapse; width: 100%">`;
   const rows = getChildren(tbl, "tr");
   for (const tr of rows) {
@@ -188,8 +351,8 @@ function tableToHtml(tbl: Element): string {
       for (let i = 0; i < nodes.length; i++) {
         const child = asElement(nodes[i]);
         if (!child) continue;
-        if (child.localName === "p") cellHtml += paragraphToHtml(child);
-        else if (child.localName === "tbl") cellHtml += tableToHtml(child);
+        if (child.localName === "p") cellHtml += paragraphToHtml(child, st);
+        else if (child.localName === "tbl") cellHtml += tableToHtml(child, st);
       }
       html += `<td style="border: 1px solid #ccc; padding: 4px; vertical-align: top">${cellHtml}</td>`;
     }
@@ -199,19 +362,19 @@ function tableToHtml(tbl: Element): string {
   return html;
 }
 
-function bodyOrRootToHtml(root: Element): string {
+function bodyOrRootToHtml(root: Element, st: StylesIndex): string {
   let html = "";
   const nodes = root.childNodes;
   for (let i = 0; i < nodes.length; i++) {
     const child = asElement(nodes[i]);
     if (!child) continue;
-    if (child.localName === "p") html += paragraphToHtml(child);
-    else if (child.localName === "tbl") html += tableToHtml(child);
+    if (child.localName === "p") html += paragraphToHtml(child, st);
+    else if (child.localName === "tbl") html += tableToHtml(child, st);
   }
   return html;
 }
 
-function xmlToHtml(xml: string): string {
+function xmlToHtml(xml: string, st: StylesIndex): string {
   const parser = new DOMParser({
     errorHandler: { warning: () => {}, error: () => {}, fatalError: () => {} },
   });
@@ -220,7 +383,7 @@ function xmlToHtml(xml: string): string {
   if (!docEl) return "";
   // For document.xml the meaningful content is inside <w:body>; for header/footer it's the root <w:hdr>/<w:ftr>.
   const body = firstChild(docEl, "body");
-  return bodyOrRootToHtml(body || docEl);
+  return bodyOrRootToHtml(body || docEl, st);
 }
 
 export interface DocxImportResult {
@@ -233,17 +396,17 @@ export function importDocxFile(filePath: string): DocxImportResult {
   const zip = new AdmZip(filePath);
   const entries = zip.getEntries();
 
-  let bodyHtml = "";
-  let headerHtml = "";
-  let footerHtml = "";
-
+  let stylesXml = "";
+  let documentXml = "";
   const headerXmls: string[] = [];
   const footerXmls: string[] = [];
 
   for (const e of entries) {
     const name = e.entryName;
     if (name === "word/document.xml") {
-      bodyHtml = xmlToHtml(e.getData().toString("utf-8"));
+      documentXml = e.getData().toString("utf-8");
+    } else if (name === "word/styles.xml") {
+      stylesXml = e.getData().toString("utf-8");
     } else if (/^word\/header\d*\.xml$/.test(name)) {
       headerXmls.push(e.getData().toString("utf-8"));
     } else if (/^word\/footer\d*\.xml$/.test(name)) {
@@ -251,13 +414,18 @@ export function importDocxFile(filePath: string): DocxImportResult {
     }
   }
 
-  // Use the first non-empty header/footer (geralmente o "default").
+  const stylesIndex = stylesXml ? parseStylesXml(stylesXml) : EMPTY_STYLES;
+
+  const bodyHtml = documentXml ? xmlToHtml(documentXml, stylesIndex) : "";
+
+  let headerHtml = "";
+  let footerHtml = "";
   for (const xml of headerXmls) {
-    const h = xmlToHtml(xml).trim();
+    const h = xmlToHtml(xml, stylesIndex).trim();
     if (h && h.replace(/<[^>]+>/g, "").trim()) { headerHtml = h; break; }
   }
   for (const xml of footerXmls) {
-    const f = xmlToHtml(xml).trim();
+    const f = xmlToHtml(xml, stylesIndex).trim();
     if (f && f.replace(/<[^>]+>/g, "").trim()) { footerHtml = f; break; }
   }
 
