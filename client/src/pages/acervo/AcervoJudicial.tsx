@@ -432,8 +432,25 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
       });
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Comunicação gerada com sucesso" });
+    onSuccess: async (comm: any) => {
+      toast({ title: "Comunicação gerada — baixando PDF..." });
+      // Trigger immediate PDF download after generation
+      try {
+        const pdfRes = await fetch(`/api/communications/${comm.id}/pdf`);
+        if (pdfRes.ok) {
+          const blob = await pdfRes.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          const filename = comm.numeroOficio
+            ? `oficio-${comm.numeroOficio.replace(/\//g, "-")}.pdf`
+            : `comunicacao-${comm.id.slice(0, 8)}.pdf`;
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+        }
+      } catch { /* PDF optional — communication already saved */ }
       onGenerated();
       onClose();
     },
