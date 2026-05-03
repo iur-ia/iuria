@@ -12,7 +12,7 @@ import {
   Scale, Search, Clock, FileText, Users, User, Building, ExternalLink,
   Plus, Trash2, ChevronRight, AlertCircle, CheckCircle2, Archive,
   RefreshCw, BookOpen, StickyNote, Filter, X, Mail, Eye, Printer,
-  Send, Edit, Hash,
+  Send, Edit, Hash, Download,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -544,6 +544,7 @@ function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoN
   const [showGerar, setShowGerar] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [commParaProtocolo, setCommParaProtocolo] = useState<CommResponse | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { data: comms = [], isLoading } = useQuery<CommResponse[]>({
     queryKey: ["/api/communications", acervoId],
@@ -552,6 +553,31 @@ function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoN
       return res.json();
     },
   });
+
+  const { data: equipeTab = [] } = useQuery<Equipe[]>({ queryKey: ["/api/equipe"] });
+  const equipeMap = Object.fromEntries(equipeTab.map((m) => [m.id, m.nome]));
+
+  const handleDownloadPdf = async (c: CommResponse) => {
+    setDownloadingId(c.id);
+    try {
+      const res = await fetch(`/api/communications/${c.id}/pdf`);
+      if (!res.ok) throw new Error("Falha ao gerar PDF");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = c.numeroOficio
+        ? `oficio-${String(c.numeroOficio).replace(/\//g, "-")}.pdf`
+        : `comunicacao-${c.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    } catch {
+      toast({ title: "Erro ao baixar PDF", variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/communications/${id}`); },
@@ -608,9 +634,21 @@ function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoN
                   </div>
                   <p className="text-sm font-medium truncate">Para: {c.destinatario}</p>
                   {c.assunto && <p className="text-xs text-muted-foreground">Assunto: {c.assunto}</p>}
-                  <p className="text-xs text-muted-foreground">
-                    {c.createdAt ? new Date(c.createdAt).toLocaleString("pt-BR") : ""}
-                  </p>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <p className="text-xs text-muted-foreground">
+                      {c.createdAt ? new Date(c.createdAt).toLocaleString("pt-BR") : ""}
+                    </p>
+                    {c.responsavelId && equipeMap[c.responsavelId] && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <User className="h-3 w-3" />{equipeMap[c.responsavelId]}
+                      </p>
+                    )}
+                    {c.pdfGeradoEm && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-green-600" />PDF gerado
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {c.htmlGerado && (
@@ -618,6 +656,15 @@ function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoN
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                  <Button
+                    size="icon" variant="ghost" className="h-7 w-7"
+                    onClick={() => handleDownloadPdf(c)}
+                    disabled={downloadingId === c.id}
+                    data-testid={`button-pdf-comm-${c.id}`}
+                    title="Baixar PDF"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
                   <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setCommParaProtocolo(c)} data-testid={`button-editar-comm-${c.id}`} title="Protocolo / Status">
                     <Edit className="h-3.5 w-3.5" />
                   </Button>
