@@ -514,6 +514,77 @@ export const insertTimesheetEntrySchema = createInsertSchema(timesheetEntries).o
 export type InsertTimesheetEntry = z.infer<typeof insertTimesheetEntrySchema>;
 export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
 
+// ==================== COMUNICAÇÕES — TEMPLATES ====================
+export const communicationTemplates = pgTable("communication_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  nome: text("nome").notNull(),
+  categoria: text("categoria").notNull(), // oficio | notificacao | carta | minuta | outro
+  descricao: text("descricao"),
+  corpo: text("corpo").notNull(), // HTML com {{placeholders}}
+  camposObrigatorios: text("campos_obrigatorios"), // JSON array de nomes de campos
+  ativo: boolean("ativo").notNull().default(true),
+  preConfigurada: boolean("pre_configurada").notNull().default(false),
+  usos: integer("usos").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCommunicationTemplateSchema = createInsertSchema(communicationTemplates).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCommunicationTemplate = z.infer<typeof insertCommunicationTemplateSchema>;
+export type CommunicationTemplate = typeof communicationTemplates.$inferSelect;
+
+// ==================== COMUNICAÇÕES — DOCUMENTOS GERADOS ====================
+export const communications = pgTable("communications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => communicationTemplates.id),
+  acervoId: varchar("acervo_id").references(() => acervoProcessos.id, { onDelete: "set null" }),
+  acervoNumero: text("acervo_numero"), // snapshot do número do processo
+  destinatario: text("destinatario").notNull(),
+  assunto: text("assunto"),
+  dadosPreenchidos: text("dados_preenchidos"), // JSON com valores dos campos
+  htmlGerado: text("html_gerado"), // HTML final renderizado
+  status: text("status").notNull().default("gerada"), // gerada | enviada | respondida | arquivada
+  protocolo: text("protocolo"), // número de protocolo / AR
+  responsavelId: varchar("responsavel_id").references(() => equipe.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertCommunicationSchema = createInsertSchema(communications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCommunication = z.infer<typeof insertCommunicationSchema>;
+export type Communication = typeof communications.$inferSelect;
+
+// ==================== CONFIGURAÇÃO DO ESCRITÓRIO ====================
+export const escritorioConfig = pgTable("escritorio_config", {
+  id: integer("id").primaryKey().default(1),
+  nome: text("nome"),
+  oab: text("oab"),
+  cnpj: text("cnpj"),
+  endereco: text("endereco"),
+  complemento: text("complemento"),
+  cidade: text("cidade"),
+  estado: text("estado"),
+  cep: text("cep"),
+  telefone: text("telefone"),
+  email: text("email"),
+  website: text("website"),
+  logoUrl: text("logo_url"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertEscritorioConfigSchema = createInsertSchema(escritorioConfig).omit({
+  updatedAt: true,
+});
+
+export type InsertEscritorioConfig = z.infer<typeof insertEscritorioConfigSchema>;
+export type EscritorioConfig = typeof escritorioConfig.$inferSelect;
+
 // ==================== ACERVO TRAMITACOES ====================
 export const acervoTramitacoes = pgTable("acervo_tramitacoes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

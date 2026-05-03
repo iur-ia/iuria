@@ -21,6 +21,7 @@ import Honorarios from "@/pages/financeiro/Honorarios";
 import TodosDocumentos from "@/pages/documentos/TodosDocumentos";
 import Peticoes from "@/pages/documentos/Peticoes";
 import Contratos from "@/pages/documentos/Contratos";
+import Oficios from "@/pages/documentos/Oficios";
 import ConsultaProcessual from "@/pages/ConsultaProcessual";
 import ProcessosAcompanhar from "@/pages/ProcessosAcompanhar";
 import PesquisaJuridica from "@/pages/pesquisa-juridica";
@@ -61,6 +62,7 @@ function Router() {
       <Route path="/financeiro" component={() => <div className="p-6 bg-[#f5f5f5] min-h-screen"><h1 className="text-2xl font-semibold">Financeiro</h1><p className="text-muted-foreground mt-2">Selecione uma opção no menu</p></div>} />
       <Route path="/documentos/peticoes" component={Peticoes} />
       <Route path="/documentos/contratos" component={Contratos} />
+      <Route path="/documentos/oficios" component={Oficios} />
       <Route path="/documentos" component={TodosDocumentos} />
       <Route path="/acervo/judicial" component={AcervoJudicial} />
       <Route path="/acervo/administrativo" component={ProcessoAdministrativo} />

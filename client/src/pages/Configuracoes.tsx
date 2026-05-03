@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Shield, CheckCircle, XCircle, AlertCircle, ExternalLink, Loader2,
   Key, Globe, RefreshCw, LogOut, Fingerprint, Wifi, WifiOff, Info,
-  Scale, Bell, Zap,
+  Scale, Bell, Zap, Building,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -68,6 +68,43 @@ export default function Configuracoes() {
   const { toast } = useToast();
 
   const queryClient = useQueryClient();
+
+  // ── Escritório Config ──
+  const { data: escritorioCfg, isLoading: loadingEscritorio } = useQuery<any>({
+    queryKey: ["/api/escritorio-config"],
+  });
+  const [escritorioForm, setEscritorioForm] = useState<Record<string, string>>({});
+  const [escritorioEditando, setEscritorioEditando] = useState(false);
+
+  const salvarEscritoriMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", "/api/escritorio-config", escritorioForm);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/escritorio-config"] });
+      setEscritorioEditando(false);
+      toast({ title: "Configurações do escritório salvas" });
+    },
+    onError: () => toast({ title: "Erro ao salvar configurações", variant: "destructive" }),
+  });
+
+  const iniciarEdicaoEscritorio = () => {
+    setEscritorioForm({
+      nome: escritorioCfg?.nome ?? "",
+      oab: escritorioCfg?.oab ?? "",
+      cnpj: escritorioCfg?.cnpj ?? "",
+      endereco: escritorioCfg?.endereco ?? "",
+      complemento: escritorioCfg?.complemento ?? "",
+      cidade: escritorioCfg?.cidade ?? "",
+      estado: escritorioCfg?.estado ?? "",
+      cep: escritorioCfg?.cep ?? "",
+      telefone: escritorioCfg?.telefone ?? "",
+      email: escritorioCfg?.email ?? "",
+      website: escritorioCfg?.website ?? "",
+    });
+    setEscritorioEditando(true);
+  };
 
   const [provedorSelecionado, setProvedorSelecionado] = useState<string>("");
   const [cpfCertificado, setCpfCertificado] = useState<string>("");
@@ -848,6 +885,104 @@ export default function Configuracoes() {
               Para alterar, acesse as configurações de Secrets do projeto.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* === CABEÇALHO DO ESCRITÓRIO === */}
+      <Card data-testid="card-escritorio-config">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building className="h-5 w-5" />
+            Cabeçalho do Escritório
+          </CardTitle>
+          <CardDescription>
+            Dados institucionais usados no cabeçalho de ofícios, notificações e demais comunicações geradas automaticamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loadingEscritorio ? (
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando...
+            </div>
+          ) : !escritorioEditando ? (
+            <div className="space-y-3">
+              {escritorioCfg?.nome ? (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                  <div><span className="text-muted-foreground">Nome:</span> <span className="font-medium">{escritorioCfg.nome}</span></div>
+                  <div><span className="text-muted-foreground">OAB:</span> <span className="font-medium">{escritorioCfg.oab ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">CNPJ:</span> <span className="font-medium">{escritorioCfg.cnpj ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Telefone:</span> <span className="font-medium">{escritorioCfg.telefone ?? "—"}</span></div>
+                  <div className="col-span-2"><span className="text-muted-foreground">Endereço:</span> <span className="font-medium">{[escritorioCfg.endereco, escritorioCfg.complemento, escritorioCfg.cidade, escritorioCfg.estado].filter(Boolean).join(", ") || "—"}</span></div>
+                  <div><span className="text-muted-foreground">E-mail:</span> <span className="font-medium">{escritorioCfg.email ?? "—"}</span></div>
+                  <div><span className="text-muted-foreground">Website:</span> <span className="font-medium">{escritorioCfg.website ?? "—"}</span></div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhuma informação cadastrada ainda.</p>
+              )}
+              <Button variant="outline" size="sm" onClick={iniciarEdicaoEscritorio} data-testid="button-editar-escritorio">
+                Editar informações
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 space-y-2">
+                  <Label>Nome do Escritório</Label>
+                  <Input data-testid="input-esc-nome" value={escritorioForm.nome ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, nome: e.target.value })} placeholder="Alves & Associados Advocacia" />
+                </div>
+                <div className="space-y-2">
+                  <Label>OAB</Label>
+                  <Input data-testid="input-esc-oab" value={escritorioForm.oab ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, oab: e.target.value })} placeholder="SP 12345-A" />
+                </div>
+                <div className="space-y-2">
+                  <Label>CNPJ</Label>
+                  <Input data-testid="input-esc-cnpj" value={escritorioForm.cnpj ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, cnpj: e.target.value })} placeholder="00.000.000/0001-00" />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label>Endereço (Rua, Nº)</Label>
+                  <Input data-testid="input-esc-endereco" value={escritorioForm.endereco ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, endereco: e.target.value })} placeholder="Av. Paulista, 1000" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Complemento / Sala</Label>
+                  <Input data-testid="input-esc-complemento" value={escritorioForm.complemento ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, complemento: e.target.value })} placeholder="Sala 501, 5º andar" />
+                </div>
+                <div className="space-y-2">
+                  <Label>CEP</Label>
+                  <Input data-testid="input-esc-cep" value={escritorioForm.cep ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, cep: e.target.value })} placeholder="01310-100" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cidade</Label>
+                  <Input data-testid="input-esc-cidade" value={escritorioForm.cidade ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, cidade: e.target.value })} placeholder="São Paulo" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado (UF)</Label>
+                  <Input data-testid="input-esc-estado" value={escritorioForm.estado ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, estado: e.target.value })} placeholder="SP" maxLength={2} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input data-testid="input-esc-telefone" value={escritorioForm.telefone ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, telefone: e.target.value })} placeholder="(11) 3000-0000" />
+                </div>
+                <div className="space-y-2">
+                  <Label>E-mail</Label>
+                  <Input data-testid="input-esc-email" type="email" value={escritorioForm.email ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, email: e.target.value })} placeholder="contato@escritorio.adv.br" />
+                </div>
+                <div className="col-span-2 space-y-2">
+                  <Label>Website</Label>
+                  <Input data-testid="input-esc-website" value={escritorioForm.website ?? ""} onChange={(e) => setEscritorioForm({ ...escritorioForm, website: e.target.value })} placeholder="https://escritorio.adv.br" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => salvarEscritoriMutation.mutate()} disabled={salvarEscritoriMutation.isPending} data-testid="button-salvar-escritorio">
+                  {salvarEscritoriMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+                  Salvar
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setEscritorioEditando(false)} data-testid="button-cancelar-escritorio">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

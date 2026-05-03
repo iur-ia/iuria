@@ -21,12 +21,15 @@ import {
   type DeadlineRule, type InsertDeadlineRule,
   type DeadlineAlert, type InsertDeadlineAlert,
   type TimesheetEntry, type InsertTimesheetEntry,
+  type CommunicationTemplate, type InsertCommunicationTemplate,
+  type Communication, type InsertCommunication,
+  type EscritorioConfig, type InsertEscritorioConfig,
   users, clientes, equipe, processos, atividades, documentos, 
   contasReceber, contasPagar, honorarios, templates,
   tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento,
   acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
   processosAcompanhados, deadlineRules, deadlineAlerts,
-  timesheetEntries,
+  timesheetEntries, communicationTemplates, communications, escritorioConfig,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, inArray, gte, sql } from "drizzle-orm";
@@ -174,6 +177,24 @@ export interface IStorage {
 
   // Atividades com prazos críticos
   getAtividadesPrazosCriticos(horasJanela: number): Promise<Atividade[]>;
+
+  // Communication Templates
+  getCommunicationTemplates(filters?: { ativo?: boolean; categoria?: string }): Promise<CommunicationTemplate[]>;
+  getCommunicationTemplate(id: string): Promise<CommunicationTemplate | undefined>;
+  createCommunicationTemplate(t: InsertCommunicationTemplate): Promise<CommunicationTemplate>;
+  updateCommunicationTemplate(id: string, t: Partial<InsertCommunicationTemplate>): Promise<CommunicationTemplate | undefined>;
+  deleteCommunicationTemplate(id: string): Promise<boolean>;
+
+  // Communications (generated docs)
+  getCommunications(filters?: { acervoId?: string; status?: string }): Promise<Communication[]>;
+  getCommunication(id: string): Promise<Communication | undefined>;
+  createCommunication(c: InsertCommunication): Promise<Communication>;
+  updateCommunication(id: string, c: Partial<InsertCommunication>): Promise<Communication | undefined>;
+  deleteCommunication(id: string): Promise<boolean>;
+
+  // Escritório Config
+  getEscritorioConfig(): Promise<EscritorioConfig | undefined>;
+  upsertEscritorioConfig(config: Partial<InsertEscritorioConfig>): Promise<EscritorioConfig>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -724,6 +745,85 @@ export class DatabaseStorage implements IStorage {
   async createDeadlineAlert(alert: InsertDeadlineAlert): Promise<DeadlineAlert> {
     const [created] = await db.insert(deadlineAlerts).values(alert).returning();
     return created;
+  }
+
+  // ==================== COMMUNICATION TEMPLATES ====================
+
+  async getCommunicationTemplates(filters?: { ativo?: boolean; categoria?: string }): Promise<CommunicationTemplate[]> {
+    let q = db.select().from(communicationTemplates).$dynamic();
+    if (filters?.ativo !== undefined) q = q.where(eq(communicationTemplates.ativo, filters.ativo));
+    if (filters?.categoria) q = q.where(eq(communicationTemplates.categoria, filters.categoria));
+    return q.orderBy(desc(communicationTemplates.preConfigurada), communicationTemplates.nome);
+  }
+
+  async getCommunicationTemplate(id: string): Promise<CommunicationTemplate | undefined> {
+    const [t] = await db.select().from(communicationTemplates).where(eq(communicationTemplates.id, id));
+    return t;
+  }
+
+  async createCommunicationTemplate(t: InsertCommunicationTemplate): Promise<CommunicationTemplate> {
+    const [created] = await db.insert(communicationTemplates).values(t).returning();
+    return created;
+  }
+
+  async updateCommunicationTemplate(id: string, t: Partial<InsertCommunicationTemplate>): Promise<CommunicationTemplate | undefined> {
+    const [updated] = await db.update(communicationTemplates).set(t).where(eq(communicationTemplates.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCommunicationTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(communicationTemplates).where(eq(communicationTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== COMMUNICATIONS ====================
+
+  async getCommunications(filters?: { acervoId?: string; status?: string }): Promise<Communication[]> {
+    let q = db.select().from(communications).$dynamic();
+    if (filters?.acervoId) q = q.where(eq(communications.acervoId, filters.acervoId));
+    if (filters?.status) q = q.where(eq(communications.status, filters.status));
+    return q.orderBy(desc(communications.createdAt));
+  }
+
+  async getCommunication(id: string): Promise<Communication | undefined> {
+    const [c] = await db.select().from(communications).where(eq(communications.id, id));
+    return c;
+  }
+
+  async createCommunication(c: InsertCommunication): Promise<Communication> {
+    const [created] = await db.insert(communications).values(c).returning();
+    return created;
+  }
+
+  async updateCommunication(id: string, c: Partial<InsertCommunication>): Promise<Communication | undefined> {
+    const [updated] = await db.update(communications).set(c).where(eq(communications.id, id)).returning();
+    return updated;
+  }
+
+  async deleteCommunication(id: string): Promise<boolean> {
+    const result = await db.delete(communications).where(eq(communications.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== ESCRITÓRIO CONFIG ====================
+
+  async getEscritorioConfig(): Promise<EscritorioConfig | undefined> {
+    const [config] = await db.select().from(escritorioConfig).where(eq(escritorioConfig.id, 1));
+    return config;
+  }
+
+  async upsertEscritorioConfig(config: Partial<InsertEscritorioConfig>): Promise<EscritorioConfig> {
+    const existing = await this.getEscritorioConfig();
+    if (existing) {
+      const [updated] = await db.update(escritorioConfig)
+        .set({ ...config, updatedAt: new Date() })
+        .where(eq(escritorioConfig.id, 1))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(escritorioConfig).values({ ...config, id: 1 }).returning();
+      return created;
+    }
   }
 
   // ==================== ATIVIDADES PRAZOS CRÍTICOS ====================

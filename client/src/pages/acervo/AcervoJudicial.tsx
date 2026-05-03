@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Scale, Search, Clock, FileText, Users, User, Building, ExternalLink,
   Plus, Trash2, ChevronRight, AlertCircle, CheckCircle2, Archive,
-  RefreshCw, BookOpen, StickyNote, Filter, X,
+  RefreshCw, BookOpen, StickyNote, Filter, X, Mail, Eye, Printer,
+  Send, Edit, Hash,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -320,6 +321,295 @@ function DocumentosTab({ acervoId }: { acervoId: string }) {
   );
 }
 
+const STATUS_COMM_COLORS: Record<string, string> = {
+  gerada: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  enviada: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  respondida: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  arquivada: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+};
+const STATUS_COMM_LABELS: Record<string, string> = {
+  gerada: "Gerada", enviada: "Enviada", respondida: "Respondida", arquivada: "Arquivada",
+};
+
+function PrintPreviewDialog({ html, onClose }: { html: string; onClose: () => void }) {
+  const handlePrint = () => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Comunicação</title></head><body>${html}</body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+        <DialogHeader><DialogTitle>Visualizar Comunicação</DialogTitle></DialogHeader>
+        <div className="flex-1 overflow-y-auto border rounded-md bg-white min-h-64">
+          <div dangerouslySetInnerHTML={{ __html: html }} />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Fechar</Button>
+          <Button onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-2" />
+            Imprimir / PDF
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProtocoloCommDialog({ comm, onClose }: { comm: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const [protocolo, setProtocolo] = useState(comm.protocolo ?? "");
+  const [status, setStatus] = useState(comm.status);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/communications/${comm.id}`, { protocolo, status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communications"] });
+      toast({ title: "Comunicação atualizada" });
+      onClose();
+    },
+    onError: () => toast({ title: "Erro ao atualizar", variant: "destructive" }),
+  });
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Atualizar Comunicação</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Protocolo / AR</Label>
+            <Input value={protocolo} onChange={(e) => setProtocolo(e.target.value)} placeholder="Número de protocolo" data-testid="input-protocolo-comm" />
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger data-testid="select-status-comm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(STATUS_COMM_LABELS).map(([v, l]) => (
+                  <SelectItem key={v} value={v}>{l}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending} data-testid="button-salvar-protocolo-comm">Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
+  acervoId: string; acervoNumero: string; onClose: () => void; onGenerated: () => void;
+}) {
+  const { toast } = useToast();
+  const [templateId, setTemplateId] = useState("");
+  const [destinatario, setDestinatario] = useState("");
+  const [assunto, setAssunto] = useState("");
+  const [responsavelId, setResponsavelId] = useState("");
+  const [campos, setCampos] = useState<Record<string, string>>({});
+
+  const { data: templates = [] } = useQuery<any[]>({ queryKey: ["/api/communication-templates"] });
+  const { data: equipe = [] } = useQuery<any[]>({ queryKey: ["/api/equipe"] });
+
+  const selectedTemplate = templates.find((t: any) => t.id === templateId);
+  const camposObrigatorios: string[] = (() => {
+    try { return selectedTemplate?.camposObrigatorios ? JSON.parse(selectedTemplate.camposObrigatorios) : []; }
+    catch { return []; }
+  })();
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/communications/generate", {
+        templateId, acervoId, destinatario, assunto: assunto || undefined,
+        dados: campos, responsavelId: responsavelId || undefined,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Comunicação gerada com sucesso" });
+      onGenerated();
+      onClose();
+    },
+    onError: () => toast({ title: "Erro ao gerar comunicação", variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Gerar Comunicação — {acervoNumero}</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div>
+            <Label>Template *</Label>
+            <Select value={templateId} onValueChange={setTemplateId}>
+              <SelectTrigger data-testid="select-template-comm"><SelectValue placeholder="Selecionar template..." /></SelectTrigger>
+              <SelectContent>
+                {templates.map((t: any) => (
+                  <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Destinatário *</Label>
+            <Input value={destinatario} onChange={(e) => setDestinatario(e.target.value)} placeholder="Nome do destinatário" data-testid="input-destinatario-comm" />
+          </div>
+          <div>
+            <Label>Assunto</Label>
+            <Input value={assunto} onChange={(e) => setAssunto(e.target.value)} placeholder="Assunto da comunicação" data-testid="input-assunto-comm" />
+          </div>
+          <div>
+            <Label>Advogado Responsável</Label>
+            <Select value={responsavelId} onValueChange={setResponsavelId}>
+              <SelectTrigger data-testid="select-resp-comm"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Nenhum</SelectItem>
+                {equipe.map((m: any) => (
+                  <SelectItem key={m.id} value={m.id}>{m.nome}{m.oab ? ` — OAB ${m.oab}` : ""}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {camposObrigatorios.length > 0 && (
+            <div className="space-y-3 pt-2 border-t">
+              <h4 className="text-sm font-medium">Campos do Template</h4>
+              {camposObrigatorios.map((campo) => (
+                <div key={campo}>
+                  <Label className="capitalize">{campo.replace(/_/g, " ")}</Label>
+                  {campo.includes("corpo") || campo.includes("pedido") || campo.includes("notificacao") ? (
+                    <Textarea
+                      data-testid={`input-campo-${campo}`}
+                      value={campos[campo] ?? ""}
+                      onChange={(e) => setCampos({ ...campos, [campo]: e.target.value })}
+                      placeholder={campo.replace(/_/g, " ")}
+                      className="resize-none" rows={3}
+                    />
+                  ) : (
+                    <Input
+                      data-testid={`input-campo-${campo}`}
+                      value={campos[campo] ?? ""}
+                      onChange={(e) => setCampos({ ...campos, [campo]: e.target.value })}
+                      placeholder={campo.replace(/_/g, " ")}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+          <Button onClick={() => generateMutation.mutate()} disabled={!templateId || !destinatario || generateMutation.isPending} data-testid="button-gerar-comm">
+            <Send className="h-4 w-4 mr-2" />
+            Gerar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoNumero: string }) {
+  const { toast } = useToast();
+  const [showGerar, setShowGerar] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [commParaProtocolo, setCommParaProtocolo] = useState<any | null>(null);
+
+  const { data: comms = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/communications", acervoId],
+    queryFn: async () => {
+      const res = await fetch(`/api/communications?acervoId=${acervoId}`);
+      return res.json();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/communications/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communications", acervoId] });
+      toast({ title: "Comunicação removida" });
+    },
+    onError: () => toast({ title: "Erro ao remover", variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      {previewHtml && <PrintPreviewDialog html={previewHtml} onClose={() => setPreviewHtml(null)} />}
+      {commParaProtocolo && <ProtocoloCommDialog comm={commParaProtocolo} onClose={() => setCommParaProtocolo(null)} />}
+      {showGerar && (
+        <GerarComDialog
+          acervoId={acervoId}
+          acervoNumero={acervoNumero}
+          onClose={() => setShowGerar(false)}
+          onGenerated={() => queryClient.invalidateQueries({ queryKey: ["/api/communications", acervoId] })}
+        />
+      )}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-muted-foreground">{comms.length} comunicação(ões)</h3>
+        <Button size="sm" variant="outline" onClick={() => setShowGerar(true)} data-testid="button-gerar-comunicacao">
+          <Plus className="h-4 w-4 mr-1" />
+          Gerar Comunicação
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+      ) : comms.length === 0 ? (
+        <div className="text-center py-10 text-muted-foreground border border-dashed rounded-md">
+          <Mail className="h-8 w-8 mx-auto mb-2 opacity-40" />
+          <p className="text-sm">Nenhuma comunicação gerada ainda</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {comms.map((c: any) => (
+            <div key={c.id} className="p-3 rounded-md border bg-muted/30" data-testid={`comm-item-${c.id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <Badge className={`text-xs ${STATUS_COMM_COLORS[c.status] ?? ""}`}>
+                      {STATUS_COMM_LABELS[c.status] ?? c.status}
+                    </Badge>
+                    {c.templateNome && <Badge variant="outline" className="text-xs">{c.templateNome}</Badge>}
+                    {c.protocolo && (
+                      <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                        <Hash className="h-3 w-3" />{c.protocolo}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium truncate">Para: {c.destinatario}</p>
+                  {c.assunto && <p className="text-xs text-muted-foreground">Assunto: {c.assunto}</p>}
+                  <p className="text-xs text-muted-foreground">
+                    {c.createdAt ? new Date(c.createdAt).toLocaleString("pt-BR") : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {c.htmlGerado && (
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setPreviewHtml(c.htmlGerado)} data-testid={`button-ver-comm-${c.id}`} title="Visualizar / Imprimir">
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setCommParaProtocolo(c)} data-testid={`button-editar-comm-${c.id}`} title="Protocolo / Status">
+                    <Edit className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => deleteMutation.mutate(c.id)} data-testid={`button-excluir-comm-${c.id}`} title="Excluir">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ObservacoesTab({ processo }: { processo: AcervoProcesso }) {
   const { toast } = useToast();
   const [editando, setEditando] = useState(false);
@@ -472,6 +762,10 @@ function ProcessoFicha({ processo, onClose }: { processo: AcervoProcesso; onClos
               <StickyNote className="h-4 w-4 mr-1" />
               Observações
             </TabsTrigger>
+            <TabsTrigger value="comunicacoes" data-testid="tab-comunicacoes">
+              <Mail className="h-4 w-4 mr-1" />
+              Comunicações
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="andamentos">
             <AndamentosTab acervoId={processo.id} />
@@ -481,6 +775,9 @@ function ProcessoFicha({ processo, onClose }: { processo: AcervoProcesso; onClos
           </TabsContent>
           <TabsContent value="observacoes">
             <ObservacoesTab processo={processo} />
+          </TabsContent>
+          <TabsContent value="comunicacoes">
+            <ComunicacoesTab acervoId={processo.id} acervoNumero={processo.numero} />
           </TabsContent>
         </Tabs>
       </div>

@@ -3033,6 +3033,267 @@ except Exception as e:
   iniciarJobAlertas();
   iniciarJobVerificacaoAcompanhamentos();
 
+  // ==================== COMUNICAÇÕES — PLACEHOLDER ENGINE ====================
+
+  function resolverPlaceholders(corpo: string, ctx: Record<string, string>): string {
+    return corpo.replace(/\{\{([^}]+)\}\}/g, (_, key) => {
+      const k = key.trim();
+      return ctx[k] ?? `{{${k}}}`;
+    });
+  }
+
+  function buildContexto(
+    dados: Record<string, string>,
+    escritorio: Record<string, string>,
+    processo: Record<string, string>,
+    cliente: Record<string, string>,
+    advogado: Record<string, string>
+  ): Record<string, string> {
+    const hoje = new Date();
+    const dataAtual = hoje.toLocaleDateString("pt-BR");
+    const meses = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+    const dataExtenso = `${hoje.getDate()} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+
+    return {
+      "escritorio.nome": escritorio.nome ?? "",
+      "escritorio.oab": escritorio.oab ?? "",
+      "escritorio.cnpj": escritorio.cnpj ?? "",
+      "escritorio.endereco": [escritorio.endereco, escritorio.complemento].filter(Boolean).join(", ") ?? "",
+      "escritorio.cidade": escritorio.cidade ?? "",
+      "escritorio.estado": escritorio.estado ?? "",
+      "escritorio.telefone": escritorio.telefone ?? "",
+      "escritorio.email": escritorio.email ?? "",
+      "escritorio.website": escritorio.website ?? "",
+      "processo.numero": processo.numero ?? "",
+      "processo.tribunal": processo.tribunal ?? "",
+      "processo.classe": processo.classe ?? "",
+      "processo.assunto": processo.assunto ?? "",
+      "processo.fase": processo.fase ?? "",
+      "cliente.nome": cliente.nome ?? "",
+      "cliente.cpfCnpj": cliente.cpfCnpj ?? "",
+      "cliente.email": cliente.email ?? "",
+      "cliente.telefone": cliente.telefone ?? "",
+      "advogado.nome": advogado.nome ?? "",
+      "advogado.oab": advogado.oab ?? "",
+      "data_atual": dataAtual,
+      "data_extenso": dataExtenso,
+      ...dados,
+    };
+  }
+
+  // ==================== ROTAS — ESCRITÓRIO CONFIG ====================
+
+  app.get("/api/escritorio-config", async (_req, res) => {
+    const config = await storage.getEscritorioConfig();
+    res.json(config ?? {});
+  });
+
+  app.put("/api/escritorio-config", async (req, res) => {
+    try {
+      const config = await storage.upsertEscritorioConfig(req.body);
+      res.json(config);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  // ==================== ROTAS — COMMUNICATION TEMPLATES ====================
+
+  app.get("/api/communication-templates", async (req, res) => {
+    const filters: any = {};
+    if (req.query.categoria) filters.categoria = req.query.categoria as string;
+    if (req.query.ativo !== undefined) filters.ativo = req.query.ativo === "true";
+    const templates = await storage.getCommunicationTemplates(filters);
+    res.json(templates);
+  });
+
+  app.get("/api/communication-templates/:id", async (req, res) => {
+    const t = await storage.getCommunicationTemplate(req.params.id);
+    if (!t) return res.status(404).json({ error: "Template não encontrado" });
+    res.json(t);
+  });
+
+  app.post("/api/communication-templates", async (req, res) => {
+    try {
+      const t = await storage.createCommunicationTemplate(req.body);
+      res.status(201).json(t);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/communication-templates/:id", async (req, res) => {
+    const t = await storage.updateCommunicationTemplate(req.params.id, req.body);
+    if (!t) return res.status(404).json({ error: "Template não encontrado" });
+    res.json(t);
+  });
+
+  app.delete("/api/communication-templates/:id", async (req, res) => {
+    const ok = await storage.deleteCommunicationTemplate(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Template não encontrado" });
+    res.json({ ok: true });
+  });
+
+  app.post("/api/communication-templates/:id/render", async (req, res) => {
+    const tmpl = await storage.getCommunicationTemplate(req.params.id);
+    if (!tmpl) return res.status(404).json({ error: "Template não encontrado" });
+
+    const { dados = {}, acervoId, responsavelId } = req.body as {
+      dados?: Record<string, string>;
+      acervoId?: string;
+      responsavelId?: string;
+    };
+
+    let processoCtx: Record<string, string> = {};
+    if (acervoId) {
+      const proc = await storage.getAcervoProcesso(acervoId);
+      if (proc) {
+        processoCtx = {
+          numero: proc.numero ?? "",
+          tribunal: proc.tribunal ?? "",
+          classe: proc.classe ?? "",
+          assunto: proc.assunto ?? "",
+          fase: proc.fase ?? "",
+        };
+      }
+    }
+
+    const cfg = await storage.getEscritorioConfig();
+    const escritorioCtx: Record<string, string> = {
+      nome: cfg?.nome ?? "",
+      oab: cfg?.oab ?? "",
+      cnpj: cfg?.cnpj ?? "",
+      endereco: cfg?.endereco ?? "",
+      complemento: cfg?.complemento ?? "",
+      cidade: cfg?.cidade ?? "",
+      estado: cfg?.estado ?? "",
+      telefone: cfg?.telefone ?? "",
+      email: cfg?.email ?? "",
+      website: cfg?.website ?? "",
+    };
+
+    let advogadoCtx: Record<string, string> = {};
+    if (responsavelId) {
+      const membro = await storage.getMembro(responsavelId);
+      if (membro) advogadoCtx = { nome: membro.nome ?? "", oab: membro.oab ?? "" };
+    }
+
+    const ctx = buildContexto(dados, escritorioCtx, processoCtx, {}, advogadoCtx);
+    const html = resolverPlaceholders(tmpl.corpo, ctx);
+    res.json({ html, ctx });
+  });
+
+  // ==================== ROTAS — COMMUNICATIONS ====================
+
+  app.get("/api/communications", async (req, res) => {
+    const filters: any = {};
+    if (req.query.acervoId) filters.acervoId = req.query.acervoId as string;
+    if (req.query.status) filters.status = req.query.status as string;
+    const comms = await storage.getCommunications(filters);
+    const enriched = await Promise.all(comms.map(async (c) => {
+      let templateNome: string | null = null;
+      if (c.templateId) {
+        const tmpl = await storage.getCommunicationTemplate(c.templateId);
+        templateNome = tmpl?.nome ?? null;
+      }
+      return { ...c, templateNome };
+    }));
+    res.json(enriched);
+  });
+
+  app.get("/api/communications/:id", async (req, res) => {
+    const c = await storage.getCommunication(req.params.id);
+    if (!c) return res.status(404).json({ error: "Comunicação não encontrada" });
+    res.json(c);
+  });
+
+  app.post("/api/communications/generate", async (req, res) => {
+    try {
+      const { templateId, acervoId, destinatario, assunto, dados = {}, responsavelId } = req.body as {
+        templateId: string; acervoId?: string; destinatario: string;
+        assunto?: string; dados?: Record<string, string>; responsavelId?: string;
+      };
+
+      if (!templateId || !destinatario) {
+        return res.status(400).json({ error: "templateId e destinatario são obrigatórios" });
+      }
+
+      const tmpl = await storage.getCommunicationTemplate(templateId);
+      if (!tmpl) return res.status(404).json({ error: "Template não encontrado" });
+
+      let processoCtx: Record<string, string> = {};
+      let acervoNumero: string | undefined;
+      if (acervoId) {
+        const proc = await storage.getAcervoProcesso(acervoId);
+        if (proc) {
+          acervoNumero = proc.numero;
+          processoCtx = {
+            numero: proc.numero ?? "",
+            tribunal: proc.tribunal ?? "",
+            classe: proc.classe ?? "",
+            assunto: proc.assunto ?? "",
+            fase: proc.fase ?? "",
+          };
+        }
+      }
+
+      const cfg = await storage.getEscritorioConfig();
+      const escritorioCtx: Record<string, string> = {
+        nome: cfg?.nome ?? "",
+        oab: cfg?.oab ?? "",
+        cnpj: cfg?.cnpj ?? "",
+        endereco: cfg?.endereco ?? "",
+        complemento: cfg?.complemento ?? "",
+        cidade: cfg?.cidade ?? "",
+        estado: cfg?.estado ?? "",
+        telefone: cfg?.telefone ?? "",
+        email: cfg?.email ?? "",
+        website: cfg?.website ?? "",
+      };
+
+      let advogadoCtx: Record<string, string> = {};
+      if (responsavelId) {
+        const membro = await storage.getMembro(responsavelId);
+        if (membro) advogadoCtx = { nome: membro.nome ?? "", oab: membro.oab ?? "" };
+      }
+
+      const dadosFull = { ...dados, destinatario, assunto: assunto ?? "" };
+      const ctx = buildContexto(dadosFull, escritorioCtx, processoCtx, {}, advogadoCtx);
+      const htmlGerado = resolverPlaceholders(tmpl.corpo, ctx);
+
+      await storage.updateCommunicationTemplate(templateId, { usos: (tmpl.usos ?? 0) + 1 });
+
+      const comm = await storage.createCommunication({
+        templateId,
+        acervoId: acervoId ?? null,
+        acervoNumero: acervoNumero ?? null,
+        destinatario,
+        assunto: assunto ?? null,
+        dadosPreenchidos: JSON.stringify(dados),
+        htmlGerado,
+        status: "gerada",
+        protocolo: null,
+        responsavelId: responsavelId ?? null,
+      });
+
+      res.status(201).json({ ...comm, templateNome: tmpl.nome });
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.patch("/api/communications/:id", async (req, res) => {
+    const c = await storage.updateCommunication(req.params.id, req.body);
+    if (!c) return res.status(404).json({ error: "Comunicação não encontrada" });
+    res.json(c);
+  });
+
+  app.delete("/api/communications/:id", async (req, res) => {
+    const ok = await storage.deleteCommunication(req.params.id);
+    if (!ok) return res.status(404).json({ error: "Comunicação não encontrada" });
+    res.json({ ok: true });
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
@@ -3135,4 +3396,5 @@ function iniciarJobVerificacaoAcompanhamentos() {
     verificar().catch(console.error);
     setInterval(() => verificar().catch(console.error), INTERVALO_MS);
   }, 5 * 60 * 1000);
+
 }

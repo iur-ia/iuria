@@ -79,6 +79,7 @@ const menuItems = [
       { title: "Todos os Documentos", href: "/documentos" },
       { title: "Petições", href: "/documentos/peticoes" },
       { title: "Contratos", href: "/documentos/contratos" },
+      { title: "Ofícios e Comunicações", href: "/documentos/oficios" },
     ],
   },
   {
