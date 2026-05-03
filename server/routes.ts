@@ -16,6 +16,53 @@ declare module "express-serve-static-core" {
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import sanitizeHtml from "sanitize-html";
+
+// Sanitização HTML estrita para conteúdo de petições (IA, import, export, acervo)
+function sanitizeLegalHtml(html: string): string {
+  if (!html) return "";
+  return sanitizeHtml(html, {
+    allowedTags: [
+      "h1","h2","h3","h4","h5","h6","p","br","hr","span","div",
+      "strong","b","em","i","u","s","sub","sup","small","mark",
+      "ul","ol","li","blockquote","pre","code",
+      "table","thead","tbody","tfoot","tr","th","td",
+      "a","img",
+    ],
+    allowedAttributes: {
+      "*": ["style","class","data-*"],
+      a: ["href","title","target","rel"],
+      img: ["src","alt","title","width","height"],
+      td: ["colspan","rowspan"],
+      th: ["colspan","rowspan"],
+    },
+    allowedSchemes: ["http","https","mailto","tel","data"],
+    allowedSchemesByTag: { img: ["http","https","data"] },
+    allowedStyles: {
+      "*": {
+        "color": [/.*/],
+        "background-color": [/.*/],
+        "text-align": [/^left$|^right$|^center$|^justify$/],
+        "font-family": [/.*/],
+        "font-size": [/.*/],
+        "font-weight": [/.*/],
+        "font-style": [/.*/],
+        "text-decoration": [/.*/],
+        "text-indent": [/.*/],
+        "margin": [/.*/], "margin-left": [/.*/], "margin-right": [/.*/], "margin-top": [/.*/], "margin-bottom": [/.*/],
+        "padding": [/.*/], "padding-left": [/.*/], "padding-right": [/.*/], "padding-top": [/.*/], "padding-bottom": [/.*/],
+        "width": [/.*/], "height": [/.*/],
+        "border": [/.*/], "border-collapse": [/.*/],
+      },
+    },
+    transformTags: {
+      a: (tag, attribs) => ({
+        tagName: "a",
+        attribs: { ...attribs, rel: "noopener noreferrer", target: attribs.target || "_blank" },
+      }),
+    },
+  });
+}
 import { 
   insertClienteSchema, insertEquipeSchema, insertProcessoSchema,
   insertAtividadeSchema, insertDocumentoSchema, insertContaReceberSchema,
@@ -25,6 +72,7 @@ import {
   insertAcervoDocumentoSchema, insertAcervoTramitacaoSchema,
   insertProcessoAcompanhadoSchema,
   insertDeadlineRuleSchema,
+  insertPeticaoRascunhoSchema,
 } from "@shared/schema";
 import { aplicarRegrasDeadline, seedRegrasPreconfigured, detectarEventoGatilho } from "./deadlineEngine";
 import { iniciarJobAlertas } from "./emailAlerts";
@@ -727,6 +775,293 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Erro ao excluir template" });
+    }
+  });
+
+  // Marcar template como padrão (toggle)
+  app.post("/api/templates/:id/padrao", async (req, res) => {
+    try {
+      const { isPadrao } = req.body as { isPadrao: boolean };
+      const t = await storage.setTemplatePadrao(req.params.id, !!isPadrao);
+      if (!t) return res.status(404).json({ error: "Template não encontrado" });
+      res.json(t);
+    } catch (error) {
+      res.status(500).json({ error: "Erro ao atualizar template" });
+    }
+  });
+
+  // Importar arquivo .docx / .html / .txt como template ou rascunho
+  app.post("/api/templates/import", upload.single("arquivo"), async (req: Request, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado" });
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      const allowed = [".docx", ".html", ".htm", ".txt"];
+      if (!allowed.includes(ext)) {
+        try { fs.unlinkSync(req.file.path); } catch {}
+        return res.status(415).json({ error: `Formato '${ext}' não suportado. Aceitos: ${allowed.join(", ")}` });
+      }
+
+      let html = "";
+      if (ext === ".docx") {
+        const mammoth = (await import("mammoth")).default;
+        const result = await mammoth.convertToHtml({ path: req.file.path });
+        html = result.value || "";
+      } else if (ext === ".html" || ext === ".htm") {
+        html = fs.readFileSync(req.file.path, "utf-8");
+      } else {
+        const txt = fs.readFileSync(req.file.path, "utf-8");
+        html = txt.split(/\r?\n\r?\n/).map(p => `<p>${p.replace(/\n/g, "<br/>")}</p>`).join("\n");
+      }
+
+      try { fs.unlinkSync(req.file.path); } catch {}
+
+      // Se vier ?asTemplate=1, persiste como Template; senão devolve apenas o html
+      if (req.query.asTemplate === "1") {
+        const nome = (req.body.nome as string) || req.file.originalname.replace(ext, "");
+        const categoria = (req.body.categoria as string) || "Importado";
+        const descricao = (req.body.descricao as string) || `Importado de ${req.file.originalname}`;
+        const safeHtml = sanitizeLegalHtml(html);
+        const created = await storage.createTemplate({
+          nome, categoria, descricao,
+          conteudo: safeHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 4000),
+          conteudoHtml: safeHtml,
+          headerHtml: null,
+          origem: "importado",
+          isPadrao: false,
+          usos: 0,
+        } as any);
+        return res.status(201).json({ template: created, html: safeHtml });
+      }
+
+      res.json({ html: sanitizeLegalHtml(html), fileName: req.file.originalname });
+    } catch (error: any) {
+      console.error("[templates/import]", error);
+      res.status(500).json({ error: error?.message || "Erro ao importar arquivo" });
+    }
+  });
+
+  // ==================== PETIÇÕES — RASCUNHOS ====================
+  app.get("/api/peticao-rascunhos", async (_req, res) => {
+    try { res.json(await storage.getPeticaoRascunhos()); }
+    catch { res.status(500).json({ error: "Erro ao buscar rascunhos" }); }
+  });
+
+  app.get("/api/peticao-rascunhos/:id", async (req, res) => {
+    try {
+      const r = await storage.getPeticaoRascunho(req.params.id);
+      if (!r) return res.status(404).json({ error: "Rascunho não encontrado" });
+      res.json(r);
+    } catch { res.status(500).json({ error: "Erro" }); }
+  });
+
+  app.post("/api/peticao-rascunhos", async (req, res) => {
+    try {
+      const data = insertPeticaoRascunhoSchema.parse(req.body);
+      const r = await storage.createPeticaoRascunho(data);
+      res.status(201).json(r);
+    } catch (e: any) { res.status(400).json({ error: e?.message || "Dados inválidos" }); }
+  });
+
+  app.patch("/api/peticao-rascunhos/:id", async (req, res) => {
+    try {
+      const r = await storage.updatePeticaoRascunho(req.params.id, req.body);
+      if (!r) return res.status(404).json({ error: "Rascunho não encontrado" });
+      res.json(r);
+    } catch { res.status(500).json({ error: "Erro" }); }
+  });
+
+  app.delete("/api/peticao-rascunhos/:id", async (req, res) => {
+    try {
+      const ok = await storage.deletePeticaoRascunho(req.params.id);
+      if (!ok) return res.status(404).json({ error: "Rascunho não encontrado" });
+      res.status(204).send();
+    } catch { res.status(500).json({ error: "Erro" }); }
+  });
+
+  // ==================== PETIÇÕES IA — CHAT ====================
+  app.post("/api/peticoes-ia/chat", async (req, res) => {
+    try {
+      const { instruction, contentHtml, selection, mode } = req.body as {
+        instruction: string;
+        contentHtml?: string;
+        selection?: string;
+        mode?: "gerar" | "editar" | "revisar";
+      };
+      if (!instruction || typeof instruction !== "string") {
+        return res.status(400).json({ error: "Instrução é obrigatória" });
+      }
+
+      const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(503).json({
+          error: "Chave de IA não configurada. Defina ANTHROPIC_API_KEY ou OPENAI_API_KEY nos secrets do projeto.",
+          hint: "missing_api_key",
+        });
+      }
+
+      const systemPrompt = [
+        "Você é um redator jurídico brasileiro sênior, especializado em peças processuais.",
+        "Sempre devolva HTML semântico (<h1>, <h2>, <p>, <strong>, <em>, <ul>, <ol>, <blockquote>) — sem <html>, <body> ou <script>.",
+        "Mantenha tom técnico, formal, citando fundamentos legais (CF/88, CPC, CLT, leis específicas) quando pertinente.",
+        "Nunca invente jurisprudência. Se não souber a citação exata, sinalize com [conferir].",
+        "Use parágrafos curtos e numerados quando apropriado. Não use markdown — apenas HTML.",
+      ].join(" ");
+
+      const userPrompt = (() => {
+        if (mode === "editar" && selection) {
+          return `Reescreva apenas o trecho selecionado do documento conforme a instrução.\n\nINSTRUÇÃO: ${instruction}\n\nTRECHO SELECIONADO (HTML):\n${selection}\n\nDocumento completo (contexto, não reescreva):\n${contentHtml || "(vazio)"}\n\nResponda apenas com o HTML do novo trecho, sem explicações.`;
+        }
+        if (mode === "revisar") {
+          return `Revise tecnicamente o documento abaixo conforme a instrução, mantendo a estrutura geral. Aprimore redação, fundamentação e clareza.\n\nINSTRUÇÃO: ${instruction}\n\nDOCUMENTO ATUAL (HTML):\n${contentHtml || "(vazio)"}\n\nResponda apenas com o HTML completo revisado.`;
+        }
+        return `Gere uma peça jurídica em HTML conforme a instrução.\n\nINSTRUÇÃO: ${instruction}\n\nDocumento atual (continue/integre se houver):\n${contentHtml || "(vazio)"}\n\nResponda apenas com o HTML completo.`;
+      })();
+
+      const tryAnthropic = async (): Promise<string> => {
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": process.env.ANTHROPIC_API_KEY!,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-latest",
+            max_tokens: 4096,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }],
+          }),
+        });
+        if (!r.ok) throw new Error(`Anthropic ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        const j = await r.json();
+        return j?.content?.[0]?.text || "";
+      };
+      const tryOpenAI = async (): Promise<string> => {
+        const r = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "authorization": `Bearer ${process.env.OPENAI_API_KEY!}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            max_tokens: 4096,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+          }),
+        });
+        if (!r.ok) throw new Error(`OpenAI ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        const j = await r.json();
+        return j?.choices?.[0]?.message?.content || "";
+      };
+
+      let resultHtml = "";
+      let provider = "";
+      const errors: string[] = [];
+      const order: ("anthropic" | "openai")[] = process.env.ANTHROPIC_API_KEY
+        ? ["anthropic", "openai"]
+        : ["openai", "anthropic"];
+
+      for (const p of order) {
+        if (p === "anthropic" && !process.env.ANTHROPIC_API_KEY) continue;
+        if (p === "openai" && !process.env.OPENAI_API_KEY) continue;
+        try {
+          resultHtml = p === "anthropic" ? await tryAnthropic() : await tryOpenAI();
+          provider = p;
+          break;
+        } catch (e: any) {
+          errors.push(`${p}: ${e.message}`);
+        }
+      }
+
+      if (!resultHtml) {
+        return res.status(502).json({ error: `Falha em todos os provedores. ${errors.join(" | ")}` });
+      }
+
+      // Remove fences ```html
+      resultHtml = resultHtml.replace(/^```html\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+
+      // Sanitização HTML estrita
+      resultHtml = sanitizeLegalHtml(resultHtml);
+
+      res.json({ html: resultHtml, provider, mode: mode || "gerar" });
+    } catch (error: any) {
+      console.error("[peticoes-ia/chat]", error);
+      res.status(500).json({ error: error?.message || "Erro na IA" });
+    }
+  });
+
+  // ==================== PETIÇÕES IA — EXPORT ====================
+  app.post("/api/peticoes-ia/export", async (req, res) => {
+    try {
+      const { html, format, titulo } = req.body as { html: string; format: "docx" | "pdf"; titulo?: string };
+      if (!html) return res.status(400).json({ error: "HTML é obrigatório" });
+      const safeTitle = (titulo || "peticao").replace(/[^a-zA-Z0-9._-]/g, "_");
+      const safeHtml = sanitizeLegalHtml(html);
+
+      const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+<style>
+body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.6; color: #000; }
+h1 { font-size: 16pt; text-align: center; margin: 1em 0; }
+h2 { font-size: 14pt; margin: 1em 0 0.5em; }
+h3 { font-size: 12pt; margin: 0.8em 0 0.4em; }
+p { text-align: justify; margin: 0.5em 0; text-indent: 2em; }
+blockquote { margin: 0.5em 2em; font-style: italic; }
+table { border-collapse: collapse; width: 100%; }
+td, th { border: 1px solid #444; padding: 4px 8px; }
+</style></head><body>${safeHtml}</body></html>`;
+
+      if (format === "docx") {
+        const htmlToDocx = (await import("html-to-docx")).default;
+        const buffer: any = await htmlToDocx(fullHtml, undefined, {
+          orientation: "portrait",
+          margins: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+        });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.docx"`);
+        return res.send(buffer);
+      }
+
+      if (format === "pdf") {
+        const htmlPdf: any = (await import("html-pdf-node")).default;
+        const file = { content: fullHtml };
+        const buffer = await htmlPdf.generatePdf(file, { format: "A4", margin: { top: "2.5cm", bottom: "2.5cm", left: "3cm", right: "2cm" } });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeTitle}.pdf"`);
+        return res.send(buffer);
+      }
+
+      return res.status(400).json({ error: "Formato inválido. Use 'docx' ou 'pdf'." });
+    } catch (error: any) {
+      console.error("[peticoes-ia/export]", error);
+      res.status(500).json({ error: error?.message || "Erro no export" });
+    }
+  });
+
+  // ==================== PETIÇÕES IA — SALVAR NO ACERVO ====================
+  app.post("/api/peticoes-ia/salvar-no-acervo", async (req, res) => {
+    try {
+      const { titulo, html, processoId } = req.body as {
+        titulo: string; html: string; processoId?: string;
+      };
+      if (!titulo || !html) return res.status(400).json({ error: "Título e conteúdo são obrigatórios" });
+      const safeHtml = sanitizeLegalHtml(html);
+
+      const doc = await storage.createDocumento({
+        nome: `${titulo}.html`,
+        tipo: "Petição",
+        tamanho: `${(safeHtml.length / 1024).toFixed(1)} KB`,
+        conteudoMarkdown: safeHtml,
+        extracaoStatus: "concluida",
+        versao: 1,
+        processoId: processoId || null,
+      } as any);
+      res.status(201).json(doc);
+    } catch (error: any) {
+      console.error("[peticoes-ia/salvar-no-acervo]", error);
+      res.status(500).json({ error: error?.message || "Erro ao salvar no acervo" });
     }
   });
 

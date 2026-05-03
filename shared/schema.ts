@@ -222,17 +222,44 @@ export const templates = pgTable("templates", {
   categoria: text("categoria").notNull(),
   descricao: text("descricao"),
   conteudo: text("conteudo"),
+  conteudoHtml: text("conteudo_html"),
+  headerHtml: text("header_html"),
+  origem: text("origem").notNull().default("manual"),
+  isPadrao: boolean("is_padrao").notNull().default(false),
   usos: integer("usos").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const insertTemplateSchema = createInsertSchema(templates).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 
 export type InsertTemplate = z.infer<typeof insertTemplateSchema>;
 export type Template = typeof templates.$inferSelect;
+
+// Petição rascunhos (drafts do editor)
+export const peticaoRascunhos = pgTable("peticao_rascunhos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  titulo: text("titulo").notNull().default("Sem título"),
+  conteudoHtml: text("conteudo_html").notNull().default(""),
+  templateId: varchar("template_id"),
+  processoId: varchar("processo_id"),
+  clienteId: varchar("cliente_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPeticaoRascunhoSchema = createInsertSchema(peticaoRascunhos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertPeticaoRascunho = z.infer<typeof insertPeticaoRascunhoSchema>;
+export type PeticaoRascunho = typeof peticaoRascunhos.$inferSelect;
 
 // Tribunais table - Registry of available courts for search
 export const tribunais = pgTable("tribunais", {

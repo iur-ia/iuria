@@ -1,28 +1,60 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import TextAlign from "@tiptap/extension-text-align";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Color } from "@tiptap/extension-color";
+import { Table, TableRow, TableCell, TableHeader } from "@tiptap/extension-table";
+import Placeholder from "@tiptap/extension-placeholder";
+import { FontFamily } from "@tiptap/extension-font-family";
 import {
-  FileText,
-  Brain,
-  Zap,
-  Eye,
-  ChevronRight,
-  ChevronLeft,
+  TextB,
+  TextItalic,
+  TextUnderline,
+  TextStrikethrough,
+  TextAlignLeft,
+  TextAlignCenter,
+  TextAlignRight,
+  TextAlignJustify,
+  ListBullets,
+  ListNumbers,
+  Quotes,
+  Table as TableIcon,
+  ArrowCounterClockwise,
+  ArrowClockwise,
+  TextHOne,
+  TextHTwo,
+  TextHThree,
+  Plus,
+  UploadSimple,
+  Star,
+  Trash,
+  FloppyDisk,
+  FilePdf,
+  FileDoc,
+  PaperPlaneTilt,
+  Sparkle,
+  Archive,
+  CaretDown,
+  Pencil,
+  MagicWand,
+  CircleNotch,
+  Copy as CopyIcon,
   Check,
-  Download,
-  Copy,
-  Edit,
-  Swords,
-  BookOpen,
-  Shield,
-  Scale,
-  AlertTriangle,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+} from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -30,616 +62,849 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { Template, PeticaoRascunho } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
-// --- Constantes ---
-
-const TIPOS_PECA = [
-  "Peticao Inicial",
-  "Contestacao",
-  "Recurso de Apelacao",
-  "Recurso Especial",
-  "Recurso Extraordinario",
-  "Agravo de Instrumento",
-  "Embargos de Declaracao",
-  "Mandado de Seguranca",
-  "Habeas Corpus",
-  "Manifestacao",
-  "Parecer",
-  "Contrarrazoes",
-];
-
-const INSTANCIAS = [
-  "1a Instancia",
-  "2a Instancia (TJ/TRF)",
-  "Tribunal Superior (STJ)",
-  "Supremo Tribunal Federal",
-  "Juizado Especial",
-  "Turma Recursal",
-];
-
-const AREAS_DIREITO = [
-  "Civel",
+const CATEGORIAS = [
+  "Cível",
   "Trabalhista",
   "Penal",
-  "Tributario",
+  "Tributário",
   "Administrativo",
-  "Constitucional",
-  "Previdenciario",
-  "Ambiental",
-  "Consumidor",
   "Empresarial",
-  "Familia e Sucessoes",
-  "Eleitoral",
+  "Família",
+  "Recursos",
+  "Importado",
+  "Outro",
 ];
 
-const FASES_GERACAO = [
-  "Estruturacao",
-  "Fatos",
-  "Direito",
-  "Pedidos",
-  "Red Team",
-  "Verificacao",
-  "Formatacao",
+const QUICK_ACTIONS = [
+  { label: "Gerar petição inicial", prompt: "Gere uma petição inicial completa com endereçamento, qualificação genérica das partes, fatos, fundamentação jurídica, pedidos e fechamento." },
+  { label: "Revisar fundamentação", prompt: "Revise a fundamentação jurídica do documento, fortalecendo a argumentação e adicionando referências legais quando pertinente." },
+  { label: "Reforçar argumentos", prompt: "Reforce os argumentos do documento atual com fundamentação doutrinária e jurisprudencial brasileira." },
+  { label: "Gerar contestação", prompt: "Gere uma contestação completa, refutando a inicial em preliminares e mérito." },
+  { label: "Pedido de tutela de urgência", prompt: "Adicione um capítulo de pedido de tutela provisória de urgência, com demonstração de probabilidade do direito e perigo na demora." },
+  { label: "Resumir documento", prompt: "Faça um resumo executivo do documento, em até 5 parágrafos." },
 ];
 
-// --- Seed data for Conselho resumido (Etapa 2) ---
-const SEED_CONSELHO_RESUMO = [
-  {
-    nome: "Min. Barroso",
-    estilo: "Principiologico",
-    corBadge: "bg-amber-500 text-white",
-    resumo:
-      "Fundamentar em principios constitucionais e direitos fundamentais. Articular proporcionalidade e vedacao ao retrocesso. Incluir dialogo com Corte IDH.",
-  },
-  {
-    nome: "Min. Gilmar Mendes",
-    estilo: "Tecnico-Processual",
-    corBadge: "bg-blue-600 text-white",
-    resumo:
-      "Assegurar prequestionamento e repercussao geral. Apresentar evolucao legislativa. Requerer modulacao de efeitos com parametros claros.",
-  },
-  {
-    nome: "Des. Streck",
-    estilo: "Advogado do Diabo",
-    corBadge: "bg-red-600 text-white",
-    resumo:
-      "Riscos: reserva do possivel e natureza infraconstitucional. Necessario distinguishing expresso. Prever argumentacao subsidiaria.",
-  },
-  {
-    nome: "Min. Celso de Mello",
-    estilo: "Revisor Critico",
-    corBadge: "bg-emerald-600 text-white",
-    resumo:
-      "Convergencia: materia constitucional confirmada. Estrutura recomendada: admissibilidade + merito principiologico + distinguishing + pedido com tutela.",
-  },
-];
-
-// --- Seed data for Preview (Etapa 4) ---
-const SEED_PREVIEW = `EXCELENTISSIMO SENHOR DOUTOR JUIZ DE DIREITO DA ___ VARA CIVEL DA COMARCA DE ___
-
-[VERDE] Qualificacao completa das partes conforme art. 319, II, CPC
-
-JOAO DA SILVA SANTOS, brasileiro, casado, empresario, inscrito no CPF sob o no 000.000.000-00, residente e domiciliado na Rua das Flores, no 123, Centro, Cidade/UF, CEP 00000-000, por seu advogado que esta subscreve (procuracao em anexo), vem, respeitosamente, a presenca de Vossa Excelencia, com fundamento nos arts. 319 e seguintes do Codigo de Processo Civil, propor a presente
-
-ACAO DE OBRIGACAO DE FAZER COM PEDIDO DE TUTELA PROVISORIA DE URGENCIA
-
-em face de EMPRESA BETA LTDA., pessoa juridica de direito privado, inscrita no CNPJ sob o no 00.000.000/0001-00, com sede na Av. Principal, no 456, Bairro Industrial, Cidade/UF, CEP 00000-000, pelos fatos e fundamentos a seguir expostos.
-
-I - DOS FATOS
-
-[VERDE] Narrativa fatica completa e cronologica
-
-1. O Autor celebrou com a Re, em 15 de marco de 2024, contrato de prestacao de servicos de consultoria empresarial, pelo prazo de 12 (doze) meses, mediante remuneracao mensal de R$ 15.000,00 (quinze mil reais).
-
-2. O referido contrato preve, em sua clausula 5a, a obrigacao da Re de fornecer ao Autor acesso irrestrito a plataforma digital de gestao, ferramenta indispensavel para a execucao dos servicos contratados.
-
-3. Ocorre que, a partir de 10 de janeiro de 2025, a Re, de forma unilateral e sem qualquer justificativa, suspendeu o acesso do Autor a referida plataforma, inviabilizando a continuidade da prestacao dos servicos.
-
-[AMARELO] Verificar se ha notificacao extrajudicial comprovando a mora
-
-4. O Autor notificou extrajudicialmente a Re em 20 de janeiro de 2025, concedendo o prazo de 15 (quinze) dias para restabelecimento do acesso, sem que houvesse qualquer resposta.
-
-II - DO DIREITO
-
-[VERDE] Fundamentacao juridica adequada
-
-5. O Codigo Civil, em seu art. 421, consagra o principio da funcao social do contrato, que impoe as partes o dever de lealdade e cooperacao na execucao das obrigacoes avencadas.
-
-6. A conduta da Re configura inequivoco inadimplemento contratual (art. 389, CC), gerando ao Autor o direito de exigir o cumprimento forcado da obrigacao, nos termos do art. 497 do CPC.
-
-7. Ademais, a suspensao unilateral e injustificada do acesso a plataforma viola o principio da boa-fe objetiva (art. 422, CC), configurando abuso de direito passivel de reparacao (art. 187, CC).
-
-III - DA TUTELA PROVISORIA DE URGENCIA
-
-[VERDE] Requisitos do art. 300 CPC preenchidos
-
-8. Estao presentes os requisitos do art. 300 do CPC. A probabilidade do direito decorre da existencia de contrato valido com obrigacao expressa. O perigo de dano resulta da impossibilidade de prestacao dos servicos contratados, gerando prejuizos financeiros e reputacionais continuos ao Autor.
-
-IV - DOS PEDIDOS
-
-[VERDE] Pedidos especificos e bem formulados
-
-Ante o exposto, requer:
-
-a) A concessao de tutela provisoria de urgencia para determinar a imediata reativacao do acesso do Autor a plataforma digital, sob pena de multa diaria de R$ 1.000,00;
-
-b) A citacao da Re para contestar a presente acao;
-
-c) A procedencia dos pedidos para condenar a Re ao cumprimento da obrigacao de fazer consistente na manutencao do acesso a plataforma pelo prazo contratual remanescente;
-
-d) A condenacao da Re ao pagamento de indenizacao por danos materiais e morais, a serem apurados em liquidacao de sentenca;
-
-e) A condenacao da Re ao pagamento das custas processuais e honorarios advocaticios.
-
-Da-se a causa o valor de R$ 180.000,00 (cento e oitenta mil reais).
-
-Nestes termos, pede deferimento.
-
-Cidade/UF, ___ de ___ de 2025.
-
-___________________________
-Advogado
-OAB/___ no ___`;
-
-// --- Componente Principal ---
+type ChatMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  mode?: "gerar" | "editar" | "revisar";
+  ts: number;
+};
 
 export default function PeticoesIA() {
-  const [etapa, setEtapa] = useState(1);
+  const { toast } = useToast();
 
-  // Etapa 1 - Intake
-  const [tipo, setTipo] = useState("");
-  const [instancia, setInstancia] = useState("");
-  const [area, setArea] = useState("");
-  const [cliente, setCliente] = useState("");
-  const [fatos, setFatos] = useState("");
-  const [pedido, setPedido] = useState("");
-  const [tom, setTom] = useState<"combativo" | "reflexivo">("combativo");
-  const [tutela, setTutela] = useState(false);
+  // Editor state
+  const [titulo, setTitulo] = useState("Nova Petição");
+  const [rascunhoId, setRascunhoId] = useState<string | null>(null);
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({}),
+      TextStyle,
+      Color,
+      FontFamily,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      Placeholder.configure({
+        placeholder: "Comece a redigir, escolha um template à esquerda ou peça à IA…",
+      }),
+    ],
+    content: "",
+    editorProps: {
+      attributes: {
+        class:
+          "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[60vh] font-serif text-[15px] leading-[1.75]",
+      },
+    },
+  });
 
-  // Etapa 3 - Progress
-  const [faseAtual, setFaseAtual] = useState(0);
-  const [progressValue, setProgressValue] = useState(0);
-  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Templates query
+  const { data: templates = [] } = useQuery<Template[]>({ queryKey: ["/api/templates"] });
+  const { data: rascunhos = [] } = useQuery<PeticaoRascunho[]>({ queryKey: ["/api/peticao-rascunhos"] });
 
-  // Etapa 4 - Preview
-  const [copiadoMsg, setCopiadoMsg] = useState(false);
-
-  const canProceed =
-    etapa === 1 ? tipo && instancia && area && fatos.trim() && pedido.trim() : true;
-
-  const iniciarGeracao = () => {
-    setEtapa(3);
-    setFaseAtual(0);
-    setProgressValue(0);
-
-    let fase = 0;
-    let prog = 0;
-
-    progressInterval.current = setInterval(() => {
-      prog += 2;
-      if (prog >= 100 && fase < FASES_GERACAO.length - 1) {
-        fase += 1;
-        prog = 0;
-      } else if (prog >= 100 && fase === FASES_GERACAO.length - 1) {
-        if (progressInterval.current) clearInterval(progressInterval.current);
-        setEtapa(4);
-        return;
-      }
-      setFaseAtual(fase);
-      setProgressValue(prog);
-    }, 80);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (progressInterval.current) clearInterval(progressInterval.current);
-    };
-  }, []);
-
-  const handleCopiar = () => {
-    navigator.clipboard.writeText(SEED_PREVIEW).then(() => {
-      setCopiadoMsg(true);
-      setTimeout(() => setCopiadoMsg(false), 2000);
+  // Filtros painel templates
+  const [filtroCat, setFiltroCat] = useState<string>("todas");
+  const [buscaTpl, setBuscaTpl] = useState("");
+  const templatesFiltrados = useMemo(() => {
+    return templates.filter((t) => {
+      if (filtroCat !== "todas" && t.categoria !== filtroCat) return false;
+      if (buscaTpl && !t.nome.toLowerCase().includes(buscaTpl.toLowerCase())) return false;
+      return true;
     });
+  }, [templates, filtroCat, buscaTpl]);
+
+  const templatesPadrao = useMemo(() => templates.filter((t) => t.isPadrao), [templates]);
+
+  // Carrega template padrão automaticamente uma vez
+  useEffect(() => {
+    if (!editor) return;
+    if (rascunhoId) return;
+    if (editor.getHTML() && editor.getHTML() !== "<p></p>") return;
+    if (templatesPadrao.length > 0) {
+      const html = templatesPadrao[0].conteudoHtml || templatesPadrao[0].conteudo || "";
+      if (html) editor.commands.setContent(html);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templatesPadrao.length, editor]);
+
+  // Chat state
+  const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [chatMode, setChatMode] = useState<"gerar" | "editar" | "revisar">("gerar");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chat.length]);
+
+  const chatMutation = useMutation({
+    mutationFn: async (payload: { instruction: string; mode: typeof chatMode; selection?: string }) => {
+      const res = await apiRequest("POST", "/api/peticoes-ia/chat", {
+        instruction: payload.instruction,
+        contentHtml: editor?.getHTML() || "",
+        selection: payload.selection,
+        mode: payload.mode,
+      });
+      return res.json();
+    },
+    onSuccess: (data: { html: string; mode: string }) => {
+      if (!editor) return;
+      if (data.mode === "editar") {
+        // substitui a seleção atual (ou no fim se não houver)
+        const { from, to } = editor.state.selection;
+        if (from !== to) {
+          editor.chain().focus().deleteSelection().insertContent(data.html).run();
+        } else {
+          editor.chain().focus("end").insertContent(data.html).run();
+        }
+      } else if (data.mode === "revisar") {
+        editor.commands.setContent(data.html);
+      } else {
+        // gerar — se editor está vazio, substitui; senão append
+        const cur = editor.getHTML();
+        if (!cur || cur === "<p></p>") {
+          editor.commands.setContent(data.html);
+        } else {
+          editor.chain().focus("end").insertContent(data.html).run();
+        }
+      }
+      setChat((prev) => [...prev, { role: "assistant", content: "Pronto. Aplicado ao documento.", mode: data.mode as any, ts: Date.now() }]);
+    },
+    onError: (err: any) => {
+      const msg = err?.message || "Erro na IA";
+      setChat((prev) => [...prev, { role: "system", content: msg, ts: Date.now() }]);
+      toast({ title: "IA indisponível", description: msg, variant: "destructive" });
+    },
+  });
+
+  const sendChat = (instruction: string) => {
+    if (!instruction.trim()) return;
+    const selection = (() => {
+      if (!editor || chatMode !== "editar") return undefined;
+      const { from, to } = editor.state.selection;
+      if (from === to) return undefined;
+      return editor.state.doc.cut(from, to).textContent;
+    })();
+    setChat((prev) => [...prev, { role: "user", content: instruction, mode: chatMode, ts: Date.now() }]);
+    setInput("");
+    chatMutation.mutate({ instruction, mode: chatMode, selection });
   };
 
-  const etapas = [
-    { num: 1, label: "Intake", icon: FileText },
-    { num: 2, label: "Conselho", icon: Brain },
-    { num: 3, label: "Geracao", icon: Zap },
-    { num: 4, label: "Preview", icon: Eye },
-  ];
+  // Templates mutations
+  const deleteTpl = useMutation({
+    mutationFn: (id: string) => apiRequest("DELETE", `/api/templates/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/templates"] }),
+  });
+  const setPadraoTpl = useMutation({
+    mutationFn: ({ id, isPadrao }: { id: string; isPadrao: boolean }) =>
+      apiRequest("POST", `/api/templates/${id}/padrao`, { isPadrao }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/templates"] }),
+  });
+
+  const loadTemplate = (t: Template) => {
+    if (!editor) return;
+    const html = t.conteudoHtml || (t.conteudo ? `<p>${t.conteudo}</p>` : "");
+    editor.commands.setContent(html);
+    setTitulo(t.nome);
+    toast({ title: "Template carregado", description: t.nome });
+    apiRequest("PATCH", `/api/templates/${t.id}`, { usos: (t.usos || 0) + 1 }).catch(() => {});
+  };
+
+  // ===== Novo template dialog =====
+  const [tplDialogOpen, setTplDialogOpen] = useState(false);
+  const [novoTpl, setNovoTpl] = useState({ nome: "", categoria: "Cível", descricao: "" });
+  const createTplMut = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/templates", {
+        nome: novoTpl.nome,
+        categoria: novoTpl.categoria,
+        descricao: novoTpl.descricao,
+        conteudoHtml: editor?.getHTML() || "",
+        conteudo: editor?.getText().slice(0, 4000) || "",
+        origem: "manual",
+        isPadrao: false,
+        usos: 0,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      setTplDialogOpen(false);
+      setNovoTpl({ nome: "", categoria: "Cível", descricao: "" });
+      toast({ title: "Template criado", description: "Salvo a partir do documento atual." });
+    },
+  });
+
+  // ===== Import =====
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const onImport = async (file: File, asTemplate: boolean) => {
+    const fd = new FormData();
+    fd.append("arquivo", file);
+    if (asTemplate) {
+      fd.append("nome", file.name.replace(/\.[^.]+$/, ""));
+      fd.append("categoria", "Importado");
+    }
+    const res = await fetch(`/api/templates/import${asTemplate ? "?asTemplate=1" : ""}`, {
+      method: "POST",
+      body: fd,
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Falha ao importar", description: err.error || "Erro", variant: "destructive" });
+      return;
+    }
+    const data = await res.json();
+    if (asTemplate) {
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
+      toast({ title: "Template importado", description: file.name });
+    } else if (editor && data.html) {
+      editor.commands.setContent(data.html);
+      setTitulo(file.name.replace(/\.[^.]+$/, ""));
+      toast({ title: "Documento importado", description: file.name });
+    }
+  };
+
+  // ===== Salvar rascunho =====
+  const salvarRascunho = useMutation({
+    mutationFn: async () => {
+      const html = editor?.getHTML() || "";
+      if (rascunhoId) {
+        const r = await apiRequest("PATCH", `/api/peticao-rascunhos/${rascunhoId}`, {
+          titulo, conteudoHtml: html,
+        });
+        return r.json();
+      } else {
+        const r = await apiRequest("POST", "/api/peticao-rascunhos", {
+          titulo, conteudoHtml: html,
+        });
+        return r.json();
+      }
+    },
+    onSuccess: (r: PeticaoRascunho) => {
+      setRascunhoId(r.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/peticao-rascunhos"] });
+      toast({ title: "Rascunho salvo", description: r.titulo });
+    },
+  });
+
+  const carregarRascunho = (r: PeticaoRascunho) => {
+    if (!editor) return;
+    editor.commands.setContent(r.conteudoHtml || "");
+    setTitulo(r.titulo);
+    setRascunhoId(r.id);
+  };
+
+  // ===== Export =====
+  const [exporting, setExporting] = useState<"docx" | "pdf" | null>(null);
+  const exportar = async (format: "docx" | "pdf") => {
+    if (!editor) return;
+    setExporting(format);
+    try {
+      const res = await fetch("/api/peticoes-ia/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ html: editor.getHTML(), format, titulo }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Erro ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${titulo.replace(/[^a-zA-Z0-9._-]/g, "_")}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: "Falha ao exportar", description: e.message, variant: "destructive" });
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  // ===== Salvar no acervo =====
+  const salvarAcervo = useMutation({
+    mutationFn: () =>
+      apiRequest("POST", "/api/peticoes-ia/salvar-no-acervo", {
+        titulo, html: editor?.getHTML() || "",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documentos"] });
+      toast({ title: "Salvo no acervo", description: `${titulo} adicionado em Documentos > Petições.` });
+    },
+  });
+
+  // ===== Copiar =====
+  const [copiado, setCopiado] = useState(false);
+  const copiar = async () => {
+    if (!editor) return;
+    try {
+      await navigator.clipboard.writeText(editor.getText());
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 1500);
+    } catch {}
+  };
+
+  if (!editor) {
+    return <div className="p-8 text-muted-foreground">Carregando editor…</div>;
+  }
 
   return (
-    <div className="p-6 min-h-screen space-y-6">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-3 mb-1">
-          <FileText className="w-7 h-7 text-blue-600" />
-          <h1 className="text-2xl font-semibold">Peticoes IA</h1>
-        </div>
-        <p className="text-muted-foreground">
-          Gere peticoes juridicas com auxilio de inteligencia artificial em 4 etapas.
-        </p>
-      </div>
+    <TooltipProvider delayDuration={300}>
+      <div className="flex h-[calc(100vh-7rem)] gap-3 p-3" data-testid="page-peticoes-ia">
+        {/* ============================ COLUNA 1 — TEMPLATES ============================ */}
+        <aside className="w-[280px] flex flex-col gap-2 shrink-0">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-tight">Templates</h2>
+            <div className="flex gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} data-testid="button-import-template">
+                    <UploadSimple />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Importar (.docx, .html, .txt)</TooltipContent>
+              </Tooltip>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,.html,.htm,.txt"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onImport(f, true);
+                  e.target.value = "";
+                }}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon" variant="ghost" onClick={() => setTplDialogOpen(true)} data-testid="button-novo-template">
+                    <Plus />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Novo template (a partir do editor)</TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-2 justify-center">
-        {etapas.map((e, i) => (
-          <div key={e.num} className="flex items-center gap-2">
-            <div
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                etapa === e.num
-                  ? "bg-blue-600 text-white"
-                  : etapa > e.num
-                    ? "bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300"
-                    : "bg-muted text-muted-foreground"
-              }`}
-            >
-              {etapa > e.num ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <e.icon className="w-4 h-4" />
+          <Input
+            placeholder="Buscar…"
+            value={buscaTpl}
+            onChange={(e) => setBuscaTpl(e.target.value)}
+            data-testid="input-busca-template"
+          />
+          <Select value={filtroCat} onValueChange={setFiltroCat}>
+            <SelectTrigger data-testid="select-categoria-template">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas categorias</SelectItem>
+              {CATEGORIAS.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <ScrollArea className="flex-1 -mx-1 px-1">
+            <div className="space-y-1">
+              {templatesFiltrados.length === 0 && (
+                <div className="text-xs text-muted-foreground p-3 text-center">
+                  Nenhum template. Crie a partir do editor ou importe um arquivo.
+                </div>
               )}
-              <span>
-                {e.num}. {e.label}
-              </span>
-            </div>
-            {i < etapas.length - 1 && (
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* ETAPA 1 - Intake */}
-      {etapa === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Dados da Peticao</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Tipo de Peca */}
-              <div className="space-y-2">
-                <Label>Tipo de Peca</Label>
-                <Select value={tipo} onValueChange={setTipo}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIPOS_PECA.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Instancia */}
-              <div className="space-y-2">
-                <Label>Instancia</Label>
-                <Select value={instancia} onValueChange={setInstancia}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {INSTANCIAS.map((inst) => (
-                      <SelectItem key={inst} value={inst}>
-                        {inst}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Area do Direito */}
-              <div className="space-y-2">
-                <Label>Area do Direito</Label>
-                <Select value={area} onValueChange={setArea}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AREAS_DIREITO.map((a) => (
-                      <SelectItem key={a} value={a}>
-                        {a}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Cliente */}
-            <div className="space-y-2">
-              <Label>Cliente</Label>
-              <Input
-                placeholder="Buscar cliente pelo nome..."
-                value={cliente}
-                onChange={(e) => setCliente(e.target.value)}
-              />
-            </div>
-
-            {/* Fatos */}
-            <div className="space-y-2">
-              <Label>Resumo dos Fatos</Label>
-              <Textarea
-                placeholder="Descreva os fatos do caso de forma detalhada..."
-                className="min-h-[120px] resize-y"
-                value={fatos}
-                onChange={(e) => setFatos(e.target.value)}
-              />
-            </div>
-
-            {/* Pedido */}
-            <div className="space-y-2">
-              <Label>Pedido Final</Label>
-              <Textarea
-                placeholder="Descreva o que se pretende obter com a peticao..."
-                className="min-h-[80px] resize-y"
-                value={pedido}
-                onChange={(e) => setPedido(e.target.value)}
-              />
-            </div>
-
-            {/* Tom e Tutela */}
-            <div className="flex flex-wrap items-center gap-6">
-              {/* Toggle Tom */}
-              <div className="space-y-2">
-                <Label>Tom da Peticao</Label>
-                <div className="flex gap-2">
-                  <Button
-                    variant={tom === "combativo" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setTom("combativo")}
-                    className={tom === "combativo" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
-                  >
-                    <Swords className="w-4 h-4 mr-1" />
-                    Combativo
-                  </Button>
-                  <Button
-                    variant={tom === "reflexivo" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setTom("reflexivo")}
-                    className={tom === "reflexivo" ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}
-                  >
-                    <BookOpen className="w-4 h-4 mr-1" />
-                    Reflexivo
-                  </Button>
-                </div>
-              </div>
-
-              {/* Tutela */}
-              <div className="flex items-center gap-2 pt-6">
-                <Checkbox
-                  id="tutela"
-                  checked={tutela}
-                  onCheckedChange={(v) => setTutela(v === true)}
-                />
-                <Label htmlFor="tutela" className="cursor-pointer">
-                  Tutela Provisoria de Urgencia
-                </Label>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-4">
-              <Button
-                onClick={() => setEtapa(2)}
-                disabled={!canProceed}
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Avancar para Conselho
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ETAPA 2 - Conselho Resumo */}
-      {etapa === 2 && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {SEED_CONSELHO_RESUMO.map((m) => (
-              <Card key={m.nome}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm">{m.nome}</CardTitle>
-                    <Badge className={`${m.corBadge} text-xs`}>{m.estilo}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{m.resumo}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Memorando resumido */}
-          <Card className="border-primary/40 bg-primary/5">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-primary" />
-                <CardTitle className="text-base">Memorando Estrategico (Resumo)</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-start gap-2">
-                <Scale className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-xs font-semibold text-primary">Tese:</span>
-                  <p className="text-sm">
-                    Inconstitucionalidade por violacao a vedacao ao retrocesso social e dignidade da pessoa humana.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Check className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-xs font-semibold text-green-700">Argumentos:</span>
-                  <p className="text-sm">Eficacia horizontal, Estado de Coisas Inconstitucional, protecao da confianca.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                <div>
-                  <span className="text-xs font-semibold text-red-700">Riscos:</span>
-                  <p className="text-sm">Reserva do possivel, deficiencia no prequestionamento.</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setEtapa(1)}>
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Voltar
-            </Button>
-            <Button onClick={iniciarGeracao} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Zap className="w-4 h-4 mr-1" />
-              Gerar Peticao
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* ETAPA 3 - Geracao */}
-      {etapa === 3 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg text-center">Gerando Peticao...</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 py-8">
-            <div className="max-w-lg mx-auto space-y-4">
-              {FASES_GERACAO.map((fase, i) => (
-                <div key={fase} className="flex items-center gap-3">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all ${
-                      i < faseAtual
-                        ? "bg-emerald-500/100 text-white"
-                        : i === faseAtual
-                          ? "bg-blue-500/100 text-white animate-pulse"
-                          : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {i < faseAtual ? <Check className="w-3.5 h-3.5" /> : i + 1}
-                  </div>
-                  <span
-                    className={`text-sm ${
-                      i < faseAtual
-                        ? "text-green-700 font-medium"
-                        : i === faseAtual
-                          ? "text-blue-700 font-semibold"
-                          : "text-gray-400"
-                    }`}
-                  >
-                    {fase}
-                  </span>
-                  {i === faseAtual && (
-                    <div className="flex-1 ml-2">
-                      <Progress value={progressValue} className="h-2" />
+              {templatesFiltrados.map((t) => (
+                <div
+                  key={t.id}
+                  className="group rounded-md border bg-card p-2 hover-elevate cursor-pointer"
+                  onClick={() => loadTemplate(t)}
+                  data-testid={`card-template-${t.id}`}
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{t.nome}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 h-4">
+                          {t.categoria}
+                        </Badge>
+                        {t.origem === "importado" && (
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-wide">imp.</span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">{t.usos || 0} usos</span>
+                      </div>
                     </div>
+                    <div className="flex flex-col items-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPadraoTpl.mutate({ id: t.id, isPadrao: !t.isPadrao });
+                        }}
+                        data-testid={`button-padrao-${t.id}`}
+                      >
+                        <Star weight={t.isPadrao ? "fill" : "regular"} className={t.isPadrao ? "text-primary" : ""} />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Excluir "${t.nome}"?`)) deleteTpl.mutate(t.id);
+                        }}
+                        data-testid={`button-excluir-${t.id}`}
+                      >
+                        <Trash />
+                      </Button>
+                    </div>
+                  </div>
+                  {t.descricao && (
+                    <div className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{t.descricao}</div>
                   )}
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* ETAPA 4 - Preview */}
-      {etapa === 4 && (
-        <div className="space-y-4">
-          {/* Badges de qualidade */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
-              <Check className="w-3 h-3 mr-1" />
-              Qualificacao [VERDE]
-            </Badge>
-            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
-              <Check className="w-3 h-3 mr-1" />
-              Fatos [VERDE]
-            </Badge>
-            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
-              <Check className="w-3 h-3 mr-1" />
-              Fundamentacao [VERDE]
-            </Badge>
-            <Badge className="bg-amber-500/15 text-amber-400 dark:bg-amber-500/15 dark:text-amber-300">
-              <AlertTriangle className="w-3 h-3 mr-1" />
-              Notificacao [AMARELO]
-            </Badge>
-            <Badge className="bg-emerald-500/15 text-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300">
-              <Check className="w-3 h-3 mr-1" />
-              Pedidos [VERDE]
-            </Badge>
-          </div>
-
-          {/* Documento */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Preview do Documento</CardTitle>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>Tom: </span>
-                  {tom === "combativo" ? (
-                    <Badge className="bg-rose-500/15 text-rose-400 dark:bg-rose-500/15 dark:text-rose-300">
-                      <Swords className="w-3 h-3 mr-1" />
-                      Combativo
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-blue-500/15 text-blue-400 dark:bg-blue-500/15 dark:text-blue-300">
-                      <BookOpen className="w-3 h-3 mr-1" />
-                      Reflexivo
-                    </Badge>
-                  )}
-                  {tutela && (
-                    <Badge className="bg-primary/15 text-primary">Tutela Provisoria</Badge>
-                  )}
+            {rascunhos.length > 0 && (
+              <div className="mt-4">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5 px-1">Rascunhos</div>
+                <div className="space-y-1">
+                  {rascunhos.slice(0, 8).map((r) => (
+                    <button
+                      key={r.id}
+                      className="w-full text-left rounded-md border bg-card p-2 hover-elevate"
+                      onClick={() => carregarRascunho(r)}
+                      data-testid={`card-rascunho-${r.id}`}
+                    >
+                      <div className="text-sm truncate">{r.titulo}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {r.updatedAt ? new Date(r.updatedAt).toLocaleString("pt-BR") : ""}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-card border rounded-lg p-8 font-serif text-sm leading-relaxed whitespace-pre-wrap max-h-[600px] overflow-y-auto">
-                {SEED_PREVIEW}
-              </div>
-            </CardContent>
-          </Card>
+            )}
+          </ScrollArea>
+        </aside>
 
-          {/* Acoes */}
-          <div className="flex justify-between">
-            <Button variant="outline" onClick={() => setEtapa(1)}>
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Nova Peticao
+        {/* ============================ COLUNA 2 — EDITOR ============================ */}
+        <section className="flex-1 flex flex-col min-w-0 gap-2">
+          {/* Header com título e ações */}
+          <div className="flex items-center gap-2">
+            <Input
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              className="text-base font-medium border-none shadow-none focus-visible:ring-1 px-2 max-w-md"
+              data-testid="input-titulo-peticao"
+            />
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => salvarRascunho.mutate()}
+              disabled={salvarRascunho.isPending}
+              data-testid="button-salvar-rascunho"
+            >
+              <FloppyDisk className="mr-1.5" />
+              {salvarRascunho.isPending ? "Salvando…" : rascunhoId ? "Salvar" : "Salvar rascunho"}
             </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleCopiar}>
-                {copiadoMsg ? (
-                  <>
-                    <Check className="w-4 h-4 mr-1 text-green-600" />
-                    Copiado!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 mr-1" />
-                    Copiar
-                  </>
-                )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" data-testid="button-export-menu">
+                  Exportar <CaretDown className="ml-1.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => exportar("docx")} disabled={!!exporting}>
+                  <FileDoc className="mr-2" /> {exporting === "docx" ? "Gerando…" : "Word (.docx)"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportar("pdf")} disabled={!!exporting}>
+                  <FilePdf className="mr-2" /> {exporting === "pdf" ? "Gerando…" : "PDF"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={copiar}>
+                  {copiado ? <Check className="mr-2" /> : <CopyIcon className="mr-2" />}
+                  {copiado ? "Copiado!" : "Copiar texto"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.print()}>
+                  <FilePdf className="mr-2" /> Imprimir / PDF do navegador
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              size="sm"
+              onClick={() => salvarAcervo.mutate()}
+              disabled={salvarAcervo.isPending}
+              data-testid="button-salvar-acervo"
+            >
+              <Archive className="mr-1.5" />
+              {salvarAcervo.isPending ? "Salvando…" : "Salvar no acervo"}
+            </Button>
+          </div>
+
+          {/* Toolbar */}
+          <EditorToolbar editor={editor} />
+
+          {/* Página A4 */}
+          <ScrollArea className="flex-1 surface-elevated rounded-md">
+            <div className="mx-auto my-6 bg-white text-zinc-900 dark:bg-[#fafaf7] shadow-sm border border-border max-w-[820px] min-h-[1000px] px-[80px] py-[72px] print:shadow-none print:border-0 print:max-w-full print:p-0">
+              <EditorContent editor={editor} />
+            </div>
+          </ScrollArea>
+        </section>
+
+        {/* ============================ COLUNA 3 — CHAT IA ============================ */}
+        <aside className="w-[340px] flex flex-col gap-2 shrink-0 border-l pl-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkle className="text-primary" />
+              <h2 className="text-sm font-semibold tracking-tight">Assistente IA</h2>
+            </div>
+            <Select value={chatMode} onValueChange={(v) => setChatMode(v as any)}>
+              <SelectTrigger className="h-7 w-[120px] text-xs" data-testid="select-chat-mode">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gerar">Gerar</SelectItem>
+                <SelectItem value="editar">Editar seleção</SelectItem>
+                <SelectItem value="revisar">Revisar tudo</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-wrap gap-1">
+            {QUICK_ACTIONS.map((q) => (
+              <Button
+                key={q.label}
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px]"
+                onClick={() => sendChat(q.prompt)}
+                disabled={chatMutation.isPending}
+                data-testid={`button-quick-${q.label.replace(/\s+/g, "-").toLowerCase()}`}
+              >
+                {q.label}
               </Button>
-              <Button variant="outline">
-                <Download className="w-4 h-4 mr-1" />
-                Exportar DOCX
-              </Button>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                <Edit className="w-4 h-4 mr-1" />
-                Revisar
+            ))}
+          </div>
+
+          <ScrollArea className="flex-1 -mx-1 px-1">
+            <div className="space-y-2 py-1">
+              {chat.length === 0 && (
+                <div className="text-xs text-muted-foreground text-center p-6">
+                  <MagicWand className="mx-auto mb-2 text-2xl text-primary/60" />
+                  Peça à IA para gerar, editar ou revisar trechos.
+                  <div className="mt-2 text-[10px]">
+                    Modo <strong>Editar seleção</strong>: selecione um trecho no editor, descreva a mudança.
+                  </div>
+                </div>
+              )}
+              {chat.map((m, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "rounded-md border p-2 text-xs",
+                    m.role === "user" && "bg-primary/5 border-primary/30",
+                    m.role === "assistant" && "bg-card",
+                    m.role === "system" && "bg-destructive/10 border-destructive/30 text-destructive"
+                  )}
+                >
+                  <div className="flex items-center gap-1.5 mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {m.role === "user" ? "Você" : m.role === "assistant" ? "IA" : "Sistema"}
+                    {m.mode && <Badge variant="outline" className="text-[9px] py-0 px-1 h-3.5">{m.mode}</Badge>}
+                  </div>
+                  <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                </div>
+              ))}
+              {chatMutation.isPending && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
+                  <CircleNotch className="animate-spin" /> Pensando…
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+          </ScrollArea>
+
+          <div className="space-y-1.5">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  sendChat(input);
+                }
+              }}
+              placeholder={
+                chatMode === "editar"
+                  ? "Selecione um trecho no editor e descreva a alteração…"
+                  : chatMode === "revisar"
+                    ? "Como deseja que o documento inteiro seja revisado?"
+                    : "Descreva a peça ou trecho que deseja gerar…"
+              }
+              rows={3}
+              className="text-xs resize-none"
+              data-testid="textarea-chat-input"
+            />
+            <div className="flex items-center justify-between gap-1">
+              <div className="text-[10px] text-muted-foreground">⌘/Ctrl + Enter para enviar</div>
+              <Button
+                size="sm"
+                onClick={() => sendChat(input)}
+                disabled={chatMutation.isPending || !input.trim()}
+                data-testid="button-enviar-chat"
+              >
+                <PaperPlaneTilt className="mr-1" /> Enviar
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </aside>
+      </div>
+
+      {/* Dialog: Novo template */}
+      <Dialog open={tplDialogOpen} onOpenChange={setTplDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Salvar como template</DialogTitle>
+            <DialogDescription>O conteúdo atual do editor será salvo como modelo reutilizável.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome</Label>
+              <Input value={novoTpl.nome} onChange={(e) => setNovoTpl({ ...novoTpl, nome: e.target.value })} data-testid="input-novo-tpl-nome" />
+            </div>
+            <div>
+              <Label>Categoria</Label>
+              <Select value={novoTpl.categoria} onValueChange={(v) => setNovoTpl({ ...novoTpl, categoria: v })}>
+                <SelectTrigger data-testid="select-novo-tpl-categoria"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIAS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Descrição</Label>
+              <Textarea
+                rows={2}
+                value={novoTpl.descricao}
+                onChange={(e) => setNovoTpl({ ...novoTpl, descricao: e.target.value })}
+                data-testid="textarea-novo-tpl-descricao"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTplDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={() => createTplMut.mutate()} disabled={!novoTpl.nome || createTplMut.isPending} data-testid="button-confirmar-novo-tpl">
+              Salvar template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
+  );
+}
+
+// ============================================================================
+// Toolbar
+// ============================================================================
+function EditorToolbar({ editor }: { editor: Editor }) {
+  if (!editor) return null;
+  const Btn = ({
+    onClick,
+    active,
+    icon: Icon,
+    label,
+    testId,
+  }: {
+    onClick: () => void;
+    active?: boolean;
+    icon: any;
+    label: string;
+    testId: string;
+  }) => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          className={cn("h-8 w-8", active && "bg-accent text-accent-foreground")}
+          onClick={onClick}
+          data-testid={testId}
+        >
+          <Icon weight={active ? "fill" : "regular"} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+
+  const Sep = () => <div className="w-px h-6 bg-border mx-0.5" />;
+
+  return (
+    <div className="flex items-center gap-0.5 flex-wrap p-1.5 rounded-md border bg-card">
+      <Btn
+        onClick={() => editor.chain().focus().undo().run()}
+        icon={ArrowCounterClockwise}
+        label="Desfazer"
+        testId="toolbar-undo"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().redo().run()}
+        icon={ArrowClockwise}
+        label="Refazer"
+        testId="toolbar-redo"
+      />
+      <Sep />
+      <Btn
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        active={editor.isActive("heading", { level: 1 })}
+        icon={TextHOne}
+        label="Título 1"
+        testId="toolbar-h1"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        active={editor.isActive("heading", { level: 2 })}
+        icon={TextHTwo}
+        label="Título 2"
+        testId="toolbar-h2"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        active={editor.isActive("heading", { level: 3 })}
+        icon={TextHThree}
+        label="Título 3"
+        testId="toolbar-h3"
+      />
+      <Sep />
+      <Btn
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        active={editor.isActive("bold")}
+        icon={TextB}
+        label="Negrito"
+        testId="toolbar-bold"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        active={editor.isActive("italic")}
+        icon={TextItalic}
+        label="Itálico"
+        testId="toolbar-italic"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        active={editor.isActive("underline")}
+        icon={TextUnderline}
+        label="Sublinhado"
+        testId="toolbar-underline"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        active={editor.isActive("strike")}
+        icon={TextStrikethrough}
+        label="Tachado"
+        testId="toolbar-strike"
+      />
+      <Sep />
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("left").run()}
+        active={editor.isActive({ textAlign: "left" })}
+        icon={TextAlignLeft}
+        label="Esquerda"
+        testId="toolbar-align-left"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("center").run()}
+        active={editor.isActive({ textAlign: "center" })}
+        icon={TextAlignCenter}
+        label="Centro"
+        testId="toolbar-align-center"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("right").run()}
+        active={editor.isActive({ textAlign: "right" })}
+        icon={TextAlignRight}
+        label="Direita"
+        testId="toolbar-align-right"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+        active={editor.isActive({ textAlign: "justify" })}
+        icon={TextAlignJustify}
+        label="Justificar"
+        testId="toolbar-align-justify"
+      />
+      <Sep />
+      <Btn
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        active={editor.isActive("bulletList")}
+        icon={ListBullets}
+        label="Lista"
+        testId="toolbar-bullet-list"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        active={editor.isActive("orderedList")}
+        icon={ListNumbers}
+        label="Lista numerada"
+        testId="toolbar-ordered-list"
+      />
+      <Btn
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        active={editor.isActive("blockquote")}
+        icon={Quotes}
+        label="Citação"
+        testId="toolbar-blockquote"
+      />
+      <Sep />
+      <Btn
+        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        icon={TableIcon}
+        label="Inserir tabela"
+        testId="toolbar-table"
+      />
     </div>
   );
 }

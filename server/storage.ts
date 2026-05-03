@@ -9,6 +9,7 @@ import {
   type ContaPagar, type InsertContaPagar,
   type Honorario, type InsertHonorario,
   type Template, type InsertTemplate,
+  type PeticaoRascunho, type InsertPeticaoRascunho,
   type Tribunal, type InsertTribunal,
   type ConsultaProcessual, type InsertConsultaProcessual,
   type Monitoramento, type InsertMonitoramento,
@@ -25,7 +26,7 @@ import {
   type Communication, type InsertCommunication,
   type EscritorioConfig, type InsertEscritorioConfig,
   users, clientes, equipe, processos, atividades, documentos, 
-  contasReceber, contasPagar, honorarios, templates,
+  contasReceber, contasPagar, honorarios, templates, peticaoRascunhos,
   tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento,
   acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
   processosAcompanhados, deadlineRules, deadlineAlerts,
@@ -107,6 +108,15 @@ export interface IStorage {
   createTemplate(template: InsertTemplate): Promise<Template>;
   updateTemplate(id: string, template: Partial<InsertTemplate>): Promise<Template | undefined>;
   deleteTemplate(id: string): Promise<boolean>;
+  setTemplatePadrao(id: string, isPadrao: boolean): Promise<Template | undefined>;
+  incrementTemplateUsos(id: string): Promise<void>;
+
+  // Petição rascunhos (drafts editor)
+  getPeticaoRascunhos(): Promise<PeticaoRascunho[]>;
+  getPeticaoRascunho(id: string): Promise<PeticaoRascunho | undefined>;
+  createPeticaoRascunho(r: InsertPeticaoRascunho): Promise<PeticaoRascunho>;
+  updatePeticaoRascunho(id: string, r: Partial<InsertPeticaoRascunho>): Promise<PeticaoRascunho | undefined>;
+  deletePeticaoRascunho(id: string): Promise<boolean>;
   
   // Tribunais
   getTribunais(): Promise<Tribunal[]>;
@@ -452,6 +462,40 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTemplate(id: string): Promise<boolean> {
     const result = await db.delete(templates).where(eq(templates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async setTemplatePadrao(id: string, isPadrao: boolean): Promise<Template | undefined> {
+    const [t] = await db.update(templates).set({ isPadrao, updatedAt: new Date() }).where(eq(templates.id, id)).returning();
+    return t;
+  }
+
+  async incrementTemplateUsos(id: string): Promise<void> {
+    await db.update(templates).set({ usos: sql`${templates.usos} + 1`, updatedAt: new Date() }).where(eq(templates.id, id));
+  }
+
+  // Petição rascunhos
+  async getPeticaoRascunhos(): Promise<PeticaoRascunho[]> {
+    return db.select().from(peticaoRascunhos).orderBy(desc(peticaoRascunhos.updatedAt));
+  }
+
+  async getPeticaoRascunho(id: string): Promise<PeticaoRascunho | undefined> {
+    const [r] = await db.select().from(peticaoRascunhos).where(eq(peticaoRascunhos.id, id));
+    return r;
+  }
+
+  async createPeticaoRascunho(insertR: InsertPeticaoRascunho): Promise<PeticaoRascunho> {
+    const [r] = await db.insert(peticaoRascunhos).values(insertR).returning();
+    return r;
+  }
+
+  async updatePeticaoRascunho(id: string, updateData: Partial<InsertPeticaoRascunho>): Promise<PeticaoRascunho | undefined> {
+    const [r] = await db.update(peticaoRascunhos).set({ ...updateData, updatedAt: new Date() }).where(eq(peticaoRascunhos.id, id)).returning();
+    return r;
+  }
+
+  async deletePeticaoRascunho(id: string): Promise<boolean> {
+    const result = await db.delete(peticaoRascunhos).where(eq(peticaoRascunhos.id, id)).returning();
     return result.length > 0;
   }
 
