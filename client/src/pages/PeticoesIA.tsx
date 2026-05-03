@@ -226,12 +226,20 @@ export default function PeticoesIA() {
 
   const templatesPadrao = useMemo(() => templates.filter((t) => t.isPadrao), [templates]);
 
+  // Header do documento (declarado antes dos efeitos de carregamento p/ ordem segura)
+  const [activeHeaderHtml, setActiveHeaderHtml] = useState<string>("");
+
   // Carrega template padrão automaticamente uma vez
   useEffect(() => {
     if (!editor) return;
     if (rascunhoId) return;
     const cur = editor.getHTML();
     if (cur && cur !== "<p></p>") return;
+    if (loadedFromUrlRef.current) return;
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("docId") || params.get("templateId")) return;
+    }
     if (templatesPadrao.length > 0) {
       const html = templatesPadrao[0].conteudoHtml || templatesPadrao[0].conteudo || "";
       if (html) {
@@ -242,8 +250,63 @@ export default function PeticoesIA() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templatesPadrao.length, editor]);
 
+  // Carregamento via URL: ?docId=... (acervo) ou ?templateId=... (templates)
+  const loadedFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (!editor) return;
+    if (loadedFromUrlRef.current) return;
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const docId = params.get("docId");
+    const templateId = params.get("templateId");
+    if (!docId && !templateId) return;
+
+    if (templateId) {
+      const t = templates.find((x) => x.id === templateId);
+      if (!t) return; // espera a query de templates carregar
+      const html = t.conteudoHtml || (t.conteudo ? `<p>${t.conteudo}</p>` : "");
+      editor.commands.setContent(html);
+      setTitulo(t.nome);
+      setRascunhoId(null);
+      setActiveHeaderHtml(t.headerHtml || "");
+      setDirty(false);
+      loadedFromUrlRef.current = true;
+      apiRequest("POST", `/api/templates/${t.id}/uso`, {}).catch(() => {});
+      const url = new URL(window.location.href);
+      url.searchParams.delete("templateId");
+      window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+      return;
+    }
+
+    if (docId) {
+      loadedFromUrlRef.current = true;
+      (async () => {
+        try {
+          const res = await apiRequest("GET", `/api/documentos/${docId}`);
+          const doc = (await res.json()) as { nome?: string; conteudoMarkdown?: string | null };
+          const html = doc.conteudoMarkdown || "";
+          if (html) {
+            editor.commands.setContent(html);
+          }
+          if (doc.nome) {
+            setTitulo(doc.nome.replace(/\.html$/i, "").replace(/\.[a-z0-9]+$/i, "") || doc.nome);
+          }
+          setRascunhoId(null);
+          setDirty(false);
+          toast({ title: "Documento carregado", description: doc.nome });
+        } catch {
+          toast({ title: "Não foi possível carregar o documento", variant: "destructive" });
+        } finally {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("docId");
+          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, templates.length]);
+
   // Header do documento: precedência template > escritório > vazio
-  const [activeHeaderHtml, setActiveHeaderHtml] = useState<string>("");
   const headerHtml = useMemo(() => {
     return activeHeaderHtml || escritorio?.cabecalhoHtml || "";
   }, [activeHeaderHtml, escritorio]);
