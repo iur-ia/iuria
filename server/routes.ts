@@ -2739,8 +2739,8 @@ except Exception as e:
 }
 
 // ==================== JOB: VERIFICAÇÃO PERIÓDICA DE ACOMPANHAMENTOS ====================
-// Roda a cada 2 horas, consulta cada processo acompanhado via orchestrator TypeScript
-// e incrementa novosAndamentos quando detecta um andamento diferente do armazenado.
+// Roda a cada 2 horas. Reutiliza o mesmo scraper Python tribunal-aware da rota PATCH
+// para suportar tanto números CNJ quanto formatos STF/STJ (ex: "ADI 1", "REsp 123456").
 function iniciarJobVerificacaoAcompanhamentos() {
   const INTERVALO_MS = 2 * 60 * 60 * 1000; // 2 horas
 
@@ -2753,38 +2753,66 @@ function iniciarJobVerificacaoAcompanhamentos() {
     }
     if (items.length === 0) return;
 
-    const { pesquisarProcesso } = await import("./scraping/orchestrator");
+    const { spawn } = await import("child_process");
+    const scriptPath = path.join(process.cwd(), "scraper", "run_scraper.py");
 
     for (const item of items) {
       try {
-        const resultado = await pesquisarProcesso(item.numeroProcesso);
-        const processo = resultado.data;
-        if (!processo) continue;
+        // Mesma lógica da rota PATCH refresh=true — tribunal-aware via scraper Python
+        const scraperResult = await new Promise<Record<string, unknown> | null>((resolve) => {
+          const proc = spawn(
+            "python3",
+            [scriptPath, "consultar", item.tribunal, item.numeroProcesso, "numero"],
+            { env: { ...process.env }, timeout: 60000 }
+          );
+          let stdout = "";
+          proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+          proc.on("close", () => {
+            try {
+              const js = stdout.indexOf("{");
+              const je = stdout.lastIndexOf("}");
+              if (js !== -1) resolve(JSON.parse(stdout.slice(js, je + 1)) as Record<string, unknown>);
+              else resolve(null);
+            } catch { resolve(null); }
+          });
+          proc.on("error", () => resolve(null));
+        });
 
-        const movs: Array<{ data: string; descricao: string }> = (processo as any).movimentacoes ?? [];
-        const novoUltimoAndamento = movs[0]?.descricao ?? null;
-        const novaData = movs[0]?.data ?? null;
-
-        // Detecta mudança comparando o texto do último andamento
-        const mudou =
-          novoUltimoAndamento &&
-          novoUltimoAndamento !== item.ultimoAndamento;
-
-        const updateData: Record<string, any> = {
+        const update: Partial<import("@shared/schema").InsertProcessoAcompanhado> = {
           ultimaVerificacao: new Date(),
-          fonte: resultado.source ?? item.fonte,
         };
 
-        if (mudou) {
-          updateData.ultimoAndamento = novoUltimoAndamento;
-          updateData.dataUltimoAndamento = novaData ?? item.dataUltimoAndamento;
-          updateData.novosAndamentos = (item.novosAndamentos ?? 0) + 1;
-          // Atualiza classe/assunto se o scraping trouxe
-          if ((processo as any).classe) updateData.classe = (processo as any).classe;
-          if ((processo as any).assunto) updateData.assunto = (processo as any).assunto;
+        if (scraperResult) {
+          const processos = scraperResult.processos as Array<{
+            classe?: string;
+            assunto?: string;
+            tribunal?: string;
+            movimentacoes?: Array<{ data: string; descricao: string }>;
+          }> | undefined;
+          const fonte = scraperResult.fonte as string | undefined;
+
+          if (fonte) update.fonte = fonte;
+
+          if (processos && processos.length > 0) {
+            const proc = processos[0];
+            const movs = proc.movimentacoes ?? [];
+            const novoUltimoAndamento = movs[0]?.descricao ?? null;
+            const novaData = movs[0]?.data ?? null;
+
+            const mudou = novoUltimoAndamento !== null && novoUltimoAndamento !== item.ultimoAndamento;
+
+            if (mudou) {
+              update.ultimoAndamento = novoUltimoAndamento;
+              update.dataUltimoAndamento = novaData ?? item.dataUltimoAndamento ?? undefined;
+              update.novosAndamentos = (item.novosAndamentos ?? 0) + 1;
+              if (proc.classe) update.classe = proc.classe;
+              if (proc.assunto) update.assunto = proc.assunto;
+              if (proc.tribunal) update.tribunal = proc.tribunal;
+            }
+          }
         }
 
-        await storage.updateProcessoAcompanhado(item.id, updateData as any);
+        await storage.updateProcessoAcompanhado(item.id, update);
       } catch {
         // Ignora falhas individuais — não interrompe o job
       }

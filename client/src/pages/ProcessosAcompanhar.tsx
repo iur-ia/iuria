@@ -303,8 +303,8 @@ function ProcessoAcompanhadoCard({ item }: { item: ProcessoAcompanhado }) {
   });
 
   const updatedAt = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString("pt-BR") : null;
-  const ultimaVerificacao = (item as any).ultimaVerificacao
-    ? new Date((item as any).ultimaVerificacao).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+  const ultimaVerificacao = item.ultimaVerificacao
+    ? new Date(item.ultimaVerificacao).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
     : null;
 
   return (
