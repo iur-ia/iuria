@@ -282,7 +282,11 @@ export default function PeticoesIA() {
       (async () => {
         try {
           const res = await apiRequest("GET", `/api/documentos/${docId}`);
-          const doc = (await res.json()) as { nome?: string; conteudoMarkdown?: string | null };
+          const doc = (await res.json()) as {
+            nome?: string;
+            conteudoMarkdown?: string | null;
+            headerHtml?: string | null;
+          };
           const html = doc.conteudoMarkdown || "";
           if (html) {
             editor.commands.setContent(html);
@@ -291,6 +295,7 @@ export default function PeticoesIA() {
             setTitulo(doc.nome.replace(/\.html$/i, "").replace(/\.[a-z0-9]+$/i, "") || doc.nome);
           }
           setRascunhoId(null);
+          setActiveHeaderHtml(doc.headerHtml || "");
           setDirty(false);
           toast({ title: "Documento carregado", description: doc.nome });
         } catch {
@@ -536,7 +541,12 @@ export default function PeticoesIA() {
       toast({ title: "Falha ao importar", description: err.error || "Erro", variant: "destructive" });
       return;
     }
-    const data: { html?: string; headerHtml?: string; footerHtml?: string } = await res.json();
+    const data: {
+      html?: string;
+      headerHtml?: string;
+      footerHtml?: string;
+      headerSource?: "xml" | "heuristic" | "none";
+    } = await res.json();
     if (asTemplate) {
       queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
       toast({ title: "Template importado", description: file.name });
@@ -545,10 +555,13 @@ export default function PeticoesIA() {
       setActiveHeaderHtml(data.headerHtml || "");
       setTitulo(file.name.replace(/\.[^.]+$/, ""));
       setDirty(true);
-      toast({
-        title: "Documento importado",
-        description: data.headerHtml ? `${file.name} (cabeçalho/rodapé detectados)` : file.name,
-      });
+      const src = data.headerSource;
+      const desc = !data.headerHtml
+        ? file.name
+        : src === "heuristic"
+          ? `${file.name} (cabeçalho/rodapé inferidos do conteúdo)`
+          : `${file.name} (cabeçalho/rodapé detectados)`;
+      toast({ title: "Documento importado", description: desc });
     }
   };
 
@@ -558,7 +571,11 @@ export default function PeticoesIA() {
       const html = editor?.getHTML() || "";
       const path = rascunhoId ? `/api/peticao-rascunhos/${rascunhoId}` : "/api/peticao-rascunhos";
       const method = rascunhoId ? "PATCH" : "POST";
-      const r = await apiRequest(method, path, { titulo, conteudoHtml: html });
+      const r = await apiRequest(method, path, {
+        titulo,
+        conteudoHtml: html,
+        headerHtml: activeHeaderHtml || null,
+      });
       return r.json();
     },
     onSuccess: (r) => {
@@ -577,6 +594,7 @@ export default function PeticoesIA() {
     editor.commands.setContent(r.conteudoHtml || "");
     setTitulo(r.titulo);
     setRascunhoId(r.id);
+    setActiveHeaderHtml(r.headerHtml || "");
     setDirty(false);
   };
 
@@ -632,6 +650,7 @@ export default function PeticoesIA() {
       apiRequest("POST", "/api/peticoes-ia/salvar-no-acervo", {
         titulo,
         html: editor?.getHTML() || "",
+        headerHtml: activeHeaderHtml || undefined,
         processoId: processoId || undefined,
         clienteId: clienteId || undefined,
       }),

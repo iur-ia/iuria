@@ -821,12 +821,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let html = "";
       let headerHtmlRaw = "";
       let footerHtmlRaw = "";
+      let headerSource: "xml" | "heuristic" | "none" = "none";
       if (ext === ".docx") {
         const { importDocxFile } = await import("./docxImporter");
         const result = importDocxFile(req.file.path);
         html = result.bodyHtml || "";
         headerHtmlRaw = result.headerHtml || "";
         footerHtmlRaw = result.footerHtml || "";
+        headerSource = result.headerSource;
         // Fallback: se nosso conversor não produziu corpo, usamos mammoth
         if (!html.replace(/<[^>]+>/g, "").trim()) {
           const mammoth = (await import("mammoth")).default;
@@ -867,7 +869,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(201).json({ template: created, html: safeHtml, headerHtml: combinedHeader, footerHtml: safeFooter });
       }
 
-      res.json({ html: safeHtml, headerHtml: combinedHeader, footerHtml: safeFooter, fileName: req.file.originalname });
+      res.json({
+        html: safeHtml,
+        headerHtml: combinedHeader,
+        footerHtml: safeFooter,
+        fileName: req.file.originalname,
+        headerSource,
+      });
     } catch (error: any) {
       console.error("[templates/import]", error);
       res.status(500).json({ error: error?.message || "Erro ao importar arquivo" });
@@ -891,7 +899,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/peticao-rascunhos", async (req, res) => {
     try {
       const data = insertPeticaoRascunhoSchema.parse(req.body);
-      const sanitized = { ...data, conteudoHtml: sanitizeLegalHtml(data.conteudoHtml || "") };
+      const sanitized = {
+        ...data,
+        conteudoHtml: sanitizeLegalHtml(data.conteudoHtml || ""),
+        headerHtml: data.headerHtml ? sanitizeLegalHtml(data.headerHtml) : data.headerHtml ?? null,
+      };
       const r = await storage.createPeticaoRascunho(sanitized);
       res.status(201).json(r);
     } catch (e: any) { res.status(400).json({ error: e?.message || "Dados inválidos" }); }
@@ -901,6 +913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const body = { ...req.body };
       if (typeof body.conteudoHtml === "string") body.conteudoHtml = sanitizeLegalHtml(body.conteudoHtml);
+      if (typeof body.headerHtml === "string") body.headerHtml = sanitizeLegalHtml(body.headerHtml);
       const r = await storage.updatePeticaoRascunho(req.params.id, body);
       if (!r) return res.status(404).json({ error: "Rascunho não encontrado" });
       res.json(r);
@@ -1199,17 +1212,19 @@ td, th { border: 1px solid #444; padding: 4px 8px; }`;
   // ==================== PETIÇÕES IA — SALVAR NO ACERVO ====================
   app.post("/api/peticoes-ia/salvar-no-acervo", async (req, res) => {
     try {
-      const { titulo, html, processoId, clienteId } = req.body as {
-        titulo: string; html: string; processoId?: string; clienteId?: string;
+      const { titulo, html, headerHtml, processoId, clienteId } = req.body as {
+        titulo: string; html: string; headerHtml?: string; processoId?: string; clienteId?: string;
       };
       if (!titulo || !html) return res.status(400).json({ error: "Título e conteúdo são obrigatórios" });
       const safeHtml = sanitizeLegalHtml(html);
+      const safeHeaderHtml = headerHtml ? sanitizeLegalHtml(headerHtml) : null;
 
       const doc = await storage.createDocumento({
         nome: `${titulo}.html`,
         tipo: "Petição",
         tamanho: `${(safeHtml.length / 1024).toFixed(1)} KB`,
         conteudoMarkdown: safeHtml,
+        headerHtml: safeHeaderHtml,
         extracaoStatus: "concluida",
         versao: 1,
         processoId: processoId || null,

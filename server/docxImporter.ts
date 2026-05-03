@@ -477,6 +477,114 @@ export interface DocxImportResult {
   bodyHtml: string;
   headerHtml: string;
   footerHtml: string;
+  // 'xml' = veio dos arquivos word/header*.xml/footer*.xml
+  // 'heuristic' = inferido a partir de parágrafos do corpo
+  // 'none' = não há cabeçalho/rodapé
+  headerSource: "xml" | "heuristic" | "none";
+}
+
+// ---------- Heurística de detecção de cabeçalho/rodapé no corpo ----------
+// Quando o .docx não tem word/header*.xml/footer*.xml mas o usuário diagramou
+// o "cabeçalho" como parágrafos centralizados no topo (e timbre/contato como
+// últimos parágrafos), tentamos isolar essas faixas movendo-as do corpo.
+const TOPLEVEL_BLOCK_RE =
+  /<(p|h[1-6]|table|blockquote|ul|ol|pre)\b[^>]*>[\s\S]*?<\/\1>/gi;
+
+function extractTopLevelBlocks(html: string): string[] {
+  const blocks: string[] = [];
+  let m: RegExpExecArray | null;
+  TOPLEVEL_BLOCK_RE.lastIndex = 0;
+  while ((m = TOPLEVEL_BLOCK_RE.exec(html))) blocks.push(m[0]);
+  return blocks;
+}
+
+function blockText(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isCenteredShortBlock(html: string): boolean {
+  // Aceitamos somente <p>; headings e tables nunca viram header/footer heurístico.
+  if (!/^<p\b/i.test(html)) return false;
+  if (!/text-align:\s*center/i.test(html)) return false;
+  const t = blockText(html);
+  return t.length > 0 && t.length <= 200;
+}
+
+function isImageOnlyBlock(html: string): boolean {
+  if (!/^<p\b/i.test(html)) return false;
+  if (!/<img\b/i.test(html)) return false;
+  return blockText(html).length === 0;
+}
+
+function looksLikeFooterContact(html: string): boolean {
+  const t = blockText(html).toLowerCase();
+  if (!t) return false;
+  // Padrões frequentes em rodapés de petições brasileiras.
+  if (/oab[\s\/-]*[a-z]{2}/i.test(t)) return true;
+  if (/cep\s*\d{5}-?\d{3}/.test(t)) return true;
+  if (/\(\d{2}\)\s*\d{4,5}-?\d{4}/.test(t)) return true; // telefone
+  if (/[\w.+-]+@[\w-]+\.[\w.-]+/.test(t)) return true; // email
+  if (/www\.|https?:\/\//.test(t)) return true;
+  return false;
+}
+
+function detectHeuristicHeaderFooter(
+  bodyHtml: string,
+): { bodyHtml: string; headerHtml: string; footerHtml: string; matched: boolean } {
+  const blocks = extractTopLevelBlocks(bodyHtml);
+  if (blocks.length < 3) return { bodyHtml, headerHtml: "", footerHtml: "", matched: false };
+
+  // Header: parágrafos iniciais centralizados/curtos ou só com imagem,
+  // até no máximo 4 (parar antes do primeiro bloco "de corpo").
+  let headerEnd = 0;
+  for (let i = 0; i < Math.min(blocks.length, 4); i++) {
+    if (isImageOnlyBlock(blocks[i]) || isCenteredShortBlock(blocks[i])) {
+      headerEnd = i + 1;
+    } else {
+      break;
+    }
+  }
+  // Conservador: só assume header se o bloco seguinte parece corpo (texto longo
+  // ou heading), evitando capturar a peça inteira.
+  if (headerEnd > 0) {
+    const next = blocks[headerEnd];
+    const nextText = next ? blockText(next) : "";
+    const nextIsBody =
+      next &&
+      (/^<h[1-6]\b/i.test(next) || nextText.length > 200 || /text-align:\s*justify/i.test(next));
+    if (!nextIsBody) headerEnd = 0;
+  }
+
+  // Footer: últimos parágrafos centralizados/curtos. Para evitar cortar a
+  // assinatura final, exigimos que pelo menos um deles tenha "cara de rodapé"
+  // (OAB, CEP, telefone, email, site).
+  let footerStart = blocks.length;
+  for (let i = blocks.length - 1; i >= Math.max(headerEnd, blocks.length - 6); i--) {
+    if (isCenteredShortBlock(blocks[i]) || isImageOnlyBlock(blocks[i])) {
+      footerStart = i;
+    } else {
+      break;
+    }
+  }
+  if (footerStart < blocks.length) {
+    const footerBlocks = blocks.slice(footerStart);
+    const hasContact = footerBlocks.some(looksLikeFooterContact);
+    if (!hasContact) footerStart = blocks.length;
+  }
+
+  if (headerEnd === 0 && footerStart === blocks.length) {
+    return { bodyHtml, headerHtml: "", footerHtml: "", matched: false };
+  }
+
+  const headerHtml = blocks.slice(0, headerEnd).join("");
+  const footerHtml = blocks.slice(footerStart).join("");
+  const newBodyHtml = blocks.slice(headerEnd, footerStart).join("");
+  return { bodyHtml: newBodyHtml, headerHtml, footerHtml, matched: true };
 }
 
 export function importDocxFile(filePath: string): DocxImportResult {
@@ -503,7 +611,7 @@ export function importDocxFile(filePath: string): DocxImportResult {
 
   const stylesIndex = stylesXml ? parseStylesXml(stylesXml) : EMPTY_STYLES;
 
-  const bodyHtml = documentXml ? xmlToHtml(documentXml, stylesIndex) : "";
+  let bodyHtml = documentXml ? xmlToHtml(documentXml, stylesIndex) : "";
 
   let headerHtml = "";
   let footerHtml = "";
@@ -516,5 +624,18 @@ export function importDocxFile(filePath: string): DocxImportResult {
     if (f && f.replace(/<[^>]+>/g, "").trim()) { footerHtml = f; break; }
   }
 
-  return { bodyHtml, headerHtml, footerHtml };
+  let headerSource: "xml" | "heuristic" | "none" = "none";
+  if (headerHtml || footerHtml) {
+    headerSource = "xml";
+  } else {
+    const inferred = detectHeuristicHeaderFooter(bodyHtml);
+    if (inferred.matched) {
+      bodyHtml = inferred.bodyHtml;
+      headerHtml = inferred.headerHtml;
+      footerHtml = inferred.footerHtml;
+      headerSource = "heuristic";
+    }
+  }
+
+  return { bodyHtml, headerHtml, footerHtml, headerSource };
 }

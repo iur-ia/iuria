@@ -139,6 +139,9 @@ export const documentos = pgTable("documentos", {
   enviadoPor: varchar("enviado_por").references(() => equipe.id),
   versao: integer("versao").notNull().default(1),
   conteudoMarkdown: text("conteudo_markdown"),
+  // Cabeçalho/rodapé combinados (formato `header<hr data-iuria-footer="1"/>footer`)
+  // usado pelo editor de Petições IA para restaurar zonas de header/footer.
+  headerHtml: text("header_html"),
   extracaoStatus: text("extracao_status").notNull().default("pendente"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -246,6 +249,8 @@ export const peticaoRascunhos = pgTable("peticao_rascunhos", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   titulo: text("titulo").notNull().default("Sem título"),
   conteudoHtml: text("conteudo_html").notNull().default(""),
+  // Cabeçalho/rodapé combinados (formato `header<hr data-iuria-footer="1"/>footer`).
+  headerHtml: text("header_html"),
   templateId: varchar("template_id"),
   processoId: varchar("processo_id"),
   clienteId: varchar("cliente_id"),
