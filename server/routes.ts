@@ -2743,81 +2743,91 @@ except Exception as e:
 // para suportar tanto números CNJ quanto formatos STF/STJ (ex: "ADI 1", "REsp 123456").
 function iniciarJobVerificacaoAcompanhamentos() {
   const INTERVALO_MS = 2 * 60 * 60 * 1000; // 2 horas
+  let isRunning = false; // guard contra execuções sobrepostas
 
   const verificar = async () => {
+    if (isRunning) return;
+    isRunning = true;
     let items: import("@shared/schema").ProcessoAcompanhado[];
     try {
       items = await storage.getProcessosAcompanhados();
     } catch {
       return;
     }
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      isRunning = false;
+      return;
+    }
 
-    const { spawn } = await import("child_process");
-    const scriptPath = path.join(process.cwd(), "scraper", "run_scraper.py");
+    try {
+      const { spawn } = await import("child_process");
+      const scriptPath = path.join(process.cwd(), "scraper", "run_scraper.py");
 
-    for (const item of items) {
-      try {
-        // Mesma lógica da rota PATCH refresh=true — tribunal-aware via scraper Python
-        const scraperResult = await new Promise<Record<string, unknown> | null>((resolve) => {
-          const proc = spawn(
-            "python3",
-            [scriptPath, "consultar", item.tribunal, item.numeroProcesso, "numero"],
-            { env: { ...process.env }, timeout: 60000 }
-          );
-          let stdout = "";
-          proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-          proc.on("close", () => {
-            try {
-              const js = stdout.indexOf("{");
-              const je = stdout.lastIndexOf("}");
-              if (js !== -1) resolve(JSON.parse(stdout.slice(js, je + 1)) as Record<string, unknown>);
-              else resolve(null);
-            } catch { resolve(null); }
+      for (const item of items) {
+        try {
+          // Mesma lógica da rota PATCH refresh=true — tribunal-aware via scraper Python
+          const scraperResult = await new Promise<Record<string, unknown> | null>((resolve) => {
+            const proc = spawn(
+              "python3",
+              [scriptPath, "consultar", item.tribunal, item.numeroProcesso, "numero"],
+              { env: { ...process.env }, timeout: 60000 }
+            );
+            let stdout = "";
+            proc.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
+            proc.on("close", () => {
+              try {
+                const js = stdout.indexOf("{");
+                const je = stdout.lastIndexOf("}");
+                if (js !== -1) resolve(JSON.parse(stdout.slice(js, je + 1)) as Record<string, unknown>);
+                else resolve(null);
+              } catch { resolve(null); }
+            });
+            proc.on("error", () => resolve(null));
           });
-          proc.on("error", () => resolve(null));
-        });
 
-        const update: Partial<import("@shared/schema").InsertProcessoAcompanhado> = {
-          ultimaVerificacao: new Date(),
-        };
+          const update: Partial<import("@shared/schema").InsertProcessoAcompanhado> = {
+            ultimaVerificacao: new Date(),
+          };
 
-        if (scraperResult) {
-          const processos = scraperResult.processos as Array<{
-            classe?: string;
-            assunto?: string;
-            tribunal?: string;
-            movimentacoes?: Array<{ data: string; descricao: string }>;
-          }> | undefined;
-          const fonte = scraperResult.fonte as string | undefined;
+          if (scraperResult) {
+            const processos = scraperResult.processos as Array<{
+              classe?: string;
+              assunto?: string;
+              tribunal?: string;
+              movimentacoes?: Array<{ data: string; descricao: string }>;
+            }> | undefined;
+            const fonte = scraperResult.fonte as string | undefined;
 
-          if (fonte) update.fonte = fonte;
+            if (fonte) update.fonte = fonte;
 
-          if (processos && processos.length > 0) {
-            const proc = processos[0];
-            const movs = proc.movimentacoes ?? [];
-            const novoUltimoAndamento = movs[0]?.descricao ?? null;
-            const novaData = movs[0]?.data ?? null;
+            if (processos && processos.length > 0) {
+              const proc = processos[0];
+              const movs = proc.movimentacoes ?? [];
+              const novoUltimoAndamento = movs[0]?.descricao ?? null;
+              const novaData = movs[0]?.data ?? null;
 
-            const mudou = novoUltimoAndamento !== null && novoUltimoAndamento !== item.ultimoAndamento;
+              const mudou = novoUltimoAndamento !== null && novoUltimoAndamento !== item.ultimoAndamento;
 
-            if (mudou) {
-              update.ultimoAndamento = novoUltimoAndamento;
-              update.dataUltimoAndamento = novaData ?? item.dataUltimoAndamento ?? undefined;
-              update.novosAndamentos = (item.novosAndamentos ?? 0) + 1;
-              if (proc.classe) update.classe = proc.classe;
-              if (proc.assunto) update.assunto = proc.assunto;
-              if (proc.tribunal) update.tribunal = proc.tribunal;
+              if (mudou) {
+                update.ultimoAndamento = novoUltimoAndamento;
+                update.dataUltimoAndamento = novaData ?? item.dataUltimoAndamento ?? undefined;
+                update.novosAndamentos = (item.novosAndamentos ?? 0) + 1;
+                if (proc.classe) update.classe = proc.classe;
+                if (proc.assunto) update.assunto = proc.assunto;
+                if (proc.tribunal) update.tribunal = proc.tribunal;
+              }
             }
           }
-        }
 
-        await storage.updateProcessoAcompanhado(item.id, update);
-      } catch {
-        // Ignora falhas individuais — não interrompe o job
+          await storage.updateProcessoAcompanhado(item.id, update);
+        } catch {
+          // Ignora falhas individuais — não interrompe o job
+        }
+        // Pausa entre consultas para não sobrecarregar os tribunais
+        await new Promise((r) => setTimeout(r, 3000));
       }
-      // Pausa entre consultas para não sobrecarregar os tribunais
-      await new Promise((r) => setTimeout(r, 3000));
+    } finally {
+      isRunning = false;
     }
   };
 
