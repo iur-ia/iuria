@@ -189,8 +189,7 @@ export default function PeticoesIA() {
     content: "",
     editorProps: {
       attributes: {
-        class:
-          "prose prose-sm dark:prose-invert max-w-none focus:outline-none min-h-[60vh] font-serif text-[15px] leading-[1.75]",
+        class: "iuria-paper-content focus:outline-none min-h-[60vh]",
       },
     },
     onUpdate: () => setDirty(true),
@@ -863,10 +862,10 @@ export default function PeticoesIA() {
           <EditorToolbar editor={editor} />
 
           <ScrollArea className="flex-1 surface-elevated rounded-md">
-            <div className="mx-auto my-6 bg-white text-zinc-900 dark:bg-[#fafaf7] shadow-sm border border-border max-w-[820px] min-h-[1000px] px-[80px] py-[72px] print:shadow-none print:border-0 print:max-w-full print:p-0">
+            <div className="iuria-paper mx-auto my-6 shadow-sm border border-border max-w-[820px] min-h-[1000px] px-[80px] py-[72px] print:shadow-none print:border-0 print:max-w-full print:p-0">
               {headerHtml && (
                 <div
-                  className="text-xs text-zinc-700 mb-6 pb-3 border-b border-zinc-300 [&>*]:!my-0"
+                  className="iuria-paper-affix mb-6 pb-3 border-b border-zinc-300 text-center"
                   dangerouslySetInnerHTML={{ __html: headerHtml }}
                   data-testid="editor-header"
                 />
@@ -874,13 +873,13 @@ export default function PeticoesIA() {
               <EditorContent editor={editor} />
               {footerHtml && (
                 <div
-                  className="text-xs text-zinc-700 mt-12 pt-3 border-t border-zinc-300 [&>*]:!my-0"
+                  className="iuria-paper-affix mt-12 pt-3 border-t border-zinc-300 text-center"
                   dangerouslySetInnerHTML={{ __html: footerHtml }}
                   data-testid="editor-footer"
                 />
               )}
               {escritorio?.nome && !headerHtml && !footerHtml && (
-                <div className="mt-12 pt-4 border-t border-zinc-300 text-[10px] text-zinc-500 text-center">
+                <div className="mt-12 pt-4 border-t border-zinc-300 text-[10px] text-zinc-600 text-center" style={{ fontFamily: "Arial, Helvetica, sans-serif" }}>
                   {escritorio.nome}
                   {escritorio.oab ? ` — OAB ${escritorio.oab}` : ""}
                   {escritorio.endereco ? ` • ${escritorio.endereco}` : ""}

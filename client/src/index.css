@@ -257,6 +257,83 @@
     background: linear-gradient(90deg, transparent, hsl(var(--border)) 30%, hsl(var(--border)) 70%, transparent);
   }
 
+  /* =====================================================================
+   * IURIA — Editor "Papel" (Word-like)
+   * O editor de petições deve renderizar fielmente o documento .docx:
+   * fundo branco, fonte Arial 12pt, texto preto, justificado.
+   * Inline styles vindos da importação (font-family/font-size/color)
+   * sempre prevalecem sobre estes defaults.
+   * ===================================================================== */
+  .iuria-paper {
+    background-color: #ffffff;
+    color: #111111;
+  }
+  .dark .iuria-paper {
+    background-color: #fafaf7;
+    color: #111111;
+  }
+  .iuria-paper .iuria-paper-content,
+  .iuria-paper .iuria-paper-affix {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12pt;
+    line-height: 1.5;
+    color: #111111;
+    text-align: justify;
+    font-style: normal;
+  }
+  .iuria-paper .iuria-paper-affix {
+    font-size: 9pt;
+    color: #333333;
+    line-height: 1.35;
+  }
+  .iuria-paper .iuria-paper-affix > * { margin: 0; }
+  .iuria-paper .iuria-paper-content p,
+  .iuria-paper .iuria-paper-content h1,
+  .iuria-paper .iuria-paper-content h2,
+  .iuria-paper .iuria-paper-content h3,
+  .iuria-paper .iuria-paper-content h4,
+  .iuria-paper .iuria-paper-content h5,
+  .iuria-paper .iuria-paper-content h6,
+  .iuria-paper .iuria-paper-content li {
+    color: inherit;
+    font-family: inherit;
+    font-style: normal;
+  }
+  .iuria-paper .iuria-paper-content p { margin: 0 0 0.6em 0; }
+  .iuria-paper .iuria-paper-content h1 { font-size: 16pt; font-weight: 700; margin: 1em 0 0.5em; }
+  .iuria-paper .iuria-paper-content h2 { font-size: 14pt; font-weight: 700; margin: 1em 0 0.5em; }
+  .iuria-paper .iuria-paper-content h3 { font-size: 13pt; font-weight: 700; margin: 0.9em 0 0.45em; }
+  .iuria-paper .iuria-paper-content h4,
+  .iuria-paper .iuria-paper-content h5,
+  .iuria-paper .iuria-paper-content h6 { font-size: 12pt; font-weight: 700; margin: 0.8em 0 0.4em; }
+  .iuria-paper .iuria-paper-content ul,
+  .iuria-paper .iuria-paper-content ol { margin: 0.4em 0 0.8em 1.6em; }
+  .iuria-paper .iuria-paper-content blockquote {
+    margin: 0.6em 0 0.6em 1.6em;
+    padding-left: 0.8em;
+    border-left: 3px solid #d4d4d4;
+    color: #333333;
+  }
+  .iuria-paper .iuria-paper-content table {
+    border-collapse: collapse;
+    margin: 0.6em 0;
+  }
+  .iuria-paper .iuria-paper-content table td,
+  .iuria-paper .iuria-paper-content table th {
+    border: 1px solid #c8c8c8;
+    padding: 4px 6px;
+    vertical-align: top;
+  }
+  .iuria-paper .iuria-paper-content a { color: #0a58ca; text-decoration: underline; }
+  /* Placeholder do TipTap mantido legível */
+  .iuria-paper .iuria-paper-content p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    color: #888;
+    pointer-events: none;
+    height: 0;
+  }
+
   input[type="search"]::-webkit-search-cancel-button { @apply hidden; }
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);
