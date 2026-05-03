@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { CommunicationTemplate, Communication } from "@shared/schema";
+import type { CommunicationTemplate, Communication, Equipe } from "@shared/schema";
 
 type EnrichedComm = Communication & {
   templateNome?: string | null;
@@ -105,7 +105,7 @@ function GerarComunicacaoDialog({
     catch { return []; }
   })();
 
-  const { data: equipe = [] } = useQuery<any[]>({ queryKey: ["/api/equipe"] });
+  const { data: equipe = [] } = useQuery<Equipe[]>({ queryKey: ["/api/equipe"] });
 
   const previewMutation = useMutation({
     mutationFn: async () => {
@@ -196,7 +196,7 @@ function GerarComunicacaoDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">Nenhum</SelectItem>
-                {equipe.map((m: any) => (
+                {equipe.map((m) => (
                   <SelectItem key={m.id} value={m.id}>{m.nome} — OAB {m.oab}</SelectItem>
                 ))}
               </SelectContent>
@@ -283,7 +283,7 @@ function TemplateFormDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       const camposArr = form.camposObrigatorios
-        ? form.camposObrigatorios.split(",").map((s) => s.trim()).filter(Boolean)
+        ? form.camposObrigatorios.split(",").map((s: string) => s.trim()).filter(Boolean)
         : [];
       const payload = {
         ...form,

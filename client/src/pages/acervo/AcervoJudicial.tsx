@@ -17,7 +17,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { AcervoProcesso, Communication } from "@shared/schema";
+import type { AcervoProcesso, Communication, AcervoAndamento, AcervoDocumento, CommunicationTemplate, Equipe } from "@shared/schema";
 
 type CommResponse = Communication & {
   templateNome?: string | null;
@@ -37,7 +37,7 @@ function AndamentosTab({ acervoId }: { acervoId: string }) {
   const [novoAndamento, setNovoAndamento] = useState({ data: "", descricao: "", detalhes: "" });
   const [mostraForm, setMostraForm] = useState(false);
 
-  const { data: andamentos = [], isLoading } = useQuery<any[]>({
+  const { data: andamentos = [], isLoading } = useQuery<AcervoAndamento[]>({
     queryKey: ["/api/acervo", acervoId, "andamentos"],
     queryFn: async () => {
       const res = await fetch(`/api/acervo/${acervoId}/andamentos`);
@@ -149,7 +149,7 @@ function AndamentosTab({ acervoId }: { acervoId: string }) {
         <div className="relative">
           <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-border" />
           <div className="space-y-3 pl-8">
-            {andamentos.map((and: any, i: number) => (
+            {andamentos.map((and, i) => (
               <div key={and.id} className="relative" data-testid={`andamento-item-${i}`}>
                 <div className={`absolute -left-5 top-2 h-2 w-2 rounded-full ${and.critico ? "bg-destructive" : "bg-primary"}`} />
                 <div className={`p-3 rounded-md border ${and.critico ? "bg-destructive/5 border-destructive/30" : "bg-muted/40"}`}>
@@ -199,7 +199,7 @@ function DocumentosTab({ acervoId }: { acervoId: string }) {
   const [novoDoc, setNovoDoc] = useState({ nome: "", descricao: "", url: "" });
   const [mostraForm, setMostraForm] = useState(false);
 
-  const { data: documentos = [], isLoading } = useQuery<any[]>({
+  const { data: documentos = [], isLoading } = useQuery<AcervoDocumento[]>({
     queryKey: ["/api/acervo", acervoId, "documentos"],
     queryFn: async () => {
       const res = await fetch(`/api/acervo/${acervoId}/documentos`);
@@ -295,7 +295,7 @@ function DocumentosTab({ acervoId }: { acervoId: string }) {
         </div>
       ) : (
         <div className="space-y-2">
-          {documentos.map((doc: any, i: number) => (
+          {documentos.map((doc, i) => (
             <div key={doc.id} className="flex items-center gap-3 p-3 rounded-md border bg-muted/30" data-testid={`doc-item-${i}`}>
               <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -422,10 +422,10 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
   const [responsavelId, setResponsavelId] = useState("");
   const [campos, setCampos] = useState<Record<string, string>>({});
 
-  const { data: templates = [] } = useQuery<any[]>({ queryKey: ["/api/communication-templates"] });
-  const { data: equipe = [] } = useQuery<any[]>({ queryKey: ["/api/equipe"] });
+  const { data: templates = [] } = useQuery<CommunicationTemplate[]>({ queryKey: ["/api/communication-templates"] });
+  const { data: equipe = [] } = useQuery<Equipe[]>({ queryKey: ["/api/equipe"] });
 
-  const selectedTemplate = templates.find((t: any) => t.id === templateId);
+  const selectedTemplate = templates.find((t) => t.id === templateId);
   const camposObrigatorios: string[] = (() => {
     try { return selectedTemplate?.camposObrigatorios ? JSON.parse(selectedTemplate.camposObrigatorios) : []; }
     catch { return []; }
@@ -474,7 +474,7 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
             <Select value={templateId} onValueChange={setTemplateId}>
               <SelectTrigger data-testid="select-template-comm"><SelectValue placeholder="Selecionar template..." /></SelectTrigger>
               <SelectContent>
-                {templates.map((t: any) => (
+                {templates.map((t) => (
                   <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
                 ))}
               </SelectContent>
@@ -494,7 +494,7 @@ function GerarComDialog({ acervoId, acervoNumero, onClose, onGenerated }: {
               <SelectTrigger data-testid="select-resp-comm"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">Nenhum</SelectItem>
-                {equipe.map((m: any) => (
+                {equipe.map((m) => (
                   <SelectItem key={m.id} value={m.id}>{m.nome}{m.oab ? ` — OAB ${m.oab}` : ""}</SelectItem>
                 ))}
               </SelectContent>
@@ -591,7 +591,7 @@ function ComunicacoesTab({ acervoId, acervoNumero }: { acervoId: string; acervoN
         </div>
       ) : (
         <div className="space-y-2">
-          {comms.map((c: any) => (
+          {comms.map((c) => (
             <div key={c.id} className="p-3 rounded-md border bg-muted/30" data-testid={`comm-item-${c.id}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -847,7 +847,7 @@ export default function AcervoJudicial() {
     },
   });
 
-  const { data: equipe = [] } = useQuery<any[]>({
+  const { data: equipe = [] } = useQuery<Equipe[]>({
     queryKey: ["/api/equipe"],
     queryFn: async () => {
       const res = await fetch("/api/equipe");
@@ -965,7 +965,7 @@ export default function AcervoJudicial() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">Todos responsáveis</SelectItem>
-                  {equipe.map((m: any) => (
+                  {equipe.map((m) => (
                     <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
                   ))}
                 </SelectContent>

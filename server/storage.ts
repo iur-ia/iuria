@@ -32,7 +32,7 @@ import {
   timesheetEntries, communicationTemplates, communications, escritorioConfig,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, lte, and, inArray, gte, sql } from "drizzle-orm";
+import { eq, desc, lte, and, inArray, gte, sql, type SQL } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -780,7 +780,7 @@ export class DatabaseStorage implements IStorage {
   // ==================== COMMUNICATIONS ====================
 
   async getCommunications(filters?: { acervoId?: string; status?: string }): Promise<Communication[]> {
-    const conditions: any[] = [];
+    const conditions: SQL[] = [];
     if (filters?.acervoId) conditions.push(eq(communications.acervoId, filters.acervoId));
     if (filters?.status) conditions.push(eq(communications.status, filters.status));
     if (conditions.length > 0) {
