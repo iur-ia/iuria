@@ -492,6 +492,29 @@ export type InsertAcervoDocumento = z.infer<typeof insertAcervoDocumentoSchema>;
 export type AcervoDocumento = typeof acervoDocumentos.$inferSelect;
 
 // Tramitações do fluxo interno (principalmente processos administrativos)
+// ==================== TIMESHEET ====================
+export const timesheetEntries = pgTable("timesheet_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  equipeId: varchar("equipe_id").references(() => equipe.id),
+  processoId: varchar("processo_id").references(() => processos.id),
+  clienteId: varchar("cliente_id").references(() => clientes.id),
+  data: date("data").notNull(),
+  horas: decimal("horas", { precision: 5, scale: 2 }).notNull(),
+  descricao: text("descricao"),
+  categoria: text("categoria").notNull().default("Tarefa"), // Pesquisa | Audiência | Redação | Reunião | Consultoria | Administrativo | Tarefa
+  faturavel: boolean("faturavel").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTimesheetEntrySchema = createInsertSchema(timesheetEntries).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTimesheetEntry = z.infer<typeof insertTimesheetEntrySchema>;
+export type TimesheetEntry = typeof timesheetEntries.$inferSelect;
+
+// ==================== ACERVO TRAMITACOES ====================
 export const acervoTramitacoes = pgTable("acervo_tramitacoes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   acervoId: varchar("acervo_id").notNull().references(() => acervoProcessos.id, { onDelete: "cascade" }),

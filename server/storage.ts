@@ -20,11 +20,13 @@ import {
   type ProcessoAcompanhado, type InsertProcessoAcompanhado,
   type DeadlineRule, type InsertDeadlineRule,
   type DeadlineAlert, type InsertDeadlineAlert,
+  type TimesheetEntry, type InsertTimesheetEntry,
   users, clientes, equipe, processos, atividades, documentos, 
   contasReceber, contasPagar, honorarios, templates,
   tribunais, consultasProcessuais, monitoramentos, verificacoesMonitoramento,
   acervoProcessos, acervoAndamentos, acervoDocumentos, acervoTramitacoes,
-  processosAcompanhados, deadlineRules, deadlineAlerts
+  processosAcompanhados, deadlineRules, deadlineAlerts,
+  timesheetEntries,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, inArray, gte, sql } from "drizzle-orm";
@@ -91,6 +93,10 @@ export interface IStorage {
   createHonorario(honorario: InsertHonorario): Promise<Honorario>;
   updateHonorario(id: string, honorario: Partial<InsertHonorario>): Promise<Honorario | undefined>;
   deleteHonorario(id: string): Promise<boolean>;
+
+  // Timesheet
+  getTimesheetEntries(): Promise<TimesheetEntry[]>;
+  createTimesheetEntry(entry: InsertTimesheetEntry): Promise<TimesheetEntry>;
   
   // Templates
   getTemplates(): Promise<Template[]>;
@@ -390,6 +396,16 @@ export class DatabaseStorage implements IStorage {
   async deleteHonorario(id: string): Promise<boolean> {
     const result = await db.delete(honorarios).where(eq(honorarios.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Timesheet
+  async getTimesheetEntries(): Promise<TimesheetEntry[]> {
+    return db.select().from(timesheetEntries).orderBy(desc(timesheetEntries.data));
+  }
+
+  async createTimesheetEntry(entry: InsertTimesheetEntry): Promise<TimesheetEntry> {
+    const [created] = await db.insert(timesheetEntries).values(entry).returning();
+    return created;
   }
 
   // Templates

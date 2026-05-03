@@ -19,10 +19,10 @@ import {
 import {
   Briefcase, AlertCircle, Clock, DollarSign, TrendingDown,
   Bell, Eye, RefreshCw, AlertTriangle, CheckCircle2,
-  ChevronRight, Activity, Zap, Printer, Download,
+  ChevronRight, Activity, Zap, Printer, Download, Users, TrendingUp,
 } from "lucide-react";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface RiscoItem {
   id: string;
@@ -59,12 +59,23 @@ interface DashboardKPI {
     totalRecebidoPeriodo: number;
     honorariosPendentes: number;
     honorariosPorStatus: Record<string, number>;
+    honorariosPorCliente: { clienteId: string; nome: string; total: number; recebido: number; pendente: number }[];
+    receitaMesAtual: number;
+    metaReceitaMensal: number;
+  };
+  timesheet: {
+    totalHorasRegistradas: number;
+    horasPorColaborador: { equipeId: string; nome: string; totalHoras: number; horasFaturaveis: number }[];
   };
   mapaRisco: RiscoItem[];
   trendFinanceiro: { mes: string; label: string; recebido: number; pago: number; aVencer: number }[];
   tarefasPorSemana: { label: string; concluidas: number; abertas: number }[];
   acompanhados: { total: number; comNovosAndamentos: number };
-  filtros: { areas: string[]; equipe: { id: string; nome: string }[] };
+  filtros: {
+    areas: string[];
+    equipe: { id: string; nome: string }[];
+    clientes: { id: string; nome: string }[];
+  };
   periodo: string;
   periodoLabel: string;
   geradoEm: string;
@@ -87,7 +98,7 @@ const RISCO_CFG: Record<string, { label: string; cls: string; icon: typeof Alert
   BAIXO:   { label: "Baixo",  cls: "bg-green-100 text-green-800 border-green-200 dark:bg-green-950 dark:text-green-200 dark:border-green-900", icon: CheckCircle2 },
 };
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmt(v: number): string {
   if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
@@ -110,6 +121,16 @@ function exportCSV(data: DashboardKPI) {
     [`Recebido (${data.periodoLabel})`, fmt(data.financeiro.totalRecebidoPeriodo)],
     [`A Pagar (${data.periodoLabel})`, fmt(data.financeiro.totalPagarPeriodo)],
     ["Honorários Pendentes (qtd)", String(data.financeiro.honorariosPendentes)],
+    ["Receita Mês Atual", fmt(data.financeiro.receitaMesAtual)],
+    ["Meta Receita Mensal", fmt(data.financeiro.metaReceitaMensal)],
+    [],
+    ["=== Honorários por Cliente ==="],
+    ["Cliente", "Total Contratado", "Recebido", "Pendente"],
+    ...data.financeiro.honorariosPorCliente.map((c) => [c.nome, fmt(c.total), fmt(c.recebido), fmt(c.pendente)]),
+    [],
+    ["=== Timesheet ==="],
+    ["Colaborador", "Total Horas", "Horas Faturáveis"],
+    ...data.timesheet.horasPorColaborador.map((c) => [c.nome, String(c.totalHoras), String(c.horasFaturaveis)]),
     [],
     ["=== Mapa de Risco ==="],
     ["Título", "Risco", "Score", "Tipo", "Data", "Processo", "Área", "Dias Atraso", "Responsável"],
@@ -136,7 +157,7 @@ function exportCSV(data: DashboardKPI) {
   URL.revokeObjectURL(url);
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function RiscoBadge({ risco }: { risco: string | null }) {
   const cfg = risco ? RISCO_CFG[risco] : null;
@@ -205,26 +226,29 @@ function KpiCard({
   );
 }
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [periodo, setPeriodo] = useState<Periodo>(() => (sessionStorage.getItem("dashboard_periodo") as Periodo) || "mes");
   const [area, setArea]       = useState(() => sessionStorage.getItem("dashboard_area") || "");
   const [resp, setResp]       = useState(() => sessionStorage.getItem("dashboard_resp") || "");
+  const [cliente, setCliente] = useState(() => sessionStorage.getItem("dashboard_cliente") || "");
 
   useEffect(() => { sessionStorage.setItem("dashboard_periodo", periodo); }, [periodo]);
   useEffect(() => { sessionStorage.setItem("dashboard_area",    area);    }, [area]);
   useEffect(() => { sessionStorage.setItem("dashboard_resp",    resp);    }, [resp]);
+  useEffect(() => { sessionStorage.setItem("dashboard_cliente", cliente); }, [cliente]);
 
   const buildUrl = useCallback(() => {
     const params = new URLSearchParams({ periodo });
-    if (area) params.set("area", area);
-    if (resp) params.set("responsavel", resp);
+    if (area)    params.set("area", area);
+    if (resp)    params.set("responsavel", resp);
+    if (cliente) params.set("cliente", cliente);
     return `/api/dashboard/kpis?${params}`;
-  }, [periodo, area, resp]);
+  }, [periodo, area, resp, cliente]);
 
   const { data, isLoading, dataUpdatedAt, refetch, isFetching } = useQuery<DashboardKPI>({
-    queryKey: ["/api/dashboard/kpis", periodo, area, resp],
+    queryKey: ["/api/dashboard/kpis", periodo, area, resp, cliente],
     queryFn: () => fetch(buildUrl()).then((r) => r.json()),
     refetchInterval: 5 * 60 * 1000,
   });
@@ -250,7 +274,12 @@ export default function Dashboard() {
       ].filter((d) => d.value > 0)
     : [];
 
-  const hasActiveFilter = !!area || !!resp;
+  const hasActiveFilter = !!area || !!resp || !!cliente;
+
+  // Receita vs meta calculation
+  const receitaMeta = data?.financeiro.receitaMesAtual ?? 0;
+  const meta = data?.financeiro.metaReceitaMensal ?? 0;
+  const receitaPct = meta > 0 ? Math.min(Math.round((receitaMeta / meta) * 100), 200) : 0;
 
   return (
     <div className="min-h-screen bg-muted/30 print:bg-white">
@@ -310,8 +339,21 @@ export default function Dashboard() {
               </SelectContent>
             </Select>
 
+            {/* Cliente filter */}
+            <Select value={cliente || "todos"} onValueChange={(v) => setCliente(v === "todos" ? "" : v)}>
+              <SelectTrigger className="w-44" data-testid="filtro-cliente">
+                <SelectValue placeholder="Cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os Clientes</SelectItem>
+                {(data?.filtros?.clientes ?? []).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {hasActiveFilter && (
-              <Button variant="ghost" size="sm" onClick={() => { setArea(""); setResp(""); }} data-testid="button-limpar-filtros">
+              <Button variant="ghost" size="sm" onClick={() => { setArea(""); setResp(""); setCliente(""); }} data-testid="button-limpar-filtros">
                 Limpar filtros
               </Button>
             )}
@@ -335,7 +377,7 @@ export default function Dashboard() {
         <div className="hidden print:block">
           <h1 className="text-xl font-bold">Painel de Controle — LegalSys</h1>
           <p className="text-sm text-gray-500">
-            Período: {periodoLbl}{area && ` · Área: ${area}`}{resp && ` · Responsável`} · Gerado em {new Date().toLocaleString("pt-BR")}
+            Período: {periodoLbl}{area && ` · Área: ${area}`}{resp && ` · Responsável`}{cliente && ` · Cliente`} · Gerado em {new Date().toLocaleString("pt-BR")}
           </p>
         </div>
 
@@ -394,6 +436,103 @@ export default function Dashboard() {
               sub={isLoading ? "" : `Pendente: ${fmt(data?.financeiro.honorariosPorStatus?.["Pendente"] ?? 0)}`}
               icon={Eye} iconColor="bg-purple-500" href="/financeiro/honorarios" loading={isLoading} onNavigate={handleNavigate} />
           </div>
+        </div>
+
+        {/* ── Receita vs Meta + Honorários por Cliente ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Receita vs Meta */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-500" />
+                Receita do Mês vs Meta
+                <Badge variant="secondary" className="ml-auto no-default-active-elevate text-xs">
+                  Meta = média 3 meses anteriores
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-10 w-32" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-4 w-48" />
+                </div>
+              ) : (
+                <div className="space-y-3" data-testid="receita-vs-meta">
+                  <div className="flex items-end gap-3">
+                    <span className="text-3xl font-bold tabular-nums">{fmt(receitaMeta)}</span>
+                    <span className="text-sm text-muted-foreground mb-1">de {fmt(meta)} meta</span>
+                  </div>
+                  <div className="h-3 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-3 rounded-full transition-all ${receitaPct >= 100 ? "bg-emerald-500" : receitaPct >= 70 ? "bg-amber-500" : "bg-red-500"}`}
+                      style={{ width: `${Math.min(receitaPct, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className={`font-semibold ${receitaPct >= 100 ? "text-emerald-600" : receitaPct >= 70 ? "text-amber-600" : "text-red-600"}`}>
+                      {receitaPct}% da meta
+                    </span>
+                    <span className="text-muted-foreground">
+                      {meta > 0
+                        ? receitaMeta >= meta
+                          ? `Superado em ${fmt(receitaMeta - meta)}`
+                          : `Faltam ${fmt(meta - receitaMeta)}`
+                        : "Sem dados históricos para meta"}
+                    </span>
+                  </div>
+                  {meta === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Registre recebimentos nos meses anteriores para calcular a meta automaticamente.
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Honorários por Cliente */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="w-4 h-4 text-violet-500" />
+                Honorários por Cliente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
+              ) : (data?.financeiro.honorariosPorCliente.length ?? 0) === 0 ? (
+                <div className="py-8 text-center">
+                  <Users className="w-10 h-10 mx-auto text-muted-foreground mb-2 opacity-40" />
+                  <p className="text-sm text-muted-foreground">Nenhum honorário cadastrado</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {(data?.financeiro.honorariosPorCliente ?? []).map((c) => {
+                    const pct = c.total > 0 ? Math.round((c.recebido / c.total) * 100) : 0;
+                    return (
+                      <div key={c.clienteId} className="space-y-1" data-testid={`honorario-cliente-${c.clienteId}`}>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="truncate font-medium max-w-[55%]">{c.nome}</span>
+                          <span className="text-muted-foreground tabular-nums text-xs">
+                            {fmt(c.recebido)} / {fmt(c.total)}
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-1.5 rounded-full ${pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-500" : "bg-orange-500"}`}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
         {/* ── Mapa de Risco + Processos por Área ── */}
@@ -554,7 +693,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* ── Distribuição de Risco + Resumo Operacional ── */}
+        {/* ── Distribuição de Risco + Timesheet ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Pie */}
           <Card className="border-0 shadow-sm">
@@ -585,64 +724,119 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Resumo Operacional */}
+          {/* Timesheet — horas por colaborador */}
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Resumo Operacional</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Clock className="w-4 h-4 text-blue-500" />
+                Horas Registradas — {periodoLbl}
+                {!isLoading && (data?.timesheet.totalHorasRegistradas ?? 0) > 0 && (
+                  <Badge variant="secondary" className="ml-auto no-default-active-elevate">
+                    Total: {data?.timesheet.totalHorasRegistradas}h
+                  </Badge>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {[
-                  {
-                    label: "Tarefas concluídas",
-                    value: data?.atividades.concluidas ?? 0,
-                    total: data?.atividades.total ?? 0,
-                    color: "bg-emerald-500",
-                    pct: data ? Math.round((data.atividades.concluidas / Math.max(data.atividades.total, 1)) * 100) : 0,
-                  },
-                  {
-                    label: "Prazo de cumprimento",
-                    value: (data?.atividades.total ?? 0) - (data?.atividades.atrasadas ?? 0),
-                    total: data?.atividades.total ?? 0,
-                    color: "bg-blue-500",
-                    pct: data ? Math.max(0, 100 - Math.round((data.atividades.atrasadas / Math.max(data.atividades.total, 1)) * 100)) : 0,
-                  },
-                  {
-                    label: "Processos ativos",
-                    value: data?.processos.ativos ?? 0,
-                    total: data?.processos.total ?? 0,
-                    color: "bg-violet-500",
-                    pct: data ? Math.round((data.processos.ativos / Math.max(data.processos.total, 1)) * 100) : 0,
-                  },
-                ].map((item, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between text-sm mb-1.5">
-                      <span className="text-muted-foreground">{item.label}</span>
-                      <span className="font-semibold tabular-nums">
-                        {isLoading ? "…" : `${item.value} / ${item.total}`}
-                        {!isLoading && (
-                          <span className="text-muted-foreground font-normal ml-1.5">({item.pct}%)</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full">
-                      {!isLoading && <div className={`h-2 rounded-full transition-all ${item.color}`} style={{ width: `${Math.min(item.pct, 100)}%` }} />}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="pt-2 grid grid-cols-2 gap-2 border-t print:hidden">
-                  <Button variant="outline" size="sm" onClick={() => navigate("/atividades")} data-testid="button-ir-atividades">
-                    <Clock className="w-3.5 h-3.5 mr-1.5" /> Atividades
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/processos")} data-testid="button-ir-processos">
-                    <Briefcase className="w-3.5 h-3.5 mr-1.5" /> Processos
-                  </Button>
+              {isLoading ? (
+                <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+              ) : (data?.timesheet.horasPorColaborador.length ?? 0) === 0 ? (
+                <div className="py-8 text-center">
+                  <Clock className="w-10 h-10 mx-auto text-muted-foreground mb-2 opacity-40" />
+                  <p className="text-sm text-muted-foreground">Nenhuma hora registrada no período</p>
+                  <p className="text-xs text-muted-foreground mt-1">Use o módulo de Timesheet para registrar horas</p>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2.5" data-testid="timesheet-colaboradores">
+                  {(data?.timesheet.horasPorColaborador ?? []).map((col) => {
+                    const maxHoras = Math.max(...(data?.timesheet.horasPorColaborador ?? []).map((c) => c.totalHoras), 1);
+                    const pct = Math.round((col.totalHoras / maxHoras) * 100);
+                    const fatPct = col.totalHoras > 0 ? Math.round((col.horasFaturaveis / col.totalHoras) * 100) : 0;
+                    return (
+                      <div key={col.equipeId} data-testid={`timesheet-col-${col.equipeId}`}>
+                        <div className="flex items-center justify-between text-sm mb-1">
+                          <span className="font-medium truncate max-w-[55%]">{col.nome}</span>
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-muted-foreground">{col.horasFaturaveis}h fat.</span>
+                            <span className="font-semibold tabular-nums">{col.totalHoras}h</span>
+                            <Badge variant="secondary" className="no-default-active-elevate text-xs px-1.5 py-0">
+                              {fatPct}%
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* ── Resumo Operacional ── */}
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Resumo Operacional</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                {
+                  label: "Tarefas concluídas",
+                  value: data?.atividades.concluidas ?? 0,
+                  total: data?.atividades.total ?? 0,
+                  color: "bg-emerald-500",
+                  pct: data ? Math.round((data.atividades.concluidas / Math.max(data.atividades.total, 1)) * 100) : 0,
+                },
+                {
+                  label: "Prazo de cumprimento",
+                  value: (data?.atividades.total ?? 0) - (data?.atividades.atrasadas ?? 0),
+                  total: data?.atividades.total ?? 0,
+                  color: "bg-blue-500",
+                  pct: data ? Math.max(0, 100 - Math.round((data.atividades.atrasadas / Math.max(data.atividades.total, 1)) * 100)) : 0,
+                },
+                {
+                  label: "Processos ativos",
+                  value: data?.processos.ativos ?? 0,
+                  total: data?.processos.total ?? 0,
+                  color: "bg-violet-500",
+                  pct: data ? Math.round((data.processos.ativos / Math.max(data.processos.total, 1)) * 100) : 0,
+                },
+              ].map((item, i) => (
+                <div key={i}>
+                  <div className="flex justify-between text-sm mb-1.5">
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="font-semibold tabular-nums">
+                      {isLoading ? "…" : `${item.value} / ${item.total}`}
+                      {!isLoading && (
+                        <span className="text-muted-foreground font-normal ml-1.5">({item.pct}%)</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full">
+                    {!isLoading && <div className={`h-2 rounded-full transition-all ${item.color}`} style={{ width: `${Math.min(item.pct, 100)}%` }} />}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-4 mt-4 border-t flex flex-wrap gap-2 print:hidden">
+              <Button variant="outline" size="sm" onClick={() => navigate("/atividades")} data-testid="button-ir-atividades">
+                <Clock className="w-3.5 h-3.5 mr-1.5" /> Atividades
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate("/processos")} data-testid="button-ir-processos">
+                <Briefcase className="w-3.5 h-3.5 mr-1.5" /> Processos
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate("/financeiro")} data-testid="button-ir-financeiro">
+                <DollarSign className="w-3.5 h-3.5 mr-1.5" /> Financeiro
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   );

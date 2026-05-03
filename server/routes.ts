@@ -2732,19 +2732,23 @@ except Exception as e:
   // ==================== DASHBOARD KPIs ====================
   app.get("/api/dashboard/kpis", async (req, res) => {
     try {
-      const [proc, atv, cr, cp, acomp, eq] = await Promise.all([
+      const [proc, atv, cr, cp, acomp, eq, hon, ts, cli] = await Promise.all([
         storage.getProcessos(),
         storage.getAtividades(),
         storage.getContasReceber(),
         storage.getContasPagar(),
         storage.getProcessosAcompanhados(),
         storage.getEquipe(),
+        storage.getHonorarios(),
+        storage.getTimesheetEntries(),
+        storage.getClientes(),
       ]);
 
       // ---- Query params ----
       const periodo = (req.query.periodo as string) || "mes";
       const areaFiltro = (req.query.area as string) || "";
       const responsavelFiltro = (req.query.responsavel as string) || "";
+      const clienteFiltro = (req.query.cliente as string) || "";
       const periodoDias = periodo === "semana" ? 7 : periodo === "trimestre" ? 90 : 30;
       const periodoLabel = periodo === "semana" ? "7 dias" : periodo === "trimestre" ? "90 dias" : "30 dias";
 
@@ -2755,16 +2759,39 @@ except Exception as e:
       const haPeriodo = new Date(hoje.getTime() - periodoDias * 86400000).toISOString().split("T")[0];
       const ha30dDate = new Date(hoje.getTime() - 30 * 86400000).toISOString().split("T")[0];
 
-      // ---- Apply global filters ----
-      const procFiltrado = proc
-        .filter((p) => !areaFiltro || p.area === areaFiltro)
-        .filter((p) => !responsavelFiltro || p.responsavelId === responsavelFiltro);
-      const atvFiltrada = atv
-        .filter((a) => !responsavelFiltro || a.responsavelId === responsavelFiltro);
-
-      // ---- Build processo lookup for composite risk ----
+      // ---- Build lookup maps (needed before filtering) ----
       const processoMap = new Map(proc.map((p) => [p.id, p]));
       const equipeMap = new Map(eq.map((m) => [m.id, m.nome]));
+      const clienteMap = new Map(cli.map((c) => [c.id, c.nome]));
+
+      // ---- Apply global filters (área, responsável, cliente) — all KPIs ----
+      const procFiltrado = proc
+        .filter((p) => !areaFiltro || p.area === areaFiltro)
+        .filter((p) => !responsavelFiltro || p.responsavelId === responsavelFiltro)
+        .filter((p) => !clienteFiltro || p.clienteId === clienteFiltro);
+      const atvFiltrada = atv
+        .filter((a) => {
+          if (responsavelFiltro && a.responsavelId !== responsavelFiltro) return false;
+          if (areaFiltro || clienteFiltro) {
+            const p = a.processoId ? processoMap.get(a.processoId) : null;
+            if (areaFiltro && p?.area !== areaFiltro) return false;
+            if (clienteFiltro && p?.clienteId !== clienteFiltro) return false;
+          }
+          return true;
+        });
+      const crFiltrado = cr.filter((c) => {
+        if (!clienteFiltro) return true;
+        // find processo linked to this contaReceber
+        const proc = c.processoId ? processoMap.get(c.processoId) : null;
+        return !proc || proc.clienteId === clienteFiltro;
+      });
+      // contasPagar has no processoId/clienteId link — can't filter by client
+      const cpFiltrado = cp;
+      const tsFiltrado = ts.filter((t) => {
+        if (responsavelFiltro && t.equipeId !== responsavelFiltro) return false;
+        if (clienteFiltro && t.clienteId !== clienteFiltro) return false;
+        return true;
+      });
 
       // ---- Processos KPIs ----
       const processosAtivos = procFiltrado.filter((p) => p.status === "Ativo");
@@ -2840,22 +2867,60 @@ except Exception as e:
         .sort((a, b) => b.score - a.score || a.data.localeCompare(b.data))
         .slice(0, 15);
 
-      // ---- Financial KPIs ----
-      const totalReceber = cr
+      // ---- Financial KPIs (using filtered data) ----
+      const totalReceber = crFiltrado
         .filter((c) => c.status !== "Pago")
         .reduce((acc, c) => acc + parseFloat(c.valor), 0);
-      const totalRecebidoPeriodo = cr
+      const totalRecebidoPeriodo = crFiltrado
         .filter((c) => c.status === "Pago" && c.dataPagamento && c.dataPagamento >= haPeriodo)
         .reduce((acc, c) => acc + parseFloat(c.valor), 0);
-      const totalPagarPeriodo = cp
+      const totalPagarPeriodo = cpFiltrado
         .filter((c) => c.status !== "Pago" && c.vencimento <= emPeriodo)
         .reduce((acc, c) => acc + parseFloat(c.valor), 0);
 
-      // ---- Honorários por status (breakdown for drill-down) ----
-      const honorariosPorStatus = cr.reduce<Record<string, number>>((acc, c) => {
+      // ---- Honorários por status + por cliente ----
+      const honorariosPorStatus = crFiltrado.reduce<Record<string, number>>((acc, c) => {
         acc[c.status] = (acc[c.status] || 0) + parseFloat(c.valor);
         return acc;
       }, {});
+
+      // Honorários: breakdown by cliente from honorarios table
+      const honFiltrado = hon.filter((h) => !clienteFiltro || h.clienteId === clienteFiltro);
+      const honorariosPorCliente = cli.map((c) => {
+        const total = honFiltrado
+          .filter((h) => h.clienteId === c.id)
+          .reduce((acc, h) => acc + parseFloat(h.valorContratado ?? "0"), 0);
+        const recebido = honFiltrado
+          .filter((h) => h.clienteId === c.id)
+          .reduce((acc, h) => acc + parseFloat(h.valorRecebido ?? "0"), 0);
+        return { clienteId: c.id, nome: c.nome, total, recebido, pendente: total - recebido };
+      }).filter((x) => x.total > 0).sort((a, b) => b.pendente - a.pendente).slice(0, 8);
+
+      // ---- Receita realizada no mês vs meta (previous 3-month avg) ----
+      const anoMesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+      const receitaMesAtual = crFiltrado
+        .filter((c) => c.dataPagamento && c.dataPagamento.startsWith(anoMesAtual) && c.status === "Pago")
+        .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+      // Meta = average of last 3 months received
+      let somaMetaMeses = 0;
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+        const am = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        somaMetaMeses += crFiltrado
+          .filter((c) => c.dataPagamento && c.dataPagamento.startsWith(am) && c.status === "Pago")
+          .reduce((acc, c) => acc + parseFloat(c.valor), 0);
+      }
+      const metaReceitaMensal = Math.round(somaMetaMeses / 3);
+
+      // ---- Timesheet KPIs: hours by collaborator in period ----
+      const tsPeriodo = tsFiltrado.filter((t) => t.data >= haPeriodo && t.data <= hojeStr);
+      const horasPorColaborador = eq.map((m) => {
+        const entries = tsPeriodo.filter((t) => t.equipeId === m.id);
+        const total = entries.reduce((acc, t) => acc + parseFloat(t.horas), 0);
+        const faturavel = entries.filter((t) => t.faturavel).reduce((acc, t) => acc + parseFloat(t.horas), 0);
+        return { equipeId: m.id, nome: m.nome, totalHoras: Math.round(total * 10) / 10, horasFaturaveis: Math.round(faturavel * 10) / 10 };
+      }).filter((x) => x.totalHoras > 0).sort((a, b) => b.totalHoras - a.totalHoras);
+      const totalHorasRegistradas = horasPorColaborador.reduce((acc, x) => acc + x.totalHoras, 0);
 
       // ---- Financial trend: last 6 months ----
       const trendFinanceiro: { mes: string; label: string; recebido: number; pago: number; aVencer: number }[] = [];
@@ -2863,13 +2928,13 @@ except Exception as e:
         const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
         const anoMes = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
-        const recebido = cr
+        const recebido = crFiltrado
           .filter((c) => c.dataPagamento && c.dataPagamento.startsWith(anoMes) && c.status === "Pago")
           .reduce((acc, c) => acc + parseFloat(c.valor), 0);
-        const pago = cp
+        const pago = cpFiltrado
           .filter((c) => c.dataPagamento && c.dataPagamento.startsWith(anoMes) && c.status === "Pago")
           .reduce((acc, c) => acc + parseFloat(c.valor), 0);
-        const aVencer = cr
+        const aVencer = crFiltrado
           .filter((c) => c.vencimento && c.vencimento.startsWith(anoMes) && c.status !== "Pago")
           .reduce((acc, c) => acc + parseFloat(c.valor), 0);
         trendFinanceiro.push({ mes: anoMes, label, recebido, pago, aVencer });
@@ -2898,6 +2963,7 @@ except Exception as e:
       // ---- Filter options for UI ----
       const areas = [...new Set(proc.map((p) => p.area))].filter(Boolean).sort();
       const equipeParaFiltro = eq.map((m) => ({ id: m.id, nome: m.nome }));
+      const clientesParaFiltro = cli.map((c) => ({ id: c.id, nome: c.nome }));
 
       res.json({
         processos: {
@@ -2921,8 +2987,15 @@ except Exception as e:
           totalReceber,
           totalPagarPeriodo,
           totalRecebidoPeriodo,
-          honorariosPendentes: cr.filter((c) => c.status === "Pendente").length,
+          honorariosPendentes: crFiltrado.filter((c) => c.status === "Pendente").length,
           honorariosPorStatus,
+          honorariosPorCliente,
+          receitaMesAtual,
+          metaReceitaMensal,
+        },
+        timesheet: {
+          totalHorasRegistradas: Math.round(totalHorasRegistradas * 10) / 10,
+          horasPorColaborador,
         },
         periodo,
         periodoLabel,
@@ -2933,7 +3006,7 @@ except Exception as e:
           total: acomp.length,
           comNovosAndamentos: comNovos,
         },
-        filtros: { areas, equipe: equipeParaFiltro },
+        filtros: { areas, equipe: equipeParaFiltro, clientes: clientesParaFiltro },
         geradoEm: new Date().toISOString(),
       });
     } catch (error) {
