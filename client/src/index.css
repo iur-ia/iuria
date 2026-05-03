@@ -1,12 +1,15 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* =====================================================================
- * IURIA — Modern dark-mode-native design tokens
- * Inspired by Linear, Vercel Geist, satnaing/shadcn-admin, Tremor
+ * IURIA — Editorial Graphite × Cinnabar
+ * Direction: refined Brazilian legal-tech, anti-cliché.
+ * No gold. No navy. No AI gradients. Typography does the heavy lifting,
+ * a single warm-red signal carries the brand. Inspired by editorial
+ * design (Pentagram), Linear's restraint, and Brazilian modernism.
  * ===================================================================== */
 
 :root {
@@ -16,59 +19,58 @@
   --elevate-1: rgba(0,0,0, .03);
   --elevate-2: rgba(0,0,0, .08);
 
-  /* Light mode (kept usable but the app defaults to dark) */
-  --background: 0 0% 100%;
-  --foreground: 240 10% 4%;
-  --border: 240 6% 90%;
+  /* Light mode (kept usable; app defaults to dark) */
+  --background: 36 25% 97%;          /* #FAF7F2 warm paper */
+  --foreground: 24 14% 10%;          /* #1C1815 ink */
+  --border: 30 10% 88%;
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 4%;
-  --card-border: 240 6% 90%;
-  --sidebar: 0 0% 99%;
-  --sidebar-foreground: 240 10% 4%;
-  --sidebar-border: 240 6% 90%;
-  --sidebar-primary: 252 100% 68%;
+  --card-foreground: 24 14% 10%;
+  --card-border: 30 10% 88%;
+  --sidebar: 36 22% 95%;
+  --sidebar-foreground: 24 14% 10%;
+  --sidebar-border: 30 10% 88%;
+  --sidebar-primary: 12 76% 50%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 6% 95%;
-  --sidebar-accent-foreground: 240 10% 4%;
-  --sidebar-ring: 252 100% 68%;
+  --sidebar-accent: 30 14% 92%;
+  --sidebar-accent-foreground: 24 14% 10%;
+  --sidebar-ring: 12 76% 50%;
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 4%;
-  --popover-border: 240 6% 90%;
-  --primary: 252 100% 68%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 240 6% 95%;
-  --secondary-foreground: 240 10% 4%;
-  --muted: 240 6% 96%;
-  --muted-foreground: 240 4% 46%;
-  --accent: 240 6% 95%;
-  --accent-foreground: 240 10% 4%;
-  --destructive: 348 89% 60%;
+  --popover-foreground: 24 14% 10%;
+  --popover-border: 30 10% 88%;
+  --primary: 12 76% 50%;             /* Cinnabar #DB4F2C */
+  --primary-foreground: 36 25% 97%;
+  --secondary: 30 14% 92%;
+  --secondary-foreground: 24 14% 10%;
+  --muted: 30 14% 94%;
+  --muted-foreground: 24 6% 40%;
+  --accent: 30 14% 92%;
+  --accent-foreground: 24 14% 10%;
+  --destructive: 350 70% 45%;
   --destructive-foreground: 0 0% 100%;
-  --input: 240 6% 90%;
-  --ring: 252 100% 68%;
+  --input: 30 10% 88%;
+  --ring: 12 76% 50%;
 
-  /* Brand-aware chart palette (violet → cyan → emerald → amber → rose) */
-  --chart-1: 252 100% 68%;
-  --chart-2: 188 88% 53%;
-  --chart-3: 158 64% 52%;
-  --chart-4: 38 92% 60%;
-  --chart-5: 348 89% 60%;
+  --chart-1: 12 76% 56%;     /* cinnabar */
+  --chart-2: 158 38% 42%;    /* sage   #4F8773 */
+  --chart-3: 38 60% 50%;     /* ochre  #C68B2B */
+  --chart-4: 220 28% 48%;    /* slate-blue */
+  --chart-5: 350 60% 50%;    /* rose */
 
-  --font-sans: "Geist", "Inter", system-ui, sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
-  --radius: .5rem;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius: .375rem;
   --tracking-normal: -0.011em;
   --spacing: 0.25rem;
 
-  --shadow-2xs: 0px 1px 2px 0px hsl(240 10% 4% / 0.04);
-  --shadow-xs:  0px 1px 3px 0px hsl(240 10% 4% / 0.06);
-  --shadow-sm:  0px 2px 4px -1px hsl(240 10% 4% / 0.06), 0px 1px 2px -1px hsl(240 10% 4% / 0.08);
-  --shadow:     0px 4px 6px -1px hsl(240 10% 4% / 0.08), 0px 2px 4px -1px hsl(240 10% 4% / 0.05);
-  --shadow-md:  0px 6px 12px -2px hsl(240 10% 4% / 0.10), 0px 3px 6px -2px hsl(240 10% 4% / 0.06);
-  --shadow-lg:  0px 10px 20px -4px hsl(240 10% 4% / 0.12), 0px 4px 8px -2px hsl(240 10% 4% / 0.08);
-  --shadow-xl:  0px 20px 30px -6px hsl(240 10% 4% / 0.15), 0px 8px 12px -4px hsl(240 10% 4% / 0.10);
-  --shadow-2xl: 0px 25px 40px -8px hsl(240 10% 4% / 0.20);
+  --shadow-2xs: 0px 1px 2px 0px hsl(24 14% 10% / 0.04);
+  --shadow-xs:  0px 1px 3px 0px hsl(24 14% 10% / 0.06);
+  --shadow-sm:  0px 2px 4px -1px hsl(24 14% 10% / 0.06), 0px 1px 2px -1px hsl(24 14% 10% / 0.08);
+  --shadow:     0px 4px 6px -1px hsl(24 14% 10% / 0.08), 0px 2px 4px -1px hsl(24 14% 10% / 0.05);
+  --shadow-md:  0px 6px 12px -2px hsl(24 14% 10% / 0.10), 0px 3px 6px -2px hsl(24 14% 10% / 0.06);
+  --shadow-lg:  0px 10px 20px -4px hsl(24 14% 10% / 0.12), 0px 4px 8px -2px hsl(24 14% 10% / 0.08);
+  --shadow-xl:  0px 20px 30px -6px hsl(24 14% 10% / 0.15), 0px 8px 12px -4px hsl(24 14% 10% / 0.10);
+  --shadow-2xl: 0px 25px 40px -8px hsl(24 14% 10% / 0.20);
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -93,51 +95,52 @@
   --elevate-1: rgba(255,255,255, .04);
   --elevate-2: rgba(255,255,255, .08);
 
-  /* Linear-grade graphite — true dark, not gray */
-  --background:        240 7% 4%;     /* #0A0A0B */
-  --foreground:        0 0% 98%;       /* #FAFAFA */
-  --border:            240 4% 14%;     /* #232325 */
-  --card:              240 6% 7%;      /* #111114 */
-  --card-foreground:   0 0% 98%;
-  --card-border:       240 4% 14%;
-  --sidebar:           240 7% 5%;      /* #0C0C0E */
-  --sidebar-foreground: 0 0% 92%;
-  --sidebar-border:    240 4% 12%;
-  --sidebar-primary:   252 100% 70%;   /* #7C5CFF accent on dark */
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent:    240 4% 12%;
-  --sidebar-accent-foreground: 0 0% 98%;
-  --sidebar-ring:      252 100% 70%;
-  --popover:           240 6% 8%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border:    240 4% 14%;
-  --primary:           252 100% 70%;   /* Electric violet #7C5CFF */
-  --primary-foreground: 0 0% 100%;
-  --secondary:         240 4% 14%;
-  --secondary-foreground: 0 0% 98%;
-  --muted:             240 4% 12%;
-  --muted-foreground:  240 4% 60%;
-  --accent:            240 4% 14%;
-  --accent-foreground: 0 0% 98%;
-  --destructive:       348 89% 60%;    /* Rose #F43F5E */
-  --destructive-foreground: 0 0% 100%;
-  --input:             240 4% 16%;
-  --ring:              252 100% 70%;
+  /* Editorial graphite — a warm, almost-black with olive undertone */
+  --background:        30 6% 6%;       /* #0F0F0E */
+  --foreground:        36 18% 94%;     /* #F2EFEA warm paper */
+  --border:            28 5% 16%;      /* #2A2926 */
+  --card:              30 6% 9%;       /* #181715 */
+  --card-foreground:   36 18% 94%;
+  --card-border:       28 5% 16%;
+  --sidebar:           30 6% 7%;       /* #131210 */
+  --sidebar-foreground: 36 18% 90%;
+  --sidebar-border:    28 5% 14%;
+  --sidebar-primary:   12 80% 56%;     /* cinnabar #E45B3D */
+  --sidebar-primary-foreground: 36 18% 94%;
+  --sidebar-accent:    28 5% 14%;
+  --sidebar-accent-foreground: 36 18% 94%;
+  --sidebar-ring:      12 80% 56%;
+  --popover:           30 6% 10%;
+  --popover-foreground: 36 18% 94%;
+  --popover-border:    28 5% 16%;
+  --primary:           12 80% 56%;     /* Cinnabar — the only color */
+  --primary-foreground: 36 18% 96%;
+  --secondary:         28 5% 14%;
+  --secondary-foreground: 36 18% 94%;
+  --muted:             28 5% 12%;
+  --muted-foreground:  30 8% 62%;      /* warm gray text */
+  --accent:            28 5% 14%;
+  --accent-foreground: 36 18% 94%;
+  --destructive:       0 65% 55%;
+  --destructive-foreground: 36 18% 96%;
+  --input:             28 5% 16%;
+  --ring:              12 80% 56%;
 
-  --chart-1: 252 100% 70%;   /* violet */
-  --chart-2: 188 88% 53%;    /* cyan #22D3EE */
-  --chart-3: 158 64% 52%;    /* emerald #10B981 */
-  --chart-4: 38 92% 60%;     /* amber #F59E0B */
-  --chart-5: 348 89% 60%;    /* rose */
+  /* Editorial chart palette — earthy, no rainbow */
+  --chart-1: 12 80% 56%;     /* cinnabar */
+  --chart-2: 158 30% 50%;    /* sage */
+  --chart-3: 38 70% 58%;     /* ochre */
+  --chart-4: 215 25% 60%;    /* slate */
+  --chart-5: 0 65% 55%;      /* rose */
 
-  --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.4);
-  --shadow-xs:  0px 1px 3px 0px hsl(0 0% 0% / 0.45);
-  --shadow-sm:  0px 2px 4px -1px hsl(0 0% 0% / 0.45), 0px 1px 2px -1px hsl(0 0% 0% / 0.55);
-  --shadow:     0px 4px 6px -1px hsl(0 0% 0% / 0.55), 0px 2px 4px -1px hsl(0 0% 0% / 0.45);
-  --shadow-md:  0px 6px 12px -2px hsl(0 0% 0% / 0.6),  0px 3px 6px -2px hsl(0 0% 0% / 0.45);
-  --shadow-lg:  0px 10px 20px -4px hsl(0 0% 0% / 0.65), 0px 4px 8px -2px hsl(0 0% 0% / 0.5);
-  --shadow-xl:  0px 20px 30px -6px hsl(0 0% 0% / 0.7),  0px 8px 12px -4px hsl(0 0% 0% / 0.6);
-  --shadow-2xl: 0px 25px 40px -8px hsl(0 0% 0% / 0.75);
+  --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.5);
+  --shadow-xs:  0px 1px 3px 0px hsl(0 0% 0% / 0.55);
+  --shadow-sm:  0px 2px 4px -1px hsl(0 0% 0% / 0.55), 0px 1px 2px -1px hsl(0 0% 0% / 0.6);
+  --shadow:     0px 4px 6px -1px hsl(0 0% 0% / 0.6),  0px 2px 4px -1px hsl(0 0% 0% / 0.5);
+  --shadow-md:  0px 6px 12px -2px hsl(0 0% 0% / 0.65), 0px 3px 6px -2px hsl(0 0% 0% / 0.5);
+  --shadow-lg:  0px 10px 20px -4px hsl(0 0% 0% / 0.7),  0px 4px 8px -2px hsl(0 0% 0% / 0.55);
+  --shadow-xl:  0px 20px 30px -6px hsl(0 0% 0% / 0.75), 0px 8px 12px -4px hsl(0 0% 0% / 0.65);
+  --shadow-2xl: 0px 25px 40px -8px hsl(0 0% 0% / 0.8);
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -157,45 +160,56 @@
 
 @layer base {
   * { @apply border-border; }
-  html { font-feature-settings: "cv11", "ss01", "ss03"; }
+  html { font-feature-settings: "ss01", "cv11"; }
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1, "cv11" 1;
     letter-spacing: var(--tracking-normal);
   }
-  /* Mono blocks (CNJ numbers, codes) feel tighter */
   code, kbd, samp, pre, .font-mono { font-feature-settings: "zero" 1, "ss02" 1; }
+  /* Display headings get the editorial serif */
+  .font-display {
+    font-family: var(--font-serif);
+    font-feature-settings: "ss01", "ss02", "ss03";
+  }
 }
 
 /* =====================================================================
  * Brand utilities
  * ===================================================================== */
 @layer utilities {
-  /* Gradient text accent */
+  /* Headline accent — single cinnabar with subtle rise; no rainbow */
+  .text-brand-accent {
+    color: hsl(var(--primary));
+  }
   .text-brand-gradient {
-    background: linear-gradient(135deg, hsl(252 100% 70%) 0%, hsl(188 88% 53%) 100%);
+    /* Kept for backward compat — now a tonal cinnabar→ochre wash, not violet+cyan */
+    background: linear-gradient(135deg, hsl(12 80% 56%) 0%, hsl(28 70% 56%) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-  /* Subtle radial wash for hero sections */
+  /* Hero wash — single warm radial, more architectural than aurora */
   .bg-brand-aurora {
     background:
-      radial-gradient(60% 60% at 20% 20%, hsl(252 100% 70% / .12) 0%, transparent 60%),
-      radial-gradient(50% 50% at 80% 30%, hsl(188 88% 53% / .10) 0%, transparent 55%),
+      radial-gradient(80% 60% at 15% 10%, hsl(12 80% 56% / .14) 0%, transparent 55%),
+      radial-gradient(60% 70% at 90% 90%, hsl(28 60% 50% / .07) 0%, transparent 60%),
       hsl(var(--background));
   }
-  /* Glassy chrome surface for top bars */
   .surface-glass {
-    background: hsl(240 7% 4% / .65);
-    backdrop-filter: saturate(180%) blur(12px);
-    -webkit-backdrop-filter: saturate(180%) blur(12px);
+    background: hsl(30 6% 6% / .72);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
     border-color: hsl(var(--border));
   }
-  /* Hairline grid for empty/dashboard backgrounds */
   .bg-grid-dot {
     background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
-    background-size: 22px 22px;
+    background-size: 24px 24px;
+  }
+  /* Subtle horizontal rule used in editorial dividers */
+  .editorial-rule {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--border)) 30%, hsl(var(--border)) 70%, transparent);
   }
 
   input[type="search"]::-webkit-search-cancel-button { @apply hidden; }

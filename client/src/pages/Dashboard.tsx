@@ -93,7 +93,14 @@ const PERIODO_LABELS: Record<Periodo, string> = {
   personalizado: "Personalizado",
 };
 
-const AREA_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f97316", "#ec4899", "#f59e0b"];
+const AREA_COLORS = [
+  "hsl(var(--chart-1))",
+  "hsl(var(--chart-2))",
+  "hsl(var(--chart-3))",
+  "hsl(var(--chart-4))",
+  "hsl(var(--chart-5))",
+  "hsl(var(--muted-foreground))",
+];
 
 const RISCO_CFG: Record<string, { label: string; cls: string; icon: typeof AlertCircle }> = {
   CRITICO: { label: "Crítico", cls: "bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-200 dark:border-red-900", icon: Zap },
@@ -515,7 +522,7 @@ export default function Dashboard() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Operacional</p>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 print:grid-cols-3">
             <KpiCard label="Processos Ativos" value={isLoading ? "…" : (data?.processos.ativos ?? 0)}
-              sub={`de ${data?.processos.total ?? 0} no total`} icon={Briefcase} iconColor="bg-blue-500"
+              sub={`de ${data?.processos.total ?? 0} no total`} icon={Briefcase} iconColor="bg-primary"
               href="/processos" drillFilter="Ativo" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Tarefas Atrasadas" value={isLoading ? "…" : (data?.atividades.atrasadas ?? 0)}
               sub={data?.atividades.atrasadas ? "Requer atenção imediata" : "Tudo em dia"}
@@ -539,7 +546,7 @@ export default function Dashboard() {
             <KpiCard label="Acompanhados" value={isLoading ? "…" : (data?.acompanhados.total ?? 0)}
               sub={data?.acompanhados.comNovosAndamentos ? `${data.acompanhados.comNovosAndamentos} com novos andamentos` : "Nenhum alerta pendente"}
               icon={Bell}
-              iconColor={data?.acompanhados.comNovosAndamentos ? "bg-red-500" : "bg-violet-500"}
+              iconColor={data?.acompanhados.comNovosAndamentos ? "bg-red-500" : "bg-muted-foreground"}
               badgeColor={data?.acompanhados.comNovosAndamentos ? "text-red-600" : "text-muted-foreground"}
               href="/acompanhamentos" loading={isLoading} onNavigate={handleNavigate} />
           </div>
@@ -553,7 +560,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 print:grid-cols-4">
             <KpiCard label="A Receber" value={isLoading ? "…" : fmt(data?.financeiro.totalReceber ?? 0)}
               sub={`${data?.financeiro.honorariosPendentes ?? 0} cobranças pendentes`}
-              icon={DollarSign} iconColor="bg-blue-500" href="/financeiro/receber" loading={isLoading} onNavigate={handleNavigate} />
+              icon={DollarSign} iconColor="bg-primary" href="/financeiro/receber" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label={`Recebido (${periodoLbl})`} value={isLoading ? "…" : fmt(data?.financeiro.totalRecebidoPeriodo ?? 0)}
               sub={`Honorários pagos nos últimos ${periodoLbl}`}
               icon={DollarSign} iconColor="bg-emerald-500" badgeColor="text-emerald-600"
@@ -563,7 +570,7 @@ export default function Dashboard() {
               icon={TrendingDown} iconColor="bg-orange-500" href="/financeiro/pagar" loading={isLoading} onNavigate={handleNavigate} />
             <KpiCard label="Honorários em Aberto" value={isLoading ? "…" : (data?.financeiro.honorariosPendentes ?? 0)}
               sub={isLoading ? "" : `Pendente: ${fmt(data?.financeiro.honorariosPorStatus?.["Pendente"] ?? 0)}`}
-              icon={Eye} iconColor="bg-purple-500" href="/financeiro/honorarios" loading={isLoading} onNavigate={handleNavigate} />
+              icon={Eye} iconColor="bg-muted-foreground" href="/financeiro/honorarios" loading={isLoading} onNavigate={handleNavigate} />
           </div>
         </div>
 
@@ -571,7 +578,7 @@ export default function Dashboard() {
         <Card className="border-0 shadow-sm" data-testid="card-honorarios-por-status">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-violet-500" />
+              <DollarSign className="w-4 h-4 text-primary" />
               Honorários por Status
             </CardTitle>
           </CardHeader>
@@ -663,7 +670,7 @@ export default function Dashboard() {
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Users className="w-4 h-4 text-violet-500" />
+                <Users className="w-4 h-4 text-primary" />
                 Honorários por Cliente
               </CardTitle>
             </CardHeader>
@@ -689,7 +696,7 @@ export default function Dashboard() {
                         </div>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
-                            className={`h-1.5 rounded-full ${pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-blue-500" : "bg-orange-500"}`}
+                            className={`h-1.5 rounded-full ${pct >= 100 ? "bg-emerald-500" : pct >= 50 ? "bg-primary" : "bg-orange-500"}`}
                             style={{ width: `${Math.min(pct, 100)}%` }}
                           />
                         </div>
@@ -832,7 +839,7 @@ export default function Dashboard() {
           <Card className="border-0 shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <Activity className="w-4 h-4 text-violet-500" />
+                <Activity className="w-4 h-4 text-primary" />
                 Tarefas Concluídas vs Abertas — Por Semana
               </CardTitle>
             </CardHeader>
@@ -852,7 +859,7 @@ export default function Dashboard() {
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 6 }} />
                     <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ fontSize: 11 }}>{v === "concluidas" ? "Concluídas" : "Abertas"}</span>} />
                     <Bar dataKey="concluidas" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={20} name="concluidas" />
-                    <Bar dataKey="abertas"    fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={20} name="abertas" />
+                    <Bar dataKey="abertas"    fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} maxBarSize={20} name="abertas" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -932,7 +939,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className="h-1.5 rounded-full bg-blue-500" style={{ width: `${pct}%` }} />
+                          <div className="h-1.5 rounded-full bg-primary" style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     );
@@ -962,14 +969,14 @@ export default function Dashboard() {
                   label: "Prazo de cumprimento",
                   value: (data?.atividades.total ?? 0) - (data?.atividades.atrasadas ?? 0),
                   total: data?.atividades.total ?? 0,
-                  color: "bg-blue-500",
+                  color: "bg-primary",
                   pct: data ? Math.max(0, 100 - Math.round((data.atividades.atrasadas / Math.max(data.atividades.total, 1)) * 100)) : 0,
                 },
                 {
                   label: "Processos ativos",
                   value: data?.processos.ativos ?? 0,
                   total: data?.processos.total ?? 0,
-                  color: "bg-violet-500",
+                  color: "bg-chart-2",
                   pct: data ? Math.round((data.processos.ativos / Math.max(data.processos.total, 1)) * 100) : 0,
                 },
               ].map((item, i) => (

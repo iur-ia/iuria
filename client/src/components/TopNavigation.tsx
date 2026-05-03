@@ -1,8 +1,16 @@
-import { Bell, Search, User, ChevronDown, Settings, LogOut, Command } from "lucide-react";
+import {
+  Bell,
+  MagnifyingGlass,
+  User,
+  CaretDown,
+  Gear,
+  SignOut,
+  Command,
+} from "@phosphor-icons/react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +21,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import avatarImage from "@assets/stock_images/professional_lawyer__9acf90aa.jpg";
 
 type TopNavProps = {
   onOpenPalette?: () => void;
@@ -114,7 +121,7 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
           className="flex items-center gap-2 cursor-pointer pr-4 mr-2 border-r border-border h-9"
           data-testid="logo-home"
         >
-          <Logo size={26} />
+          <Logo size={24} />
         </Link>
 
         {/* Primary nav */}
@@ -132,7 +139,7 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
                     data-testid={`nav-${item.title.toLowerCase()}`}
                   >
                     {item.title}
-                    <ChevronDown className="h-3 w-3 opacity-60" />
+                    <CaretDown className="h-3 w-3 opacity-60" weight="bold" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">
@@ -172,10 +179,10 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
           className="hidden md:flex items-center gap-2 h-9 w-72 rounded-md border border-border bg-card px-3 text-left text-[13px] text-muted-foreground hover:text-foreground hover-elevate"
           data-testid="button-open-palette"
         >
-          <Search className="w-3.5 h-3.5 shrink-0" />
+          <MagnifyingGlass className="w-4 h-4 shrink-0" weight="regular" />
           <span className="flex-1 truncate">Pesquisar páginas, ações...</span>
           <kbd className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono">
-            <Command className="w-2.5 h-2.5" />K
+            <Command className="w-2.5 h-2.5" weight="bold" />K
           </kbd>
         </button>
 
@@ -189,7 +196,7 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
           className="relative"
           data-testid="button-notifications"
         >
-          <Bell className="w-4 h-4" />
+          <Bell className="w-4 h-4" weight="regular" />
           <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] bg-primary text-primary-foreground border-0 rounded-full pointer-events-none">
             7
           </Badge>
@@ -205,13 +212,12 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
               data-testid="button-user-menu"
             >
               <Avatar className="w-6 h-6">
-                <AvatarImage src={avatarImage} alt="Thiago Gomes" />
-                <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
+                <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-semibold">
                   TG
                 </AvatarFallback>
               </Avatar>
               <span className="text-[13px] hidden md:inline">Thiago</span>
-              <ChevronDown className="w-3 h-3 opacity-60" />
+              <CaretDown className="w-3 h-3 opacity-60" weight="bold" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -220,19 +226,19 @@ export function TopNavigation({ onOpenPalette }: TopNavProps = {}) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="menu-profile">
-              <User className="mr-2 h-3.5 w-3.5" />
+              <User className="mr-2 h-3.5 w-3.5" weight="regular" />
               <span className="text-[13px]">Meus Dados</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setLocation("/configuracoes")}
               data-testid="menu-settings"
             >
-              <Settings className="mr-2 h-3.5 w-3.5" />
+              <Gear className="mr-2 h-3.5 w-3.5" weight="regular" />
               <span className="text-[13px]">Configurações</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="menu-logout">
-              <LogOut className="mr-2 h-3.5 w-3.5" />
+              <SignOut className="mr-2 h-3.5 w-3.5" weight="regular" />
               <span className="text-[13px]">Sair</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

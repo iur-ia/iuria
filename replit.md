@@ -16,12 +16,16 @@ Preferred communication style: Simple, everyday language.
 - **Database**: PostgreSQL via Neon serverless, Drizzle ORM with Zod validation.
 - **Data Layer**: Abstract `IStorage` interface for swappable storage implementations.
 
-### Design System (v3 — Linear/Vercel/Cursor aesthetic, dark-mode-native)
-- **Tokens** (`client/src/index.css`): bg `#0A0A0B`, surface `#111114`, primary violet `#7C5CFF` (HSL 252 100% 70%), accent cyan `#22D3EE`, success emerald, warning amber, danger rose. Charts: violet/cyan/emerald/amber/rose.
-- **Typography**: Geist Sans + Geist Mono (Google Fonts), substitui Inter/JetBrains. `font-feature-settings: "ss01","cv11"`.
-- **Brand utilities**: `.text-brand-gradient`, `.bg-brand-aurora`, `.surface-glass` (backdrop-blur sticky chrome), `.bg-grid-dot`.
+### Design System (v4 — Editorial Graphite × Cinnabar, dark-mode-native)
+- **Direção**: anti-clichê para legal-tech brasileiro. Sem ouro, sem navy, sem gradientes "cara de IA". Tipografia editorial faz o trabalho pesado, **um único sinal cinnabar** (#E45B3D / HSL 12 80% 56%) carrega a marca. Inspiração: Pentagram editorial, Linear restraint, modernismo brasileiro.
+- **Tokens dark** (`client/src/index.css`): bg `#0F0F0E` (warm graphite com undertone oliva, HSL 30 6% 6%), card `#181715`, foreground `#F2EFEA` (warm paper, HSL 36 18% 94%), border `#2A2926`, primary cinnabar `#E45B3D`, muted-foreground warm gray `30 8% 62%`.
+- **Tokens light**: bg `#FAF7F2` (warm paper), foreground `#1C1815` (ink), primary cinnabar 50% lightness.
+- **Chart palette editorial** (sem rainbow): cinnabar / sage `#4F8773` / ochre `#C68B2B` / slate-blue / rose. Status-coded mantém emerald/amber/red para success/warning/danger semânticos.
+- **Typography**: **Inter** (sans, body) + **Fraunces** (display serif, headings/wordmark) + **JetBrains Mono** (CNJ, codes). Substitui Geist anterior. Classe `.font-display` aplica Fraunces.
+- **Brand utilities**: `.text-brand-accent` (single cinnabar), `.text-brand-gradient` (cinnabar→ochre tonal, sem violet+cyan), `.bg-brand-aurora` (single warm radial wash), `.surface-glass` (graphite glassy chrome), `.bg-grid-dot`, `.editorial-rule` (horizontal divider gradiente).
 - **Dark mode**: forçado por padrão em `client/src/main.tsx`.
-- **Logo**: `client/src/components/brand/Logo.tsx` — gradient bar (violet→cyan) + violet dot + wordmark "iuria". Favicon SVG inline em `client/public/favicon.svg`.
+- **Logo** (`client/src/components/brand/Logo.tsx`): identidade tipográfica. `LogoMark` = stem vertical (column of law) + tittle quadrado destacado em cinnabar (i estilizado). Wordmark "iuria" em Fraunces medium tracking apertado. Sem gradiente, sem barra+ponto antigos. Favicon SVG inline `client/public/favicon.svg` reescrito (rounded-square graphite + tittle cinnabar + stem warm paper).
+- **Iconografia**: migrado **Lucide → @phosphor-icons/react** (peso `regular` 18-24px) em TopNavigation e CommandPalette. Phosphor é multi-peso, refinado, usado por produtos Linear-tier. Páginas internas (Dashboard, etc) ainda usam Lucide; migração progressiva quando relevante.
 - **Chrome**: `TopNavigation.tsx` reescrito com sticky header glassy, dropdowns refinados, capitalize labels.
 - **Command Palette** (`client/src/components/CommandPalette.tsx`): cmdk-based, atalho global Cmd/Ctrl+K, 30+ páginas catalogadas e agrupadas (Geral, Processos, Atividades, Gestão, Acervo, Financeiro, Documentos, IA), mais ações rápidas (alternar tema, ir ao painel, nova consulta).
 - **Theme Toggle** (`client/src/components/ThemeToggle.tsx`): hook `useTheme` com `useSyncExternalStore` (estado compartilhado entre componentes), persistência em `localStorage` chave `iuria-theme`. Funções módulo-level `setTheme`/`toggleTheme` para uso fora de React.

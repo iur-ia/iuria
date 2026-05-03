@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ComponentType } from "react";
 import { useLocation } from "wouter";
 import {
   CommandDialog,
@@ -11,52 +11,53 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import {
-  LayoutDashboard,
+  SquaresFour,
   Briefcase,
   Users,
   CheckSquare,
   Calendar,
   FileText,
-  Search,
-  DollarSign,
+  MagnifyingGlass,
+  CurrencyDollar,
   Receipt,
-  Sparkles,
-  Settings,
-  ScrollText,
+  Sparkle,
+  Gear,
+  Scroll,
   Newspaper,
   Sun,
-  Moon,
-  Folder,
+  FolderOpen,
   Clock,
-  Activity,
-  AlertTriangle,
-  type LucideIcon,
-} from "lucide-react";
+  Pulse,
+  Warning,
+  type IconProps,
+} from "@phosphor-icons/react";
+
+type IconType = ComponentType<IconProps>;
 
 type NavCommand = {
   label: string;
   href: string;
-  icon: LucideIcon;
+  icon: IconType;
   group: string;
   hint?: string;
 };
 
 const NAV: NavCommand[] = [
-  { group: "Geral", label: "Painel de Controle", href: "/", icon: LayoutDashboard },
-  { group: "Geral", label: "Configurações", href: "/configuracoes", icon: Settings },
+  { group: "Geral", label: "Painel de Controle", href: "/", icon: SquaresFour },
+  { group: "Geral", label: "Configurações", href: "/configuracoes", icon: Gear },
 
   { group: "Processos", label: "Todos os Processos", href: "/processos", icon: Briefcase },
-  { group: "Processos", label: "Consulta Processual", href: "/consulta-processual", icon: Search },
-  { group: "Processos", label: "Pesquisa Jurídica", href: "/pesquisa-juridica", icon: Search },
+  { group: "Processos", label: "Consulta Processual", href: "/consulta-processual", icon: MagnifyingGlass },
+  { group: "Processos", label: "Pesquisa Jurídica", href: "/pesquisa-juridica", icon: MagnifyingGlass },
   { group: "Processos", label: "Busca por Parte", href: "/busca-parte", icon: Users },
-  { group: "Processos", label: "Monitoramento", href: "/monitoramento", icon: Activity },
-  { group: "Processos", label: "Processos a Acompanhar", href: "/acompanhamentos", icon: Activity },
+  { group: "Processos", label: "Monitoramento", href: "/monitoramento", icon: Pulse },
+  { group: "Processos", label: "Processos a Acompanhar", href: "/acompanhamentos", icon: Pulse },
   { group: "Processos", label: "Diários Oficiais", href: "/diarios", icon: Newspaper },
 
   { group: "Atividades", label: "Lista de Atividades", href: "/atividades", icon: CheckSquare },
-  { group: "Atividades", label: "Painel de Tarefas", href: "/atividades/painel", icon: LayoutDashboard },
-  { group: "Atividades", label: "Kanban de Tarefas", href: "/atividades/kanban", icon: LayoutDashboard },
-  { group: "Atividades", label: "Prazos Críticos", href: "/atividades/prazos-criticos", icon: AlertTriangle },
+  { group: "Atividades", label: "Painel de Tarefas", href: "/atividades/painel", icon: SquaresFour },
+  { group: "Atividades", label: "Kanban de Tarefas", href: "/atividades/kanban", icon: SquaresFour },
+  { group: "Atividades", label: "Prazos Críticos", href: "/atividades/prazos-criticos", icon: Warning },
   { group: "Atividades", label: "Regras de Prazos", href: "/atividades/regras-prazos", icon: Calendar },
   { group: "Atividades", label: "Timesheet", href: "/atividades/timesheet", icon: Clock },
 
@@ -65,21 +66,21 @@ const NAV: NavCommand[] = [
   { group: "Gestão", label: "Relatórios", href: "/gestao/relatorios", icon: FileText },
   { group: "Gestão", label: "Relatórios Gerenciais", href: "/gestao/relatorios-gerenciais", icon: FileText },
 
-  { group: "Acervo", label: "Processos Judiciais", href: "/acervo/judicial", icon: Folder },
-  { group: "Acervo", label: "Processos Administrativos", href: "/acervo/administrativo", icon: Folder },
+  { group: "Acervo", label: "Processos Judiciais", href: "/acervo/judicial", icon: FolderOpen },
+  { group: "Acervo", label: "Processos Administrativos", href: "/acervo/administrativo", icon: FolderOpen },
 
-  { group: "Financeiro", label: "Contas a Receber", href: "/financeiro/receber", icon: DollarSign },
+  { group: "Financeiro", label: "Contas a Receber", href: "/financeiro/receber", icon: CurrencyDollar },
   { group: "Financeiro", label: "Contas a Pagar", href: "/financeiro/pagar", icon: Receipt },
-  { group: "Financeiro", label: "Honorários", href: "/financeiro/honorarios", icon: DollarSign },
+  { group: "Financeiro", label: "Honorários", href: "/financeiro/honorarios", icon: CurrencyDollar },
 
   { group: "Documentos", label: "Todos os Documentos", href: "/documentos", icon: FileText },
-  { group: "Documentos", label: "Petições", href: "/documentos/peticoes", icon: ScrollText },
-  { group: "Documentos", label: "Contratos", href: "/documentos/contratos", icon: ScrollText },
-  { group: "Documentos", label: "Ofícios e Comunicações", href: "/documentos/oficios", icon: ScrollText },
+  { group: "Documentos", label: "Petições", href: "/documentos/peticoes", icon: Scroll },
+  { group: "Documentos", label: "Contratos", href: "/documentos/contratos", icon: Scroll },
+  { group: "Documentos", label: "Ofícios e Comunicações", href: "/documentos/oficios", icon: Scroll },
 
-  { group: "IA", label: "Petições com IA", href: "/ia/peticoes", icon: Sparkles },
-  { group: "IA", label: "Conselho de Ministros", href: "/ia/conselho", icon: Sparkles },
-  { group: "IA", label: "Configurar DNA", href: "/configuracoes/dna", icon: Sparkles },
+  { group: "IA", label: "Petições com IA", href: "/ia/peticoes", icon: Sparkle },
+  { group: "IA", label: "Conselho de Ministros", href: "/ia/conselho", icon: Sparkle },
+  { group: "IA", label: "Configurar DNA", href: "/configuracoes/dna", icon: Sparkle },
 ];
 
 export function useCommandPalette() {
@@ -136,17 +137,17 @@ export function CommandPalette({ open, onOpenChange, onToggleTheme }: Props) {
             }}
             data-testid="cmdk-toggle-theme"
           >
-            <Sun className="mr-2 h-4 w-4" />
+            <Sun className="mr-2 h-4 w-4" weight="regular" />
             <span>Alternar tema (claro / escuro)</span>
             <CommandShortcut>⌘ J</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => go("/")} data-testid="cmdk-go-home">
-            <LayoutDashboard className="mr-2 h-4 w-4" />
+            <SquaresFour className="mr-2 h-4 w-4" weight="regular" />
             <span>Ir ao Painel</span>
             <CommandShortcut>G H</CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={() => go("/consulta-processual")} data-testid="cmdk-consulta">
-            <Search className="mr-2 h-4 w-4" />
+            <MagnifyingGlass className="mr-2 h-4 w-4" weight="regular" />
             <span>Nova consulta processual</span>
           </CommandItem>
         </CommandGroup>
@@ -161,7 +162,7 @@ export function CommandPalette({ open, onOpenChange, onToggleTheme }: Props) {
                 onSelect={() => go(it.href)}
                 data-testid={`cmdk-${it.href.replace(/\W+/g, "-")}`}
               >
-                <it.icon className="mr-2 h-4 w-4 opacity-70" />
+                <it.icon className="mr-2 h-4 w-4 opacity-70" weight="regular" />
                 <span>{it.label}</span>
                 <span className="ml-auto text-[11px] font-mono text-muted-foreground/60">{it.href}</span>
               </CommandItem>
