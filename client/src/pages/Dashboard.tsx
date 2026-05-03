@@ -504,7 +504,7 @@ export default function Dashboard() {
 
         {/* Print header */}
         <div className="hidden print:block">
-          <h1 className="text-xl font-bold">Painel de Controle — LegalSys</h1>
+          <h1 className="text-xl font-bold">Painel de Controle</h1>
           <p className="text-sm text-gray-500">
             Período: {periodoLbl}{area && ` · Área: ${area}`}{resp && ` · Responsável`}{cliente && ` · Cliente`} · Gerado em {new Date().toLocaleString("pt-BR")}
           </p>

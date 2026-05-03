@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import logoImage from "@assets/generated_images/Law_firm_logo_design_bb2f9039.png";
+import { Logo } from "@/components/brand/Logo";
 
 const menuItems = [
   {
@@ -68,14 +68,9 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarContent>
-        <div className="px-4 py-6 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <img src={logoImage} alt="LegalSys" className="w-10 h-10" />
-            <div>
-              <h2 className="text-lg font-semibold text-sidebar-foreground">LegalSys</h2>
-              <p className="text-xs text-muted-foreground">Gestão Jurídica</p>
-            </div>
-          </div>
+        <div className="px-4 py-5 border-b border-sidebar-border">
+          <Logo size={26} />
+          <p className="text-[11px] text-muted-foreground mt-1.5 font-mono uppercase tracking-wider">Sistema Operacional Jurídico</p>
         </div>
 
         <SidebarGroup>

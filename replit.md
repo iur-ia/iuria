@@ -1,8 +1,8 @@
-# Sistema de Gestão Jurídica (Legal Management System)
+# iuria — Sistema Operacional Jurídico
 
 ## Overview
 
-A comprehensive legal management system for Brazilian law firms, inspired by Projuris ADV. It provides tools for managing legal cases (processos), court notifications (intimações), case movements, tasks, documents, and finances. The system aims to offer a full-stack web application with advanced features like automated web scraping for court data, OCR for document processing, and digital certificate integration for enhanced access to court portals. The project's ambition is to cover 100% of Brazilian tribunals and streamline legal operations.
+**iuria** (lowercase, sem ".os") — sistema operacional jurídico para escritórios de advocacia brasileiros, inspirado em Projuris ADV. It provides tools for managing legal cases (processos), court notifications (intimações), case movements, tasks, documents, and finances. The system aims to offer a full-stack web application with advanced features like automated web scraping for court data, OCR for document processing, and digital certificate integration for enhanced access to court portals. The project's ambition is to cover 100% of Brazilian tribunals and streamline legal operations.
 
 ## User Preferences
 
@@ -16,8 +16,14 @@ Preferred communication style: Simple, everyday language.
 - **Database**: PostgreSQL via Neon serverless, Drizzle ORM with Zod validation.
 - **Data Layer**: Abstract `IStorage` interface for swappable storage implementations.
 
-### Design System
-Adheres to Material Design 3 principles, customized for legal contexts, featuring color-coded status indicators, professional typography (Inter, JetBrains Mono), and responsive layouts.
+### Design System (v3 — Linear/Vercel/Cursor aesthetic, dark-mode-native)
+- **Tokens** (`client/src/index.css`): bg `#0A0A0B`, surface `#111114`, primary violet `#7C5CFF` (HSL 252 100% 70%), accent cyan `#22D3EE`, success emerald, warning amber, danger rose. Charts: violet/cyan/emerald/amber/rose.
+- **Typography**: Geist Sans + Geist Mono (Google Fonts), substitui Inter/JetBrains. `font-feature-settings: "ss01","cv11"`.
+- **Brand utilities**: `.text-brand-gradient`, `.bg-brand-aurora`, `.surface-glass` (backdrop-blur sticky chrome), `.bg-grid-dot`.
+- **Dark mode**: forçado por padrão em `client/src/main.tsx`.
+- **Logo**: `client/src/components/brand/Logo.tsx` — gradient bar (violet→cyan) + violet dot + wordmark "iuria". Favicon SVG inline em `client/public/favicon.svg`.
+- **Chrome**: `TopNavigation.tsx` reescrito com sticky header glassy, Cmd+K hint, dropdowns refinados, capitalize labels.
+- **Referências (canvas)**: satnaing/shadcn-admin, Tremor (Vercel), Magic UI + Aceternity, Geist, Kibo UI.
 
 ### Web Scraping and Data Acquisition — TypeScript Engine (server/scraping/)
 - **Primary Layer**: DataJud API (CNJ's official public API) — covers 100% of Brazilian tribunals, free, no auth needed.
@@ -53,7 +59,7 @@ Enables users to track legal processes with configurable check intervals, automa
 - **CRM/Team Management**: Sections for managing clients and internal teams.
 - **Acervo (Digital Dossier)**: Internal dossier module for judicial and administrative processes. Includes Kanban for administrative processes (criação→instrução→decisão→arquivamento), timeline of andamentos, document attachments, and "Salvar no Acervo" button in ConsultaProcessual. Tables: `acervo_processos`, `acervo_andamentos`, `acervo_documentos`, `acervo_tramitacoes`.
 - **Processos a Acompanhar**: Watchlist feature for monitoring processes; table `processos_acompanhados`.
-- **Pesquisa Jurídica** (`/pesquisa-juridica`): 4-tab deep search UI — Processos (CNJ number → tribunal scraping), Jurisprudência (STF/STJ/TRFs, with tribunal filter), Doutrina (CNJ/LexML/Senado), Empresas (CNPJ lookup). Each tab shows source badge, duration, "Enviar ao LexOS" button that injects markdownContent into sessionStorage for the IA chat.
+- **Pesquisa Jurídica** (`/pesquisa-juridica`): 4-tab deep search UI — Processos (CNJ number → tribunal scraping), Jurisprudência (STF/STJ/TRFs, with tribunal filter), Doutrina (CNJ/LexML/Senado), Empresas (CNPJ lookup). Each tab shows source badge, duration, "Enviar à IA" button that injects markdownContent into sessionStorage for the IA chat.
 - **Fallback Scraping na Consulta Processual**: When DataJud returns 0 results, "Tentar via Scraping Direto" button appears and calls `/api/pesquisa/processo/:numero`, showing result with "via Scraping Direto" badge.
 - **Engine Automática de Prazos Legais**: Automated deadline engine that generates tasks from processual events. Includes configurable rules (`deadline_rules` table), extended `atividades` with `risco`/`deadlineRuleId`/`fundamentoLegal`/`eventoGatilho` fields, 8 pre-configured rules for cível and trabalhista, a "Regras de Prazos" management page, a "Prazos Críticos" panel (72h window), email alert job (48h/24h via nodemailer), and a manual engine trigger UI. Server modules: `server/deadlineEngine.ts`, `server/emailAlerts.ts`.
 - **Comunicações e Ofícios Automáticos** (`/documentos/oficios`): geração automática de ofícios, notificações e cartas a partir de templates configuráveis com placeholders dinâmicos (`{{escritorio.nome}}`, `{{processo.numero}}`, `{{advogado.oab}}` etc.). Templates lib com 5 pré-configurados (Ofício ao Juízo, Notificação Extrajudicial, Carta de Apresentação, Ofício a Cartório RI, Encerramento de Mandato). Histórico de comunicações com visualização HTML, impressão/PDF via `window.print()`, protocolo/AR e status (gerada→enviada→respondida→arquivada). Aba "Comunicações" no AcervoJudicial por processo. Cabeçalho do Escritório em Configurações. Tabelas: `communication_templates`, `communications`, `escritorio_config`. Engine de resolução de placeholders no servidor.

@@ -1,4 +1,4 @@
-import { Bell, Search, User, ChevronDown, Settings } from "lucide-react";
+import { Bell, Search, User, ChevronDown, Settings, LogOut, Command } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import logoImage from "@assets/generated_images/Law_firm_logo_design_bb2f9039.png";
+import { Logo } from "@/components/brand/Logo";
 import avatarImage from "@assets/stock_images/professional_lawyer__9acf90aa.jpg";
 
 const menuItems = [
   {
-    title: "GESTÃO",
+    title: "Gestão",
     href: "/gestao",
     submenu: [
       { title: "Clientes", href: "/gestao/clientes" },
@@ -27,7 +27,7 @@ const menuItems = [
     ],
   },
   {
-    title: "ATIVIDADES",
+    title: "Atividades",
     href: "/atividades",
     submenu: [
       { title: "Lista de atividades", href: "/atividades" },
@@ -40,7 +40,7 @@ const menuItems = [
     ],
   },
   {
-    title: "PROCESSOS",
+    title: "Processos",
     href: "/processos",
     submenu: [
       { title: "Todos os Processos", href: "/processos" },
@@ -56,7 +56,7 @@ const menuItems = [
     ],
   },
   {
-    title: "ACERVO",
+    title: "Acervo",
     href: "/acervo/judicial",
     submenu: [
       { title: "Processos Judiciais", href: "/acervo/judicial" },
@@ -64,7 +64,7 @@ const menuItems = [
     ],
   },
   {
-    title: "FINANCEIRO",
+    title: "Financeiro",
     href: "/financeiro",
     submenu: [
       { title: "Contas a Receber", href: "/financeiro/receber" },
@@ -73,7 +73,7 @@ const menuItems = [
     ],
   },
   {
-    title: "DOCUMENTOS",
+    title: "Documentos",
     href: "/documentos",
     submenu: [
       { title: "Todos os Documentos", href: "/documentos" },
@@ -83,7 +83,7 @@ const menuItems = [
     ],
   },
   {
-    title: "LEXOS IA",
+    title: "IA",
     href: "/ia/peticoes",
     submenu: [
       { title: "Petições com IA", href: "/ia/peticoes" },
@@ -94,118 +94,143 @@ const menuItems = [
 ];
 
 export function TopNavigation() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+
+  const isActive = (href: string) => {
+    if (href === "/" && location === "/") return true;
+    return href !== "/" && location.startsWith(href);
+  };
 
   return (
-    <div className="bg-[#1a1a1a] text-white border-b border-[#2a2a2a]">
-      <div className="flex items-center justify-between px-6 py-3">
-        <div className="flex items-center gap-8">
-          <Link href="/">
-            <div className="flex items-center gap-2 cursor-pointer" data-testid="logo-home">
-              <img src={logoImage} alt="LegalSys" className="w-8 h-8" />
-              <span className="text-lg font-semibold">LegalSys</span>
-            </div>
-          </Link>
+    <header className="sticky top-0 z-50 w-full border-b border-border surface-glass">
+      <div className="flex h-14 items-center gap-6 px-5">
+        {/* Brand */}
+        <Link
+          href="/"
+          className="flex items-center gap-2 cursor-pointer pr-4 mr-2 border-r border-border h-9"
+          data-testid="logo-home"
+        >
+          <Logo size={26} />
+        </Link>
 
-          <nav className="flex items-center gap-1">
-            {menuItems.map((item) => (
-              item.submenu ? (
-                <DropdownMenu key={item.title}>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      className="bg-transparent hover:bg-white/10 text-white h-9 px-3 text-sm font-medium"
-                      data-testid={`nav-${item.title.toLowerCase()}`}
-                    >
-                      {item.title}
-                      <ChevronDown className="ml-1 h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48">
-                    {item.submenu.map((subItem) => (
-                      <DropdownMenuItem 
-                        key={subItem.href}
-                        onClick={() => setLocation(subItem.href)}
-                        data-testid={`nav-${subItem.title.toLowerCase().replace(/\s+/g, '-')}`}
-                      >
-                        {subItem.title}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <Link key={item.title} href={item.href}>
+        {/* Primary nav */}
+        <nav className="hidden lg:flex items-center gap-0.5">
+          {menuItems.map((item) =>
+            item.submenu ? (
+              <DropdownMenu key={item.title}>
+                <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="bg-transparent hover:bg-white/10 text-white h-9 px-3 text-sm font-medium"
+                    size="sm"
+                    className={`text-[13px] font-medium text-muted-foreground hover:text-foreground gap-1 ${
+                      isActive(item.href) ? "text-foreground" : ""
+                    }`}
                     data-testid={`nav-${item.title.toLowerCase()}`}
                   >
                     {item.title}
+                    <ChevronDown className="h-3 w-3 opacity-60" />
                   </Button>
-                </Link>
-              )
-            ))}
-          </nav>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {item.submenu.map((sub) => (
+                    <DropdownMenuItem
+                      key={sub.href}
+                      onClick={() => setLocation(sub.href)}
+                      data-testid={`nav-${sub.title.toLowerCase().replace(/\s+/g, "-")}`}
+                      className="text-[13px]"
+                    >
+                      {sub.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link key={item.title} href={item.href}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-[13px] font-medium text-muted-foreground hover:text-foreground"
+                  data-testid={`nav-${item.title.toLowerCase()}`}
+                >
+                  {item.title}
+                </Button>
+              </Link>
+            )
+          )}
+        </nav>
+
+        <div className="flex-1" />
+
+        {/* Search (cmd+k style) */}
+        <div className="relative hidden md:block w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Pesquisar processos, clientes, intimações..."
+            className="pl-9 pr-14 h-9 text-[13px] bg-card border-border placeholder:text-muted-foreground/70"
+            data-testid="input-top-search"
+          />
+          <kbd className="absolute right-2 top-1/2 -translate-y-1/2 hidden md:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+            <Command className="w-2.5 h-2.5" />K
+          </kbd>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="relative w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input
-              type="search"
-              placeholder="Pesquisar..."
-              className="pl-9 bg-white/10 border-white/20 text-white placeholder:text-gray-400 h-9"
-              data-testid="input-top-search"
-            />
-          </div>
+        {/* Notifications */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          data-testid="button-notifications"
+        >
+          <Bell className="w-4 h-4" />
+          <Badge className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] bg-primary text-primary-foreground border-0 rounded-full pointer-events-none">
+            7
+          </Badge>
+        </Button>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative text-white hover:bg-white/10 h-9 w-9"
-            data-testid="button-notifications"
-          >
-            <Bell className="w-5 h-5" />
-            <Badge className="absolute -top-1 -right-1 h-5 min-w-5 px-1 text-xs bg-red-500 text-white border-0">
-              7
-            </Badge>
-          </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 px-2 text-white hover:bg-white/10 h-9" data-testid="button-user-menu">
-                <Avatar className="w-7 h-7">
-                  <AvatarImage src={avatarImage} alt="Thiago Gomes" />
-                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                    TG
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm">Thiago Gomes</span>
-                <ChevronDown className="w-4 h-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem data-testid="menu-profile">
-                <User className="mr-2 h-4 w-4" />
-                <span>Meus Dados</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setLocation("/configuracoes")}
-                data-testid="menu-settings"
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Configurações</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem data-testid="menu-logout">
-                <span>Sair</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {/* User */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 pl-1.5 pr-2"
+              data-testid="button-user-menu"
+            >
+              <Avatar className="w-6 h-6">
+                <AvatarImage src={avatarImage} alt="Thiago Gomes" />
+                <AvatarFallback className="bg-primary/15 text-primary text-[10px]">
+                  TG
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-[13px] hidden md:inline">Thiago</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
+              Minha Conta
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="menu-profile">
+              <User className="mr-2 h-3.5 w-3.5" />
+              <span className="text-[13px]">Meus Dados</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setLocation("/configuracoes")}
+              data-testid="menu-settings"
+            >
+              <Settings className="mr-2 h-3.5 w-3.5" />
+              <span className="text-[13px]">Configurações</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem data-testid="menu-logout">
+              <LogOut className="mr-2 h-3.5 w-3.5" />
+              <span className="text-[13px]">Sair</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-    </div>
+    </header>
   );
 }

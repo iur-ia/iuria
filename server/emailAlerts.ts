@@ -84,7 +84,7 @@ function gerarHtmlAlerta(params: {
         <div style="margin-top: 16px; padding: 12px; background: ${riscoColor}20; border-radius: 4px; border-left: 4px solid ${riscoColor};">
           <strong style="color: ${riscoColor};">Este prazo vence em ${params.horasRestantes} horas!</strong>
         </div>
-        <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">LegalSys — Sistema de Gestão Jurídica</p>
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 24px;">iuria — Sistema de Gestão Jurídica</p>
       </div>
     </div>
   `;
@@ -141,7 +141,7 @@ export async function verificarEEnviarAlertas(): Promise<void> {
 
         enviado = await enviarEmail({
           to: emailResponsavel,
-          subject: `[LegalSys] Prazo ${tarefa.risco} vence em ${horasRestantes}h — ${tarefa.titulo}`,
+          subject: `[iuria] Prazo ${tarefa.risco} vence em ${horasRestantes}h — ${tarefa.titulo}`,
           html,
         });
       } else {

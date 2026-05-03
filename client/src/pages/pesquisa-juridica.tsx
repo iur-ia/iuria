@@ -133,13 +133,13 @@ function useLexosInject() {
   return (markdown: string, label: string) => {
     if (!markdown) return;
     try {
-      sessionStorage.setItem("lexos_inject", JSON.stringify({ text: markdown, label }));
+      sessionStorage.setItem("iuria_ia_inject", JSON.stringify({ text: markdown, label }));
       toast({
-        title: "Conteúdo enviado ao LexOS",
-        description: `"${label}" foi injetado no contexto do chat. Abra o LexOS IA para continuar.`,
+        title: "Conteúdo enviado à IA",
+        description: `"${label}" foi injetado no contexto do chat. Abra a IA para continuar.`,
       });
     } catch {
-      toast({ title: "Erro", description: "Não foi possível enviar ao LexOS.", variant: "destructive" });
+      toast({ title: "Erro", description: "Não foi possível enviar à IA.", variant: "destructive" });
     }
   };
 }
@@ -232,10 +232,10 @@ function AbaProcessos() {
                   <Button
                     size="sm"
                     variant="outline"
-                    data-testid="button-enviar-lexos-processo"
+                    data-testid="button-enviar-ia-processo"
                     onClick={() => injectLexos(data.markdownContent, `Processo ${processo?.numero || query}`)}
                   >
-                    <Send className="w-3 h-3 mr-1" /> Enviar ao LexOS
+                    <Send className="w-3 h-3 mr-1" /> Enviar à IA
                   </Button>
                 )}
               </div>
@@ -438,10 +438,10 @@ function AbaJurisprudencia() {
               <Button
                 size="sm"
                 variant="outline"
-                data-testid="button-enviar-lexos-jurisprudencia"
+                data-testid="button-enviar-ia-jurisprudencia"
                 onClick={() => injectLexos(data.markdownContent, `Jurisprudência: ${queryParams?.q}`)}
               >
-                <Send className="w-3 h-3 mr-1" /> Enviar ao LexOS
+                <Send className="w-3 h-3 mr-1" /> Enviar à IA
               </Button>
             )}
           </div>
@@ -579,10 +579,10 @@ function AbaDoutrina() {
               <Button
                 size="sm"
                 variant="outline"
-                data-testid="button-enviar-lexos-doutrina"
+                data-testid="button-enviar-ia-doutrina"
                 onClick={() => injectLexos(data.markdownContent, `Doutrina: ${query}`)}
               >
-                <Send className="w-3 h-3 mr-1" /> Enviar ao LexOS
+                <Send className="w-3 h-3 mr-1" /> Enviar à IA
               </Button>
             )}
           </div>
@@ -734,10 +734,10 @@ function AbaEmpresas() {
                   <Button
                     size="sm"
                     variant="outline"
-                    data-testid="button-enviar-lexos-empresa"
+                    data-testid="button-enviar-ia-empresa"
                     onClick={() => injectLexos(data.markdownContent, empresa.razaoSocial)}
                   >
-                    <Send className="w-3 h-3 mr-1" /> Enviar ao LexOS
+                    <Send className="w-3 h-3 mr-1" /> Enviar à IA
                   </Button>
                 )}
               </div>
