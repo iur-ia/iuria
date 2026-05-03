@@ -133,6 +133,7 @@ export const documentos = pgTable("documentos", {
   nome: text("nome").notNull(),
   tipo: text("tipo").notNull(),
   processoId: varchar("processo_id").references(() => processos.id),
+  clienteId: varchar("cliente_id").references(() => clientes.id),
   tamanho: text("tamanho"),
   caminho: text("caminho"),
   enviadoPor: varchar("enviado_por").references(() => equipe.id),

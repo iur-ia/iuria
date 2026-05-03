@@ -97,7 +97,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Template, PeticaoRascunho } from "@shared/schema";
+import type { Template, PeticaoRascunho, Processo, Cliente } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 const CATEGORIAS = [
@@ -166,6 +166,8 @@ export default function PeticoesIA() {
   const [titulo, setTitulo] = useState("Nova Petição");
   const [rascunhoId, setRascunhoId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [processoId, setProcessoId] = useState<string>("");
+  const [clienteId, setClienteId] = useState<string>("");
 
   const editor = useEditor({
     extensions: [
@@ -198,6 +200,18 @@ export default function PeticoesIA() {
   const { data: templates = [] } = useQuery<Template[]>({ queryKey: ["/api/templates"] });
   const { data: rascunhos = [] } = useQuery<PeticaoRascunho[]>({ queryKey: ["/api/peticao-rascunhos"] });
   const { data: escritorio } = useQuery<EscritorioConfig>({ queryKey: ["/api/escritorio-config"] });
+  const { data: processos = [] } = useQuery<Processo[]>({ queryKey: ["/api/processos"] });
+  const { data: clientes = [] } = useQuery<Cliente[]>({ queryKey: ["/api/clientes"] });
+
+  // Auto-vincula cliente quando processo selecionado tiver cliente
+  useEffect(() => {
+    if (!processoId) return;
+    const p = processos.find((x) => x.id === processoId);
+    if (p && (p as Processo & { clienteId?: string }).clienteId && !clienteId) {
+      setClienteId((p as Processo & { clienteId?: string }).clienteId || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processoId, processos]);
 
   // Filtros
   const [filtroCat, setFiltroCat] = useState<string>("todas");
@@ -482,11 +496,24 @@ export default function PeticoesIA() {
   const salvarAcervo = useMutation({
     mutationFn: () =>
       apiRequest("POST", "/api/peticoes-ia/salvar-no-acervo", {
-        titulo, html: editor?.getHTML() || "",
+        titulo,
+        html: editor?.getHTML() || "",
+        processoId: processoId || undefined,
+        clienteId: clienteId || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documentos"] });
-      toast({ title: "Salvo no acervo", description: `${titulo} adicionado em Documentos > Petições.` });
+      const vinc: string[] = [];
+      if (processoId) {
+        const p = processos.find((x) => x.id === processoId);
+        if (p) vinc.push(`processo ${p.numero || p.id.slice(0, 8)}`);
+      }
+      if (clienteId) {
+        const c = clientes.find((x) => x.id === clienteId);
+        if (c) vinc.push(`cliente ${c.nome}`);
+      }
+      const vincStr = vinc.length ? ` (${vinc.join(", ")})` : "";
+      toast({ title: "Salvo no acervo", description: `${titulo}${vincStr} adicionado em Documentos > Petições.` });
     },
   });
 
@@ -679,10 +706,32 @@ export default function PeticoesIA() {
             <Input
               value={titulo}
               onChange={(e) => { setTitulo(e.target.value); setDirty(true); }}
-              className="text-base font-medium border-none shadow-none focus-visible:ring-1 px-2 max-w-md"
+              className="text-base font-medium border-none shadow-none focus-visible:ring-1 px-2 min-w-[160px] max-w-[280px]"
               data-testid="input-titulo-peticao"
             />
             {dirty && <Badge variant="outline" className="text-[10px]">não salvo</Badge>}
+            <Select value={processoId || "__none__"} onValueChange={(v) => setProcessoId(v === "__none__" ? "" : v)}>
+              <SelectTrigger className="h-8 w-[200px] text-xs" data-testid="select-processo-vinculo">
+                <SelectValue placeholder="Vincular processo…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem processo</SelectItem>
+                {processos.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.numero || p.id.slice(0, 8)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={clienteId || "__none__"} onValueChange={(v) => setClienteId(v === "__none__" ? "" : v)}>
+              <SelectTrigger className="h-8 w-[180px] text-xs" data-testid="select-cliente-vinculo">
+                <SelectValue placeholder="Vincular cliente…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Sem cliente</SelectItem>
+                {clientes.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="flex-1" />
             <Button
               size="sm"

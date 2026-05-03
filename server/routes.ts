@@ -1063,8 +1063,8 @@ td, th { border: 1px solid #444; padding: 4px 8px; }
   // ==================== PETIÇÕES IA — SALVAR NO ACERVO ====================
   app.post("/api/peticoes-ia/salvar-no-acervo", async (req, res) => {
     try {
-      const { titulo, html, processoId } = req.body as {
-        titulo: string; html: string; processoId?: string;
+      const { titulo, html, processoId, clienteId } = req.body as {
+        titulo: string; html: string; processoId?: string; clienteId?: string;
       };
       if (!titulo || !html) return res.status(400).json({ error: "Título e conteúdo são obrigatórios" });
       const safeHtml = sanitizeLegalHtml(html);
@@ -1077,6 +1077,7 @@ td, th { border: 1px solid #444; padding: 4px 8px; }
         extracaoStatus: "concluida",
         versao: 1,
         processoId: processoId || null,
+        clienteId: clienteId || null,
       });
       res.status(201).json(doc);
     } catch (error: any) {
