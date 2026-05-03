@@ -2792,9 +2792,10 @@ except Exception as e:
         });
       const crFiltrado = cr.filter((c) => {
         if (!clienteFiltro) return true;
-        // find processo linked to this contaReceber
+        // Prefer direct clienteId on the record; fall back to linked processo's clienteId
+        if (c.clienteId) return c.clienteId === clienteFiltro;
         const proc = c.processoId ? processoMap.get(c.processoId) : null;
-        return !proc || proc.clienteId === clienteFiltro;
+        return proc ? proc.clienteId === clienteFiltro : false;
       });
       // contasPagar has no processoId/clienteId link — can't filter by client
       const cpFiltrado = cp;
