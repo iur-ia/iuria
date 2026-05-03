@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,8 +18,15 @@ import {
   Loader2, Search, Scale, Building, Clock, FileText,
   Plus, Trash2, RefreshCw, Eye, Database, Globe, Zap,
   Fingerprint, AlertCircle, CheckCircle2, RotateCcw, StickyNote,
-  User, Briefcase, Hash, Bell, BellOff, CheckCheck,
+  User, Briefcase, Hash, Bell, BellOff, CheckCheck, ArrowUpDown, X,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { ProcessoAcompanhado } from "@shared/schema";
@@ -779,11 +786,15 @@ function SearchByParte({
   );
 }
 
+type OrdemLista = "recente" | "antigo" | "tribunal" | "numero" | "novos";
+
 export default function ProcessosAcompanhar() {
   const { toast } = useToast();
   const [searchMode, setSearchMode] = useState<"numero" | "parte">("numero");
   const [atualizandoTodos, setAtualizandoTodos] = useState(false);
   const [progressoAtualizacao, setProgressoAtualizacao] = useState(0);
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [ordemLista, setOrdemLista] = useState<OrdemLista>("recente");
 
   const { data: acompanhados = [], isLoading: loadingAcompanhados } = useQuery<ProcessoAcompanhado[]>({
     queryKey: ["/api/acompanhamentos"],
@@ -792,6 +803,39 @@ export default function ProcessosAcompanhar() {
 
   const totalNovosAndamentos = acompanhados.reduce((acc, i) => acc + (i.novosAndamentos ?? 0), 0);
   const processosComNovos = acompanhados.filter((i) => (i.novosAndamentos ?? 0) > 0).length;
+
+  const acompanhadosFiltrados = useMemo(() => {
+    const q = filtroTexto.trim().toLowerCase();
+    let lista = q
+      ? acompanhados.filter(
+          (item) =>
+            item.numeroProcesso.toLowerCase().includes(q) ||
+            (item.tribunal ?? "").toLowerCase().includes(q) ||
+            (item.assunto ?? "").toLowerCase().includes(q) ||
+            (item.classe ?? "").toLowerCase().includes(q) ||
+            (item.anotacao ?? "").toLowerCase().includes(q)
+        )
+      : [...acompanhados];
+
+    switch (ordemLista) {
+      case "recente":
+        lista.sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime());
+        break;
+      case "antigo":
+        lista.sort((a, b) => new Date(a.updatedAt ?? 0).getTime() - new Date(b.updatedAt ?? 0).getTime());
+        break;
+      case "tribunal":
+        lista.sort((a, b) => (a.tribunal ?? "").localeCompare(b.tribunal ?? "", "pt-BR"));
+        break;
+      case "numero":
+        lista.sort((a, b) => a.numeroProcesso.localeCompare(b.numeroProcesso, "pt-BR"));
+        break;
+      case "novos":
+        lista.sort((a, b) => (b.novosAndamentos ?? 0) - (a.novosAndamentos ?? 0));
+        break;
+    }
+    return lista;
+  }, [acompanhados, filtroTexto, ordemLista]);
 
   const marcarTodosVistosMutation = useMutation({
     mutationFn: async () => {
@@ -894,7 +938,9 @@ export default function ProcessosAcompanhar() {
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              {acompanhados.length} processo(s) na lista de vigilância
+              {filtroTexto
+                ? `${acompanhadosFiltrados.length} de ${acompanhados.length} processo(s)`
+                : `${acompanhados.length} processo(s) na lista de vigilância`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -938,6 +984,53 @@ export default function ProcessosAcompanhar() {
           </div>
         </div>
 
+        {/* Barra de filtro e ordenação — visível somente quando há processos */}
+        {acompanhados.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                data-testid="input-filtro-lista"
+                placeholder="Filtrar por número, tribunal, assunto, anotação..."
+                value={filtroTexto}
+                onChange={(e) => setFiltroTexto(e.target.value)}
+                className="pl-9 pr-9"
+              />
+              {filtroTexto && (
+                <button
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setFiltroTexto("")}
+                  data-testid="button-limpar-filtro"
+                  aria-label="Limpar filtro"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Select
+                value={ordemLista}
+                onValueChange={(v) => setOrdemLista(v as OrdemLista)}
+              >
+                <SelectTrigger
+                  className="w-48"
+                  data-testid="select-ordem-lista"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recente">Mais recente</SelectItem>
+                  <SelectItem value="antigo">Mais antigo</SelectItem>
+                  <SelectItem value="novos">Com novos andamentos</SelectItem>
+                  <SelectItem value="tribunal">Por tribunal (A-Z)</SelectItem>
+                  <SelectItem value="numero">Por número (A-Z)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
         {loadingAcompanhados ? (
           <Card>
             <CardContent className="py-10 text-center">
@@ -955,9 +1048,25 @@ export default function ProcessosAcompanhar() {
               </p>
             </CardContent>
           </Card>
+        ) : acompanhadosFiltrados.length === 0 ? (
+          <Card data-testid="card-filtro-sem-resultado">
+            <CardContent className="py-10 text-center">
+              <Search className="h-10 w-10 mx-auto text-muted-foreground mb-3 opacity-40" />
+              <p className="font-medium text-muted-foreground">Nenhum processo encontrado</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Tente outros termos ou{" "}
+                <button
+                  className="text-primary underline underline-offset-2"
+                  onClick={() => setFiltroTexto("")}
+                >
+                  limpe o filtro
+                </button>
+              </p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" data-testid="lista-acompanhados">
-            {acompanhados.map((item) => (
+            {acompanhadosFiltrados.map((item) => (
               <ProcessoAcompanhadoCard key={item.id} item={item} />
             ))}
           </div>
