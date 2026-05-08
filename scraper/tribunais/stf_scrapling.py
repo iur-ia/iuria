@@ -55,11 +55,11 @@ class STFScrapling(BaseScraper):
     def _fetch_with_scrapling(self, url: str):
         """Fetch a page using Scrapling DynamicFetcher (Playwright-based with stealth)"""
         from scrapling import Fetcher
-        fetcher = Fetcher(verify=False)
+        fetcher = Fetcher()
         
         
 
-        page = fetcher.get(url)
+        page = fetcher.get(url, proxy=None, proxies=None, impersonate='chrome120', timeout=30000, verify=False)
         return page
     
     def _extrair_detalhes_page(self, page, classe: str, numero: str, url: str) -> List[ProcessoInfo]:

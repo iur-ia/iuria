@@ -36,13 +36,13 @@ class TRF2Scrapling(BaseScraper):
     def _fetch_with_scrapling(self, url: str):
         """Fetch using Scrapling DynamicFetcher with anti-detection"""
         from scrapling import Fetcher
-        fetcher = Fetcher(verify=False)
+        fetcher = Fetcher()
 
         ua = random.choice(USER_AGENTS)
         wait = random.uniform(1.5, 3.0)
 
 
-        page = fetcher.get(url)
+        page = fetcher.get(url, proxy=None, proxies=None, impersonate='chrome120', timeout=30000, verify=False)
         return page
 
     def _extrair_processo(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:

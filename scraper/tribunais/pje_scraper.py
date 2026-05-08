@@ -155,7 +155,7 @@ class PJeScraper(BaseScraper):
     def _fetch_with_scrapling(self, url: str, wait_selector: str = None):
         """Fetch usando Scrapling DynamicFetcher com técnicas anti-detecção"""
         from scrapling import Fetcher
-        fetcher = Fetcher(verify=False)
+        fetcher = Fetcher()
         
         wait = random.uniform(2.0, 4.0)
         ua = random.choice(USER_AGENTS)
@@ -180,7 +180,7 @@ class PJeScraper(BaseScraper):
         if wait_selector:
             kwargs["wait_selector"] = wait_selector
         
-        page = fetcher.get(url)
+        page = fetcher.get(url, proxy=None, proxies=None, impersonate='chrome120', timeout=30000, verify=False)
         return page
     
     async def buscar_por_numero(self, numero: str) -> ResultadoBusca:
