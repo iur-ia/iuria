@@ -55,15 +55,45 @@ class STJScrapling(BaseScraper):
 
     def _fetch_with_scrapling(self, url: str):
         """Fetch using Scrapling DynamicFetcher with anti-detection"""
-        from scrapling import Fetcher
-        fetcher = Fetcher()
+        import requests
+        import urllib3
+        urllib3.disable_warnings()
+        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}, verify=False)
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, 'html.parser')
 
-        ua = random.choice(USER_AGENTS)
-        wait = random.uniform(1.5, 3.0)
+        class MockPage:
+            def __init__(self, text, soup):
+                self.text = text
+                self.soup = soup
+                self.url = url
 
+            def get_all_text(self, *a, **kw):
+                return self.text
 
-        page = fetcher.get(url, proxy=None, proxies=None, impersonate='chrome120', timeout=30000, verify=False)
-        return page
+            def css(self, selector):
+                class Item:
+                    def __init__(self, el):
+                        self.el = el
+                        self.text = el.text.strip() if el else ""
+                        self.attrib = el.attrs if el else {}
+                    def css(self, sel):
+                        found = self.el.select(sel)
+                        return MockPage("", None)._make_sel(found)
+
+                found = self.soup.select(selector)
+                return self._make_sel(found)
+
+            def _make_sel(self, found):
+                class Selector:
+                    def __init__(self, items):
+                        self.items = items
+                        self.first = items[0] if items else None
+                    def __iter__(self):
+                        return iter(self.items)
+                return Selector([Item(x) for x in found])
+
+        return MockPage(resp.text, soup)
 
     def _extrair_processo(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
         """Extract process from STJ page"""
