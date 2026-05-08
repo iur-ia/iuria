@@ -1106,7 +1106,7 @@ td, th { border: 1px solid #444; padding: 4px 8px; }`;
 
         // Pós-processa o .docx: troca os marcadores de texto por <w:fldSimple>.
         const AdmZipMod = (await import("adm-zip")).default;
-        const zip = new AdmZipMod(Buffer.from(buffer));
+        const zip = new AdmZipMod(buffer as any) as any;
         // O html-to-docx emite os elementos sem o prefixo `w:` (usa apenas o
         // namespace default herdado de <ftr xmlns="…">), então injetamos os
         // fragmentos no mesmo estilo. Declaramos `xmlns:w` localmente apenas
@@ -1179,6 +1179,7 @@ td, th { border: 1px solid #444; padding: 4px 8px; }`;
         const buffer = await htmlPdf.generatePdf(file, {
           format: "A4",
           margin: { top: "2.5cm", bottom: "2.5cm", left: "3cm", right: "2cm" },
+          // @ts-ignore
           displayHeaderFooter,
           headerTemplate,
           footerTemplate,

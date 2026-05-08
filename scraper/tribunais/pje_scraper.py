@@ -154,12 +154,13 @@ class PJeScraper(BaseScraper):
     
     def _fetch_with_scrapling(self, url: str, wait_selector: str = None):
         """Fetch usando Scrapling DynamicFetcher com técnicas anti-detecção"""
-        from scrapling import DynamicFetcher
+        from scrapling import Fetcher
+        fetcher = Fetcher(verify=False)
         
         wait = random.uniform(2.0, 4.0)
         ua = random.choice(USER_AGENTS)
         
-        fetcher = DynamicFetcher()
+
         
         kwargs = {
             "headless": True,
@@ -179,7 +180,7 @@ class PJeScraper(BaseScraper):
         if wait_selector:
             kwargs["wait_selector"] = wait_selector
         
-        page = fetcher.fetch(url, **kwargs)
+        page = fetcher.get(url)
         return page
     
     async def buscar_por_numero(self, numero: str) -> ResultadoBusca:
@@ -195,7 +196,7 @@ class PJeScraper(BaseScraper):
             url = self.config['consulta_url']
             
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
             
             if page:
                 page_text = page.get_all_text(ignore_tags=("script", "style"))
@@ -235,7 +236,7 @@ class PJeScraper(BaseScraper):
             url = f"{self.config['consulta_url']}?nomeParte={quote(nome)}"
             
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
             
             if page:
                 processos = self._extrair_lista_resultados(page)

@@ -54,17 +54,12 @@ class STFScrapling(BaseScraper):
     
     def _fetch_with_scrapling(self, url: str):
         """Fetch a page using Scrapling DynamicFetcher (Playwright-based with stealth)"""
-        from scrapling import DynamicFetcher
+        from scrapling import Fetcher
+        fetcher = Fetcher(verify=False)
         
-        fetcher = DynamicFetcher()
         
-        page = fetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            timeout=30000,
-            disable_resources=True,
-        )
+
+        page = fetcher.get(url)
         return page
     
     def _extrair_detalhes_page(self, page, classe: str, numero: str, url: str) -> List[ProcessoInfo]:
@@ -175,7 +170,7 @@ class STFScrapling(BaseScraper):
                 url = f"{self.base_url}/processos/listarProcessos.asp?classe={classe}&numeroProcesso={num}"
                 
                 loop = asyncio.get_event_loop()
-                page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+                page = self._fetch_with_scrapling(url)
                 
                 if page:
                     processos = self._extrair_detalhes_page(page, classe, num, url)
@@ -216,7 +211,7 @@ class STFScrapling(BaseScraper):
             url = f"{self.base_url}/processos/pesquisar.asp?pesquisar=pesquisar&partes={nome_encoded}"
             
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
             
             if page:
                 processos = self._extrair_lista_resultados_page(page)

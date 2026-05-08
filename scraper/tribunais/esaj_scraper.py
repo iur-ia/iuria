@@ -152,29 +152,16 @@ class ESAJScraper(BaseScraper):
 
     def _fetch_with_scrapling(self, url: str, wait: float = None) -> Optional[object]:
         """Fetch usando Scrapling DynamicFetcher com técnicas anti-detecção."""
-        from scrapling import DynamicFetcher
+        from scrapling import Fetcher
+        fetcher = Fetcher(verify=False)
 
         if wait is None:
             wait = random.uniform(1.5, 3.0)
 
         ua = random.choice(USER_AGENTS)
 
-        fetcher = DynamicFetcher()
-        page = fetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            timeout=35000,
-            disable_resources=True,
-            google_search=True,
-            useragent=ua,
-            locale="pt-BR",
-            extra_headers={
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-            wait=wait,
-        )
+
+        page = fetcher.get(url)
         return page
 
     def _fetch(self, url: str):

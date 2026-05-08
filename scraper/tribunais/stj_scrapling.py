@@ -55,28 +55,14 @@ class STJScrapling(BaseScraper):
 
     def _fetch_with_scrapling(self, url: str):
         """Fetch using Scrapling DynamicFetcher with anti-detection"""
-        from scrapling import DynamicFetcher
+        from scrapling import Fetcher
+        fetcher = Fetcher(verify=False)
 
         ua = random.choice(USER_AGENTS)
         wait = random.uniform(1.5, 3.0)
 
-        fetcher = DynamicFetcher()
-        page = fetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            timeout=30000,
-            disable_resources=True,
-            google_search=True,
-            useragent=ua,
-            locale="pt-BR",
-            extra_headers={
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Referer": "https://www.google.com.br/",
-            },
-            wait=wait,
-        )
+
+        page = fetcher.get(url)
         return page
 
     def _extrair_processo(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
@@ -189,7 +175,7 @@ class STJScrapling(BaseScraper):
                 url = f"{self.base_url}/processo/pesquisa/?tipoPesquisa=tipoPesquisaNumeroRegistro&termo={quote(numero)}"
 
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
 
             if page:
                 processo = self._extrair_processo(page, numero, page.url or url)
@@ -219,7 +205,7 @@ class STJScrapling(BaseScraper):
             url = f"{self.base_url}/processo/pesquisa/?tipoPesquisa=tipoPesquisaNomeParteAdvo&termo={quote(nome)}"
 
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
 
             if page:
                 processos = self._extrair_lista_resultados(page)
