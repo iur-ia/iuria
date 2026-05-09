@@ -296,6 +296,31 @@ class ESAJScraper(BaseScraper):
         return partes[:12], advogados
 
     def _extrair_processo_esaj(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
+        try:
+            page_text = page.get_all_text(ignore_tags=("script", "style"))
+            if 'não encontrado' in page_text.lower() or 'nenhum processo' in page_text.lower():
+                return None
+
+            processo = ProcessoInfo(
+                numero=numero,
+                numero_unico=numero,
+                tribunal=self.tribunal_sigla,
+                url=url
+            )
+
+            # Extract basics via Regex since HTML tags might be wiped
+            for m in page_text.splitlines():
+                if m.strip().lower().startswith("classe"):
+                    processo.classe = m.split(":", 1)[-1].strip()
+                if m.strip().lower().startswith("assunto"):
+                    processo.assunto = m.split(":", 1)[-1].strip()
+
+            return processo
+
+        except Exception as e:
+            return None
+
+    def _extrair_processo_esaj_old(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
         """
         Extrai dados de processo de uma página eSAJ.
         Campos: classe, assunto, valor da causa, comarca, vara, juiz,

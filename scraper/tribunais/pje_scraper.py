@@ -153,35 +153,51 @@ class PJeScraper(BaseScraper):
         self.base_url = config["base_url"]
     
     def _fetch_with_scrapling(self, url: str, wait_selector: str = None):
-        """Fetch usando Scrapling DynamicFetcher com técnicas anti-detecção"""
-        from scrapling import Fetcher
-        fetcher = Fetcher()
+        import requests
+        import os
+        import urllib3
+        urllib3.disable_warnings()
         
-        wait = random.uniform(2.0, 4.0)
-        ua = random.choice(USER_AGENTS)
+        tinyfish_url = os.environ.get("TINYFISH_URL")
+        tinyfish_key = os.environ.get("TINYFISH_KEY")
         
+        if tinyfish_url and tinyfish_key:
+            api_url = f"{tinyfish_url}?api_key={tinyfish_key}&url={requests.utils.quote(url)}"
+            resp = requests.get(api_url, verify=False, timeout=60)
+        else:
+            resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, verify=False, timeout=30)
 
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, 'html.parser')
         
-        kwargs = {
-            "headless": True,
-            "network_idle": True,
-            "timeout": 45000,
-            "disable_resources": True,
-            "google_search": True,
-            "useragent": ua,
-            "locale": "pt-BR",
-            "extra_headers": {
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-            "wait": wait,
-        }
-        
-        if wait_selector:
-            kwargs["wait_selector"] = wait_selector
-        
-        page = fetcher.get(url, proxy=None, proxies=None, impersonate='chrome120', timeout=30000, verify=False)
-        return page
+        class MockPage:
+            def __init__(self, text, soup, url):
+                self.text = text
+                self.soup = soup
+                self.url = url
+            def get_all_text(self, *a, **kw):
+                return self.text
+            def css(self, selector):
+                class Item:
+                    def __init__(self, el):
+                        self.el = el
+                        self.text = el.text.strip() if el else ""
+                        self.attrib = el.attrs if el else {}
+                    def css(self, sel):
+                        found = self.el.select(sel)
+                        return MockPage("", None, "")._make_sel(found)
+                found = self.soup.select(selector)
+                return self._make_sel(found)
+            def _make_sel(self, found):
+                class Selector:
+                    def __init__(self, items):
+                        self.items = items
+                        self.first = items[0] if items else None
+                    def __iter__(self):
+                        return iter(self.items)
+                return Selector([Item(x) for x in found])
+
+        return MockPage(resp.text, soup, url)
     
     async def buscar_por_numero(self, numero: str) -> ResultadoBusca:
         """Busca processo por número no PJe"""
