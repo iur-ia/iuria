@@ -56,11 +56,32 @@ class STFScrapling(BaseScraper):
         """Fetch a page using Scrapling DynamicFetcher (Playwright-based with stealth)"""
         import requests
         import urllib3
+        import os
         urllib3.disable_warnings()
-        resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}, verify=False)
+
+        # Integrando com proxy rotativo/TinyFish para burlar Cloudflare/403
+        tinyfish_url = os.environ.get("TINYFISH_URL")
+        tinyfish_key = os.environ.get("TINYFISH_KEY")
+
+        if tinyfish_url and tinyfish_key:
+            # Usar API do proxy se configurada no .env
+            api_url = f"{tinyfish_url}?api_key={tinyfish_key}&url={requests.utils.quote(url)}"
+            resp = requests.get(api_url, verify=False, timeout=60)
+        else:
+            # Fallback local
+            resp = requests.get(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3'
+            }, verify=False, timeout=30)
+
+            # Se for 403 (bloqueio), mas estiver usando um endpoint da Cloudflare public API como bypass alternativo
+            if resp.status_code == 403 and "stf.jus.br" in url:
+                pass # Aqui podemos plugar lógica adicional de scrape se precisar
+
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
+
         class MockPage:
             def __init__(self, text, soup):
                 self.text = text
