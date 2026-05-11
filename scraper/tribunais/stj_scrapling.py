@@ -55,29 +55,66 @@ class STJScrapling(BaseScraper):
 
     def _fetch_with_scrapling(self, url: str):
         """Fetch using Scrapling DynamicFetcher with anti-detection"""
-        from scrapling import DynamicFetcher
+        import requests
+        import urllib3
+        import os
+        urllib3.disable_warnings()
 
-        ua = random.choice(USER_AGENTS)
-        wait = random.uniform(1.5, 3.0)
+        # Integrando com proxy rotativo/TinyFish para burlar Cloudflare/403
+        tinyfish_url = os.environ.get("TINYFISH_URL")
+        tinyfish_key = os.environ.get("TINYFISH_KEY")
 
-        fetcher = DynamicFetcher()
-        page = fetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            timeout=30000,
-            disable_resources=True,
-            google_search=True,
-            useragent=ua,
-            locale="pt-BR",
-            extra_headers={
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Referer": "https://www.google.com.br/",
-            },
-            wait=wait,
-        )
-        return page
+        if tinyfish_url and tinyfish_key:
+            # Usar API do proxy se configurada no .env
+            api_url = f"{tinyfish_url}?api_key={tinyfish_key}&url={requests.utils.quote(url)}"
+            resp = requests.get(api_url, verify=False, timeout=60)
+        else:
+            # Fallback local
+            resp = requests.get(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3'
+            }, verify=False, timeout=30)
+
+            # Se for 403 (bloqueio), mas estiver usando um endpoint da Cloudflare public API como bypass alternativo
+            if resp.status_code == 403 and "stf.jus.br" in url:
+                pass # Aqui podemos plugar lógica adicional de scrape se precisar
+
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, 'html.parser')
+
+        class MockPage:
+            def __init__(self, text, soup):
+                self.text = text
+                self.soup = soup
+                self.url = url
+
+            def get_all_text(self, *a, **kw):
+                return self.text
+
+            def css(self, selector):
+                class Item:
+                    def __init__(self, el):
+                        self.el = el
+                        self.text = el.text.strip() if el else ""
+                        self.attrib = el.attrs if el else {}
+                    def css(self, sel):
+                        found = self.el.select(sel)
+                        return MockPage("", None)._make_sel(found)
+
+                found = self.soup.select(selector)
+                return self._make_sel(found)
+
+            def _make_sel(self, found):
+                class Selector:
+                    def __init__(self, items):
+                        self.items = items
+                        self.first = items[0] if items else None
+                    def __iter__(self):
+                        return iter(self.items)
+                return Selector([Item(x) for x in found])
+
+        return MockPage(resp.text, soup)
 
     def _extrair_processo(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
         """Extract process from STJ page"""
@@ -189,7 +226,7 @@ class STJScrapling(BaseScraper):
                 url = f"{self.base_url}/processo/pesquisa/?tipoPesquisa=tipoPesquisaNumeroRegistro&termo={quote(numero)}"
 
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
 
             if page:
                 processo = self._extrair_processo(page, numero, page.url or url)
@@ -219,7 +256,7 @@ class STJScrapling(BaseScraper):
             url = f"{self.base_url}/processo/pesquisa/?tipoPesquisa=tipoPesquisaNomeParteAdvo&termo={quote(nome)}"
 
             loop = asyncio.get_event_loop()
-            page = await loop.run_in_executor(None, self._fetch_with_scrapling, url)
+            page = self._fetch_with_scrapling(url)
 
             if page:
                 processos = self._extrair_lista_resultados(page)

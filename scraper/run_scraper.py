@@ -26,6 +26,26 @@ from datajud import DataJudClient, TRIBUNAL_INDICES
 
 
 def _get_scraping_scraper(tribunal: str):
+    from cnj_parser import get_router_logic
+    rota = get_router_logic(tribunal)
+
+    if rota["tipo"] == "esaj":
+        from tribunais.esaj_scraper import ESAJScraper
+        return ESAJScraper
+    elif rota["tipo"] == "pje":
+        from tribunais.pje_scraper import PJeScraper
+        return PJeScraper
+    elif rota["tipo"] == "eproc":
+        # Todo eproc via TinyFish
+        from tribunais.eproc_scraper import EProcScraper
+        return EProcScraper
+    elif rota["tipo"] == "custom":
+        modulo = __import__(f"scraper.{rota['modulo']}", fromlist=[rota["classe"]])
+        return getattr(modulo, rota["classe"])
+
+    return None
+
+def _get_scraping_scraper_old(tribunal: str):
     """
     Returns the best available scraper class for a tribunal.
     Priority: Scrapling stealth > legacy Playwright

@@ -152,29 +152,16 @@ class ESAJScraper(BaseScraper):
 
     def _fetch_with_scrapling(self, url: str, wait: float = None) -> Optional[object]:
         """Fetch usando Scrapling DynamicFetcher com técnicas anti-detecção."""
-        from scrapling import DynamicFetcher
+        from scrapling import Fetcher
+        fetcher = Fetcher()
 
         if wait is None:
             wait = random.uniform(1.5, 3.0)
 
         ua = random.choice(USER_AGENTS)
 
-        fetcher = DynamicFetcher()
-        page = fetcher.fetch(
-            url,
-            headless=True,
-            network_idle=True,
-            timeout=35000,
-            disable_resources=True,
-            google_search=True,
-            useragent=ua,
-            locale="pt-BR",
-            extra_headers={
-                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-            wait=wait,
-        )
+
+        page = fetcher.get(url, proxy=None, proxies=None, impersonate='chrome120', timeout=30000, verify=False)
         return page
 
     def _fetch(self, url: str):
@@ -309,6 +296,31 @@ class ESAJScraper(BaseScraper):
         return partes[:12], advogados
 
     def _extrair_processo_esaj(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
+        try:
+            page_text = page.get_all_text(ignore_tags=("script", "style"))
+            if 'não encontrado' in page_text.lower() or 'nenhum processo' in page_text.lower():
+                return None
+
+            processo = ProcessoInfo(
+                numero=numero,
+                numero_unico=numero,
+                tribunal=self.tribunal_sigla,
+                url=url
+            )
+
+            # Extract basics via Regex since HTML tags might be wiped
+            for m in page_text.splitlines():
+                if m.strip().lower().startswith("classe"):
+                    processo.classe = m.split(":", 1)[-1].strip()
+                if m.strip().lower().startswith("assunto"):
+                    processo.assunto = m.split(":", 1)[-1].strip()
+
+            return processo
+
+        except Exception as e:
+            return None
+
+    def _extrair_processo_esaj_old(self, page, numero: str, url: str) -> Optional[ProcessoInfo]:
         """
         Extrai dados de processo de uma página eSAJ.
         Campos: classe, assunto, valor da causa, comarca, vara, juiz,

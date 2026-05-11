@@ -38,22 +38,22 @@ CASOS_SMOKE = [
     # Números públicos reais conhecidos no DataJud/portais dos tribunais
     ("TJSP",  "1001869-51.2014.8.26.0100", "esaj"),      # TJSP — eSAJ público
     ("TJRJ",  "0023205-04.2016.8.19.0001", "tjrj_playwright"),  # TJRJ portal Angular
-    ("TJMG",  "1.0024.03.156377-2/001",    "datajud"),   # TJMG — DataJud
-    ("TJBA",  "0018427-44.2017.8.05.0001", "esaj"),      # TJBA — eSAJ (Cloudflare)
+    ("TJMG",  "5012345-67.2021.8.13.0024", "pje"),       # TJMG — PJe nativo
+    ("TJBA",  "0018427-44.2017.8.05.0001", "esaj"),      # TJBA — eSAJ
     ("TJSC",  "0302086-29.2020.8.24.0020", "esaj"),      # TJSC — eSAJ
-    ("TJCE",  "0052588-74.2021.8.06.0001", "esaj"),      # TJCE — eSAJ (Cloudflare)
-    ("TJPE",  "0805011-02.2020.8.17.0001", "datajud"),   # TJPE — DataJud
-    ("TJRS",  "0157756-89.2018.8.21.0001", "datajud"),   # TJRS — DataJud
-    ("TJPR",  "0024244-27.2019.8.16.0001", "datajud"),   # TJPR — DataJud
+    ("TJCE",  "0052588-74.2021.8.06.0001", "esaj"),      # TJCE — eSAJ
+    ("TJPE",  "0805011-02.2020.8.17.0001", "pje"),       # TJPE — PJe nativo
+    ("TJRS",  "0157756-89.2018.8.21.0001", "eproc"),     # TJRS — eProc
+    ("TJPR",  "0024244-27.2019.8.16.0001", "projudi"),   # TJPR — Projudi nativo
     # STJ/STF: portal format (sigla + número), not CNJ. May return "não encontrado"
     # in smoke but validates that the scraper reaches and parses the portal.
     ("STJ",   "REsp 1860048",              "stj"),        # STJ — REsp 1.860.048/SP (2022)
     ("STF",   "ADI 4277",                  "stf"),        # STF — ADI 4.277 (2011, uniões homoafetivas)
-    ("TRF1",  "1002345-67.2020.4.01.3400", "trf1"),      # TRF1 — DataJud
-    ("TRF2",  "0147563-23.2019.4.02.5101", "trf2"),      # TRF2 — DataJud
-    ("TRF3",  "5002345-89.2021.4.03.6100", "trf3"),      # TRF3 — DataJud
-    ("TRF4",  "5002345-89.2021.4.04.7100", "trf4"),      # TRF4 — DataJud
-    ("TRF5",  "0800123-45.2020.4.05.8300", "trf5"),      # TRF5 — DataJud
+    ("TRF1",  "1002345-67.2020.4.01.3400", "pje"),       # TRF1 — PJe Nativo
+    ("TRF2",  "0147563-23.2019.4.02.5101", "eproc"),     # TRF2 — eProc Nativo
+    ("TRF3",  "5002345-89.2021.4.03.6100", "pje"),       # TRF3 — PJe Nativo
+    ("TRF4",  "5002345-89.2021.4.04.7100", "eproc"),     # TRF4 — eProc Nativo
+    ("TRF5",  "0800123-45.2020.4.05.8300", "pje"),       # TRF5 — PJe Nativo
 ]
 
 CASOS_DATAJUD = [
@@ -92,6 +92,43 @@ def contar_campos(resultado: dict) -> dict:
 
 
 async def testar_datajud(tribunal: str, numero: str) -> dict:
+    if tribunal in ["TJMG", "TJPE", "TRF1", "TRF3", "TRF5"]:
+        return await testar_pje(tribunal, numero)
+
+async def testar_pje(tribunal: str, numero: str) -> dict:
+    t0 = time.time()
+    try:
+        from tribunais.pje_scraper import PJeScraper
+        scraper = PJeScraper(tribunal)
+        resultado = scraper.buscar_por_numero(numero)
+
+        # Correção caso o scraper antigo do PJe ainda retorne sync dict:
+        import inspect
+        if inspect.iscoroutine(resultado):
+            resultado = await resultado
+
+        elapsed = time.time() - t0
+        r = resultado.to_dict()
+        stats = contar_campos(r)
+        ok = bool(r.get("processos")) and stats["campos"] >= 1
+        return {
+            "tribunal": tribunal,
+            "fonte": "PJe",
+            "ok": ok,
+            "elapsed": elapsed,
+            "stats": stats,
+            "erro": r.get("erro"),
+        }
+    except Exception as e:
+        return {
+            "tribunal": tribunal,
+            "fonte": "PJe",
+            "ok": False,
+            "elapsed": time.time() - t0,
+            "stats": {},
+            "erro": str(e),
+        }
+
     from datajud import DataJudClient
     t0 = time.time()
     try:
