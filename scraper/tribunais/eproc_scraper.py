@@ -37,7 +37,7 @@ class EProcScraper(BaseScraper):
             else:
                 resp = requests.get(url_consulta, headers={'User-Agent': 'Mozilla/5.0'}, verify=False, timeout=30)
 
-            soup = BeautifulSoup(resp.text, 'html.parser')
+            soup = BeautifulSoup(resp.content.decode('iso-8859-1', errors='replace'), 'html.parser')
             page_text = soup.get_text()
 
             if 'nenhum registro' in page_text.lower() or 'não encontrado' in page_text.lower():
@@ -66,7 +66,9 @@ class EProcScraper(BaseScraper):
             resultado.processos = [processo]
 
         except Exception as e:
+            import traceback
             resultado.erro = str(e)
+            print(traceback.format_exc())
 
         return resultado
 
